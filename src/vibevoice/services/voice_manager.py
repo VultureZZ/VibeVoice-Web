@@ -3,7 +3,6 @@ Voice management service.
 
 Handles custom voice creation, listing, and deletion.
 """
-import logging
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -13,9 +12,7 @@ from pydub import AudioSegment
 
 from ..config import config
 from ..models.voice_storage import voice_storage
-from .audio_validator import AudioValidator, RECOMMENDED_MAX_DURATION, RECOMMENDED_MIN_DURATION
-
-logger = logging.getLogger(__name__)
+from .audio_validator import AudioValidator
 
 # Default voices that cannot be deleted
 # Mapping of short names to full voice file names
@@ -168,18 +165,6 @@ class VoiceManager:
 
             # Calculate combined duration
             combined_duration_seconds = len(combined_audio) / 1000.0
-
-            # Clip audio if it exceeds the maximum recommended duration
-            if combined_duration_seconds > RECOMMENDED_MAX_DURATION:
-                logger.info(
-                    f"Combined audio duration ({combined_duration_seconds:.1f}s) exceeds "
-                    f"maximum recommended ({RECOMMENDED_MAX_DURATION}s). Clipping to {RECOMMENDED_MIN_DURATION}s."
-                )
-                # Clip to RECOMMENDED_MIN_DURATION (60 seconds) - keep first 60 seconds
-                clip_duration_ms = int(RECOMMENDED_MIN_DURATION * 1000)
-                combined_audio = combined_audio[:clip_duration_ms]
-                combined_duration_seconds = len(combined_audio) / 1000.0
-                logger.info(f"Audio clipped to {combined_duration_seconds:.1f}s")
 
             # Validate audio files (analyze individual files and combined result)
             # Build list of saved file paths for validation
@@ -382,17 +367,12 @@ class VoiceManager:
         Raises:
             ValueError: If voice is not found
         """
-        logger.debug(f"Ensuring voice '{voice_name}' is accessible")
-
         # Check if it's a default voice that needs mapping
         if voice_name in VOICE_NAME_MAPPING:
-            resolved = VOICE_NAME_MAPPING[voice_name]
-            logger.debug(f"Voice '{voice_name}' is a default voice (mapped to '{resolved}')")
-            return resolved
+            return VOICE_NAME_MAPPING[voice_name]
 
         # Check if it's a default voice
         if self.is_default_voice(voice_name):
-            logger.debug(f"Voice '{voice_name}' is a default voice (no mapping needed)")
             return voice_name
 
         # Check if it's a custom voice
@@ -402,8 +382,6 @@ class VoiceManager:
             if not voice_id:
                 raise ValueError(f"Custom voice '{voice_name}' has no ID")
 
-            logger.info(f"Found custom voice '{voice_name}' with ID '{voice_id}'")
-
             # Ensure default voices directory exists
             self.default_voices_dir.mkdir(parents=True, exist_ok=True)
 
@@ -411,51 +389,26 @@ class VoiceManager:
             voice_dir = self.custom_voices_dir / voice_id
             source_path = voice_dir / "combined.wav"
 
-            logger.info(f"Custom voice source file: {source_path}")
-            logger.info(f"  Source file exists: {source_path.exists()}")
-            if source_path.exists():
-                file_size = source_path.stat().st_size / (1024 * 1024)  # Size in MB
-                logger.info(f"  Source file size: {file_size:.2f} MB")
-
             if not source_path.exists():
                 raise ValueError(f"Voice file not found for '{voice_name}' at {source_path}")
 
             # Create symlink in default voices directory
             target_path = self.default_voices_dir / f"{voice_name}.wav"
-            logger.info(f"Custom voice target path: {target_path}")
 
             # Remove existing symlink/file if it exists
             if target_path.exists() or target_path.is_symlink():
-                logger.debug(f"Removing existing target: {target_path}")
                 target_path.unlink()
 
             # Create symlink
             try:
                 target_path.symlink_to(source_path)
-                logger.info(f"Created symlink: {target_path} -> {source_path}")
-            except OSError as e:
+            except OSError:
                 # If symlink fails (e.g., on Windows), copy the file
-                logger.warning(f"Symlink failed ({e}), copying file instead")
                 shutil.copy2(source_path, target_path)
-                logger.info(f"Copied file: {source_path} -> {target_path}")
 
-            # Verify the target exists
-            if target_path.exists() or target_path.is_symlink():
-                if target_path.is_symlink():
-                    resolved_target = target_path.resolve()
-                    logger.info(f"Target symlink resolves to: {resolved_target}")
-                    logger.info(f"  Resolved target exists: {resolved_target.exists()}")
-                else:
-                    target_size = target_path.stat().st_size / (1024 * 1024)  # Size in MB
-                    logger.info(f"  Target file size: {target_size:.2f} MB")
-            else:
-                logger.error(f"Target file was not created: {target_path}")
-
-            logger.info(f"Voice '{voice_name}' is now accessible at {target_path}")
             return voice_name
 
         # Return as-is if not found (will cause error in inference)
-        logger.warning(f"Voice '{voice_name}' not found (will be passed to inference as-is)")
         return voice_name
 
     def resolve_voice_name(self, voice_name: str) -> str:
@@ -471,13 +424,7 @@ class VoiceManager:
         Returns:
             Resolved voice name (full name if mapping exists, otherwise original)
         """
-        logger.debug(f"Resolving voice name: '{voice_name}'")
-        resolved = self.ensure_voice_accessible(voice_name)
-        if resolved != voice_name:
-            logger.info(f"Voice name resolved: '{voice_name}' -> '{resolved}'")
-        else:
-            logger.debug(f"Voice name unchanged: '{voice_name}'")
-        return resolved
+        return self.ensure_voice_accessible(voice_name)
 
     def get_voice_path(self, voice_id: str) -> Optional[Path]:
         """
