@@ -155,11 +155,45 @@ python scripts/setup_vibevoice.py
 
 The script will list available voices on startup. Use the exact names shown (e.g., "Alice", "Frank", not "en-Alice_woman").
 
+## Running the API
+
+After installing dependencies, you can run the API server in several ways:
+
+### Option 1: Using the run script (recommended)
+```bash
+python run_api.py
+```
+
+### Option 2: Using uvicorn directly
+```bash
+PYTHONPATH=src uvicorn vibevoice.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Option 3: Using Python module
+```bash
+PYTHONPATH=src python -m vibevoice.main
+```
+
+Once running, access:
+- API Documentation: http://localhost:8000/docs
+- Health Check: http://localhost:8000/health
+- API Root: http://localhost:8000/
+
+## API Endpoints
+
+- `POST /api/v1/speech/generate` - Generate speech from text
+- `GET /api/v1/speech/download/{filename}` - Download generated audio
+- `POST /api/v1/voices` - Create custom voice
+- `GET /api/v1/voices` - List all voices
+- `DELETE /api/v1/voices/{voice_id}` - Delete custom voice
+
+See the interactive API documentation at `/docs` for detailed request/response schemas.
+
 ## Future Development
 
 This project structure is designed to support:
 
-- **API Development**: Add REST API endpoints in `src/vibevoice/`
+- **API Development**: REST API endpoints in `src/vibevoice/`
 - **Web Interface**: Build a frontend for voice generation
 - **Testing**: Expand test suite in `tests/`
 - **Documentation**: Add API documentation in `docs/`
