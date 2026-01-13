@@ -138,6 +138,18 @@ class VoiceGenerator:
 
             output_path = self.output_dir / output_filename
 
+            # Resolve speaker names (map short names like "Alice" to full names like "en-Alice_woman")
+            logger.info("Resolving speaker names to voice file names...")
+            resolved_speakers = []
+            for speaker in speakers:
+                resolved = voice_manager.resolve_voice_name(speaker)
+                resolved_speakers.append(resolved)
+                if resolved != speaker:
+                    logger.info(f"  '{speaker}' -> '{resolved}'")
+                else:
+                    logger.info(f"  '{speaker}' (no mapping needed)")
+            logger.info(f"Resolved speakers: {resolved_speakers}")
+
             # Build command
             cmd = [
                 sys.executable,
@@ -147,7 +159,7 @@ class VoiceGenerator:
                 "--txt_path",
                 str(transcript_file),
                 "--speaker_names",
-            ] + speakers
+            ] + resolved_speakers
 
             logger.info("")
             logger.info("Executing VibeVoice Inference")

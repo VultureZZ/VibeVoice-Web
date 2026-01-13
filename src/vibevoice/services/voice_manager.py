@@ -14,18 +14,17 @@ from ..config import config
 from ..models.voice_storage import voice_storage
 
 # Default voices that cannot be deleted
-DEFAULT_VOICES = [
-    "Alice",
-    "Frank",
-    "Mary",
-    "Carter",
-    "Maya",
-    "en-Alice_woman",
-    "en-Frank_man",
-    "en-Mary_woman_bgm",
-    "en-Carter_man",
-    "en-Maya_woman",
-]
+# Mapping of short names to full voice file names
+VOICE_NAME_MAPPING = {
+    "Alice": "en-Alice_woman",
+    "Frank": "en-Frank_man",
+    "Mary": "en-Mary_woman_bgm",
+    "Carter": "en-Carter_man",
+    "Maya": "en-Maya_woman",
+}
+
+# Default voices list (both short and full names)
+DEFAULT_VOICES = list(VOICE_NAME_MAPPING.keys()) + list(VOICE_NAME_MAPPING.values())
 
 
 class VoiceManager:
@@ -221,26 +220,52 @@ class VoiceManager:
             List of voice metadata dicts
         """
         voices = []
+        seen_voices = set()
 
-        # Add default voices
+        # Add default voices from actual files in the directory
         if self.default_voices_dir.exists():
-            # Try to discover default voices from the voices directory
             for voice_file in self.default_voices_dir.glob("*.wav"):
-                voice_name = voice_file.stem
-                # Skip if already in our default list or if it's a system file
-                if voice_name not in DEFAULT_VOICES and not voice_name.startswith("."):
-                    DEFAULT_VOICES.append(voice_name)
+                full_name = voice_file.stem
+                if full_name.startswith("."):
+                    continue
+                
+                # Add the full name
+                if full_name not in seen_voices:
+                    voices.append({
+                        "id": full_name,
+                        "name": full_name,
+                        "description": f"Default VibeVoice voice: {full_name}",
+                        "type": "default",
+                        "created_at": None,
+                        "audio_files": None,
+                    })
+                    seen_voices.add(full_name)
+                
+                # Also add short name if it exists in mapping
+                for short_name, mapped_name in VOICE_NAME_MAPPING.items():
+                    if mapped_name == full_name and short_name not in seen_voices:
+                        voices.append({
+                            "id": short_name,
+                            "name": short_name,
+                            "description": f"Default VibeVoice voice: {short_name} (maps to {full_name})",
+                            "type": "default",
+                            "created_at": None,
+                            "audio_files": None,
+                        })
+                        seen_voices.add(short_name)
 
-        # Add hardcoded default voices
+        # Add any hardcoded default voices that weren't found in directory
         for voice_name in DEFAULT_VOICES:
-            voices.append({
-                "id": voice_name,
-                "name": voice_name,
-                "description": f"Default VibeVoice voice: {voice_name}",
-                "type": "default",
-                "created_at": None,
-                "audio_files": None,
-            })
+            if voice_name not in seen_voices:
+                voices.append({
+                    "id": voice_name,
+                    "name": voice_name,
+                    "description": f"Default VibeVoice voice: {voice_name}",
+                    "type": "default",
+                    "created_at": None,
+                    "audio_files": None,
+                })
+                seen_voices.add(voice_name)
 
         # Add custom voices
         custom_voices = voice_storage.list_voices()
@@ -285,6 +310,24 @@ class VoiceManager:
 
         return None
 
+    def resolve_voice_name(self, voice_name: str) -> str:
+        """
+        Resolve a voice name to its actual file name.
+        
+        Maps short names (e.g., "Alice") to full names (e.g., "en-Alice_woman").
+        
+        Args:
+            voice_name: Voice name (short or full)
+            
+        Returns:
+            Resolved voice name (full name if mapping exists, otherwise original)
+        """
+        # Check if it's a short name that needs mapping
+        if voice_name in VOICE_NAME_MAPPING:
+            return VOICE_NAME_MAPPING[voice_name]
+        # Return as-is if already a full name or custom voice
+        return voice_name
+
     def get_voice_path(self, voice_id: str) -> Optional[Path]:
         """
         Get the path to a voice file.
@@ -303,10 +346,18 @@ class VoiceManager:
             if combined_path.exists():
                 return combined_path
 
+        # Resolve voice name (map short names to full names)
+        resolved_name = self.resolve_voice_name(voice_id)
+        
         # Check default voices
         if self.default_voices_dir.exists():
-            # Try different naming conventions
-            for pattern in [f"{voice_id}.wav", f"en-{voice_id}.wav", f"{voice_id}_*.wav"]:
+            # Try exact match first
+            exact_path = self.default_voices_dir / f"{resolved_name}.wav"
+            if exact_path.exists():
+                return exact_path
+            
+            # Try different naming conventions as fallback
+            for pattern in [f"{resolved_name}.wav", f"{voice_id}.wav", f"en-{voice_id}.wav", f"{voice_id}_*.wav"]:
                 matches = list(self.default_voices_dir.glob(pattern))
                 if matches:
                     return matches[0]
