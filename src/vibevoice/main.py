@@ -1,6 +1,9 @@
 """
 FastAPI application entry point for VibeVoice API.
 """
+import logging
+import sys
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -9,12 +12,38 @@ from .middleware.auth import APIKeyAuthMiddleware
 from .middleware.rate_limit import RateLimitMiddleware
 from .routes import speech, voices
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    stream=sys.stdout,
+)
+
+# Set specific loggers
+logging.getLogger("vibevoice").setLevel(logging.INFO)
+logging.getLogger("uvicorn").setLevel(logging.INFO)
+logging.getLogger("uvicorn.access").setLevel(logging.INFO)
+
+logger = logging.getLogger(__name__)
+
 # Create FastAPI app
 app = FastAPI(
     title="VibeVoice API",
     description="REST API for VibeVoice text-to-speech generation",
     version="1.0.0",
 )
+
+logger.info("=" * 80)
+logger.info("VibeVoice API Starting")
+logger.info("=" * 80)
+logger.info(f"Configuration:")
+logger.info(f"  Model path: {config.MODEL_PATH}")
+logger.info(f"  Output directory: {config.OUTPUT_DIR}")
+logger.info(f"  Custom voices directory: {config.CUSTOM_VOICES_DIR}")
+logger.info(f"  Rate limit: {config.RATE_LIMIT_PER_MINUTE} requests/minute")
+logger.info(f"  API key required: {config.requires_api_key}")
+logger.info("=" * 80)
 
 # Add CORS middleware (allow all origins for development)
 app.add_middleware(
