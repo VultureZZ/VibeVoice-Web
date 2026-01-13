@@ -13,7 +13,7 @@ from pydub import AudioSegment
 
 from ..config import config
 from ..models.voice_storage import voice_storage
-from .audio_validator import AudioValidator
+from .audio_validator import AudioValidator, RECOMMENDED_MAX_DURATION, RECOMMENDED_MIN_DURATION
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +168,18 @@ class VoiceManager:
 
             # Calculate combined duration
             combined_duration_seconds = len(combined_audio) / 1000.0
+
+            # Clip audio if it exceeds the maximum recommended duration
+            if combined_duration_seconds > RECOMMENDED_MAX_DURATION:
+                logger.info(
+                    f"Combined audio duration ({combined_duration_seconds:.1f}s) exceeds "
+                    f"maximum recommended ({RECOMMENDED_MAX_DURATION}s). Clipping to {RECOMMENDED_MIN_DURATION}s."
+                )
+                # Clip to RECOMMENDED_MIN_DURATION (60 seconds) - keep first 60 seconds
+                clip_duration_ms = int(RECOMMENDED_MIN_DURATION * 1000)
+                combined_audio = combined_audio[:clip_duration_ms]
+                combined_duration_seconds = len(combined_audio) / 1000.0
+                logger.info(f"Audio clipped to {combined_duration_seconds:.1f}s")
 
             # Validate audio files (analyze individual files and combined result)
             # Build list of saved file paths for validation
