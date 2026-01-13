@@ -189,6 +189,22 @@ print("VibeVoice imported successfully")
 
 ## Troubleshooting
 
+### Issue: FlashAttention2 Warning
+
+**Symptoms:**
+- Warning: "FlashAttention2 has been toggled on, but it cannot be used due to the following error: the package flash_attn seems to be not installed"
+- Model falls back to SDPA (scaled dot product attention)
+
+**Note:** This is not an error! The model will work fine with SDPA. FlashAttention2 is optional and provides faster inference, but SDPA is a good fallback.
+
+**Solutions (Optional - for faster inference):**
+1. Install FlashAttention2 (requires matching CUDA/PyTorch versions):
+   ```bash
+   pip install flash-attn --no-build-isolation
+   ```
+2. Verify installation: `python -c "import flash_attn; print('FlashAttention2 installed')"`
+3. If installation fails, continue using SDPA - it works fine
+
 ### Issue: CUDA Not Available
 
 **Symptoms:**

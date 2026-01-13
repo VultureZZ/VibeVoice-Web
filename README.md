@@ -124,6 +124,14 @@ Edit `tests/sample_transcript.txt` or create your own transcript file following 
 
 ## Troubleshooting
 
+### FlashAttention2 Warning
+
+If you see a warning about FlashAttention2 not being installed, this is normal and not an error. The model will automatically use SDPA (scaled dot product attention) instead, which works fine. FlashAttention2 is optional and provides faster inference. To install it (optional):
+
+```bash
+pip install flash-attn --no-build-isolation
+```
+
 ### CUDA Out of Memory
 
 - Reduce the length of your input text
