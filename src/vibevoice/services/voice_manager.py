@@ -12,6 +12,7 @@ from pydub import AudioSegment
 
 from ..config import config
 from ..models.voice_storage import voice_storage
+from .audio_validator import AudioValidator
 
 # Default voices that cannot be deleted
 # Mapping of short names to full voice file names
@@ -35,6 +36,7 @@ class VoiceManager:
         self.custom_voices_dir = config.CUSTOM_VOICES_DIR
         self.vibevoice_repo_dir = config.VIBEVOICE_REPO_DIR
         self.default_voices_dir = self.vibevoice_repo_dir / "demo" / "voices"
+        self.audio_validator = AudioValidator()
 
     def is_default_voice(self, voice_name: str) -> bool:
         """
@@ -161,6 +163,17 @@ class VoiceManager:
             combined_audio = sum(audio_segments)
             combined_path = voice_dir / "combined.wav"
 
+            # Calculate combined duration
+            combined_duration_seconds = len(combined_audio) / 1000.0
+
+            # Validate audio files (analyze individual files and combined result)
+            # Build list of saved file paths for validation
+            saved_file_paths = [original_dir / filename for filename in saved_files]
+            validation_feedback = self.audio_validator.validate_audio_files(
+                audio_files=saved_file_paths,
+                combined_duration_seconds=combined_duration_seconds,
+            )
+
             # Export combined audio as WAV
             combined_audio.export(str(combined_path), format="wav", parameters=["-ar", "24000"])
 
@@ -172,8 +185,9 @@ class VoiceManager:
                 audio_files=saved_files,
             )
 
-            # Return voice metadata
+            # Return voice metadata with validation feedback
             voice_data = voice_storage.get_voice(voice_id)
+            voice_data["validation_feedback"] = validation_feedback
             return voice_data
 
         except Exception as e:

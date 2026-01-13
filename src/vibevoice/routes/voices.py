@@ -8,7 +8,9 @@ from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 
 from ..models.schemas import (
+    AudioValidationFeedback,
     ErrorResponse,
+    IndividualFileAnalysis,
     VoiceCreateResponse,
     VoiceListResponse,
     VoiceResponse,
@@ -98,10 +100,32 @@ async def create_voice(
                 audio_files=voice_data.get("audio_files"),
             )
 
+            # Parse validation feedback if present
+            validation_feedback = None
+            if "validation_feedback" in voice_data:
+                feedback_data = voice_data["validation_feedback"]
+                individual_files = [
+                    IndividualFileAnalysis(**file_data) for file_data in feedback_data.get("individual_files", [])
+                ]
+                validation_feedback = AudioValidationFeedback(
+                    total_duration_seconds=feedback_data.get("total_duration_seconds", 0.0),
+                    individual_files=individual_files,
+                    warnings=feedback_data.get("warnings", []),
+                    recommendations=feedback_data.get("recommendations", []),
+                    quality_metrics=feedback_data.get("quality_metrics", {}),
+                )
+
+            # Build message with warnings if any
+            message = f"Voice '{name}' created successfully"
+            if validation_feedback and validation_feedback.warnings:
+                warning_count = len(validation_feedback.warnings)
+                message += f" ({warning_count} warning{'s' if warning_count > 1 else ''} about audio quality/duration)"
+
             return VoiceCreateResponse(
                 success=True,
-                message=f"Voice '{name}' created successfully",
+                message=message,
                 voice=voice_response,
+                validation_feedback=validation_feedback,
             )
 
         except ValueError as e:
