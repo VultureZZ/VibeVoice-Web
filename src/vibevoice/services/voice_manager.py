@@ -242,7 +242,7 @@ class VoiceManager:
                 full_name = voice_file.stem
                 if full_name.startswith("."):
                     continue
-                
+
                 # Add the full name
                 if full_name not in seen_voices:
                     voices.append({
@@ -254,7 +254,7 @@ class VoiceManager:
                         "audio_files": None,
                     })
                     seen_voices.add(full_name)
-                
+
                 # Also add short name if it exists in mapping
                 for short_name, mapped_name in VOICE_NAME_MAPPING.items():
                     if mapped_name == full_name and short_name not in seen_voices:
@@ -327,12 +327,12 @@ class VoiceManager:
     def resolve_voice_name(self, voice_name: str) -> str:
         """
         Resolve a voice name to its actual file name.
-        
+
         Maps short names (e.g., "Alice") to full names (e.g., "en-Alice_woman").
-        
+
         Args:
             voice_name: Voice name (short or full)
-            
+
         Returns:
             Resolved voice name (full name if mapping exists, otherwise original)
         """
@@ -362,14 +362,14 @@ class VoiceManager:
 
         # Resolve voice name (map short names to full names)
         resolved_name = self.resolve_voice_name(voice_id)
-        
+
         # Check default voices
         if self.default_voices_dir.exists():
             # Try exact match first
             exact_path = self.default_voices_dir / f"{resolved_name}.wav"
             if exact_path.exists():
                 return exact_path
-            
+
             # Try different naming conventions as fallback
             for pattern in [f"{resolved_name}.wav", f"{voice_id}.wav", f"en-{voice_id}.wav", f"{voice_id}_*.wav"]:
                 matches = list(self.default_voices_dir.glob(pattern))
