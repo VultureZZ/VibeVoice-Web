@@ -1,0 +1,7 @@
+# Core dependencies for VibeVoice
+huggingface_hub>=0.20.0
+torch>=2.0.0
+numpy>=1.24.0
+
+# Note: Additional dependencies will be installed from the cloned VibeVoice repository
+# Run: pip install -e VibeVoice/

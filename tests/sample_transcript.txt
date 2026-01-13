@@ -1,0 +1,6 @@
+Speaker 1: Have you heard about VibeVoice?
+Speaker 2: Yes, it's Microsoft's open-source text-to-speech model.
+Speaker 1: I'm excited to test it out. It can generate natural, expressive speech.
+Speaker 2: Absolutely, and it supports multiple speakers in conversations.
+Speaker 1: That's perfect for creating podcast-style content.
+Speaker 2: Let's generate some audio and see how it sounds!
