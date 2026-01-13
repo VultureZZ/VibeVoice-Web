@@ -4,7 +4,7 @@ Voice management endpoints.
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 
 from ..models.schemas import (
@@ -31,8 +31,8 @@ router = APIRouter(prefix="/api/v1/voices", tags=["voices"])
     },
 )
 async def create_voice(
-    name: str,
-    description: str = None,
+    name: str = Form(...),
+    description: str = Form(None),
     audio_files: list[UploadFile] = File(...),
 ) -> VoiceCreateResponse:
     """
