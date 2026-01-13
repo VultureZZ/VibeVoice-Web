@@ -324,11 +324,99 @@ class VoiceManager:
 
         return None
 
+    def get_voice_by_name(self, name: str) -> Optional[dict]:
+        """
+        Get voice metadata by name (searches custom voices by name).
+
+        Args:
+            name: Voice name to search for
+
+        Returns:
+            Voice metadata dict or None if not found
+        """
+        # Check custom voices by name
+        custom_voices = voice_storage.list_voices()
+        for voice_data in custom_voices:
+            if voice_data.get("name", "").lower() == name.lower():
+                return voice_data
+
+        # Check default voices
+        if self.is_default_voice(name) or name in DEFAULT_VOICES:
+            return {
+                "id": name,
+                "name": name,
+                "description": f"Default VibeVoice voice: {name}",
+                "type": "default",
+                "created_at": None,
+                "audio_files": None,
+            }
+
+        return None
+
+    def ensure_voice_accessible(self, voice_name: str) -> str:
+        """
+        Ensure a voice file is accessible in the default voices directory.
+        For custom voices, creates a symlink in the default voices directory.
+
+        Args:
+            voice_name: Voice name
+
+        Returns:
+            Resolved voice name (for default voices) or voice name (for custom voices)
+
+        Raises:
+            ValueError: If voice is not found
+        """
+        # Check if it's a default voice that needs mapping
+        if voice_name in VOICE_NAME_MAPPING:
+            return VOICE_NAME_MAPPING[voice_name]
+
+        # Check if it's a default voice
+        if self.is_default_voice(voice_name):
+            return voice_name
+
+        # Check if it's a custom voice
+        voice_data = self.get_voice_by_name(voice_name)
+        if voice_data and voice_data.get("type") == "custom":
+            voice_id = voice_data.get("id")
+            if not voice_id:
+                raise ValueError(f"Custom voice '{voice_name}' has no ID")
+
+            # Ensure default voices directory exists
+            self.default_voices_dir.mkdir(parents=True, exist_ok=True)
+
+            # Get source file path
+            voice_dir = self.custom_voices_dir / voice_id
+            source_path = voice_dir / "combined.wav"
+
+            if not source_path.exists():
+                raise ValueError(f"Voice file not found for '{voice_name}' at {source_path}")
+
+            # Create symlink in default voices directory
+            target_path = self.default_voices_dir / f"{voice_name}.wav"
+
+            # Remove existing symlink/file if it exists
+            if target_path.exists() or target_path.is_symlink():
+                target_path.unlink()
+
+            # Create symlink
+            try:
+                target_path.symlink_to(source_path)
+            except OSError:
+                # If symlink fails (e.g., on Windows), copy the file
+                shutil.copy2(source_path, target_path)
+
+            return voice_name
+
+        # Return as-is if not found (will cause error in inference)
+        return voice_name
+
     def resolve_voice_name(self, voice_name: str) -> str:
         """
         Resolve a voice name to its actual file name.
 
         Maps short names (e.g., "Alice") to full names (e.g., "en-Alice_woman").
+        For custom voices, ensures they are accessible in the default voices directory.
 
         Args:
             voice_name: Voice name (short or full)
@@ -336,11 +424,7 @@ class VoiceManager:
         Returns:
             Resolved voice name (full name if mapping exists, otherwise original)
         """
-        # Check if it's a short name that needs mapping
-        if voice_name in VOICE_NAME_MAPPING:
-            return VOICE_NAME_MAPPING[voice_name]
-        # Return as-is if already a full name or custom voice
-        return voice_name
+        return self.ensure_voice_accessible(voice_name)
 
     def get_voice_path(self, voice_id: str) -> Optional[Path]:
         """
