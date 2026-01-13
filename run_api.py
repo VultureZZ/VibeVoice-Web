@@ -37,8 +37,7 @@ if __name__ == "__main__":
         sys.exit(1)
     
     try:
-        # Import after path is set - import the app object directly
-        from vibevoice.main import app
+        # Import config to get settings
         from vibevoice.config import config
     except ImportError as e:
         print(f"Error: Failed to import vibevoice module: {e}")
@@ -49,8 +48,9 @@ if __name__ == "__main__":
         print("2. You're running from the project root directory")
         sys.exit(1)
 
+    # Use import string for reload to work properly
     uvicorn.run(
-        app,
+        "vibevoice.main:app",
         host=config.HOST,
         port=config.PORT,
         reload=True,
