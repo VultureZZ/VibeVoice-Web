@@ -8,6 +8,8 @@ fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 python-multipart>=0.0.6
 pydub>=0.25.1
+# Python 3.13+ compatibility: stdlib `audioop` removed (pydub fallback)
+audioop-lts>=0.2.1; python_version >= "3.13"
 python-dotenv>=1.0.0
 pydantic>=2.0.0
 requests>=2.31.0
@@ -16,6 +18,11 @@ requests>=2.31.0
 beautifulsoup4>=4.12.0
 httpx>=0.25.0
 lxml>=4.9.0
+# Audio transcription (used for style-oriented voice profiling from audio)
+# Note: onnxruntime is not available for some very new Python versions yet.
+# We keep transcription optional on Python >= 3.13 (the API will still work,
+# but will return a minimal profile if transcription isn't available).
+faster-whisper>=1.1.1; python_version < "3.13"
 # Optional: newspaper3k for fallback scraping (requires lxml_html_clean)
 # Uncomment the following lines if you want to use newspaper3k as a fallback scraper:
 # newspaper3k>=0.2.8

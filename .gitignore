@@ -35,6 +35,8 @@ env/
 
 # VibeVoice specific
 outputs/
+podcasts/
+custom_voices/
 models/
 *.wav
 *.mp3

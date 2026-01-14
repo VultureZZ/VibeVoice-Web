@@ -27,6 +27,17 @@ This guide provides step-by-step instructions for setting up the VibeVoice proje
    python --version
    ```
 
+2. **ffmpeg** (required for audio decoding via `pydub`, and recommended for audio profiling/transcription)
+   - macOS (Homebrew):
+   ```bash
+   brew install ffmpeg
+   ```
+   - Linux:
+   ```bash
+   # Example (Debian/Ubuntu)
+   sudo apt-get update && sudo apt-get install -y ffmpeg
+   ```
+
 2. **Git**
    ```bash
    git --version
@@ -40,6 +51,10 @@ This guide provides step-by-step instructions for setting up the VibeVoice proje
 4. **CUDA Toolkit** (for GPU support)
    - Check if CUDA is available: `nvidia-smi`
    - Install from [NVIDIA CUDA Toolkit](https://developer.nvidia.com/cuda-downloads)
+
+5. **Ollama** (recommended for podcast scripting and voice profiling)
+   - Install and run Ollama, then ensure it’s reachable at the configured URL (default `http://localhost:11434`).
+   - Pull a model (default `llama3.2`): `ollama pull llama3.2`
 
 ## Initial Setup
 
@@ -70,6 +85,10 @@ python -m venv .venv
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
+
+Notes:
+- On Python 3.13+, `audioop` is removed from stdlib. This project installs `audioop-lts` automatically for `pydub` compatibility.
+- Audio transcription for “Voice Profile from Audio” requires `faster-whisper`, which is installed automatically on Python < 3.13. On newer Python versions, transcription is disabled and the API will return a minimal profile.
 
 ### Step 4: Run Automated Setup
 
@@ -186,6 +205,20 @@ You should see files like:
 import vibevoice
 print("VibeVoice imported successfully")
 ```
+
+## Features: Podcast Library + Voice Profile from Audio
+
+### Podcast Library
+- Generated podcasts can be saved to the on-disk library under `podcasts/` (metadata JSON + audio + script).
+- The frontend “Podcast Library” page lists/searches/deletes saved items.
+
+### Voice Profile from Audio
+- In the UI, go to **Voices → Analyze Audio → Profile**.
+- Upload an audio file, the backend will:
+  - validate audio (duration/quality warnings)
+  - attempt transcription (if supported by your Python version)
+  - generate a style-oriented profile (cadence/tone/vocabulary) via Ollama
+  - allow you to apply/copy the profile onto any voice
 
 ## Troubleshooting
 

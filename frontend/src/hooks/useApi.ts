@@ -14,8 +14,11 @@ import {
   PodcastScriptResponse,
   PodcastGenerateRequest,
   PodcastGenerateResponse,
+  PodcastListResponse,
   VoiceProfileResponse,
   VoiceProfileRequest,
+  VoiceProfileApplyRequest,
+  VoiceProfileFromAudioResponse,
   VoiceUpdateRequest,
   VoiceUpdateResponse,
 } from '../types/api';
@@ -100,6 +103,47 @@ export function useApi() {
     [execute]
   );
 
+  const listPodcasts = useCallback(
+    async (query?: string): Promise<PodcastListResponse | null> => {
+      return execute(() => apiClient.listPodcasts(query));
+    },
+    [execute]
+  );
+
+  const deletePodcast = useCallback(
+    async (podcastId: string): Promise<boolean> => {
+      const result = await execute(() => apiClient.deletePodcast(podcastId));
+      return result !== null;
+    },
+    [execute]
+  );
+
+  const downloadPodcastById = useCallback(
+    async (podcastId: string): Promise<Blob | null> => {
+      return execute(() => apiClient.downloadPodcastById(podcastId));
+    },
+    [execute]
+  );
+
+  const analyzeVoiceProfileFromAudio = useCallback(
+    async (
+      audioFile: File,
+      keywords?: string,
+      ollamaUrl?: string,
+      ollamaModel?: string
+    ): Promise<VoiceProfileFromAudioResponse | null> => {
+      return execute(() => apiClient.analyzeVoiceProfileFromAudio(audioFile, keywords, ollamaUrl, ollamaModel));
+    },
+    [execute]
+  );
+
+  const applyVoiceProfile = useCallback(
+    async (voiceId: string, request: VoiceProfileApplyRequest): Promise<VoiceProfileResponse | null> => {
+      return execute(() => apiClient.applyVoiceProfile(voiceId, request));
+    },
+    [execute]
+  );
+
   const updateVoice = useCallback(
     async (voiceId: string, request: VoiceUpdateRequest): Promise<VoiceUpdateResponse | null> => {
       return execute(() => apiClient.updateVoice(voiceId, request));
@@ -152,5 +196,10 @@ export function useApi() {
     generatePodcastScript,
     generatePodcastAudio,
     downloadPodcastAudio,
+    listPodcasts,
+    deletePodcast,
+    downloadPodcastById,
+    analyzeVoiceProfileFromAudio,
+    applyVoiceProfile,
   };
 }

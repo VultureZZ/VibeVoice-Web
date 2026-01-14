@@ -2,7 +2,9 @@
 Podcast generation endpoints.
 """
 import logging
+import shutil
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import FileResponse
@@ -14,6 +16,8 @@ from ..models.schemas import (
     PodcastScriptRequest,
     PodcastScriptResponse,
 )
+from ..config import config
+from ..models.podcast_storage import podcast_storage
 from ..services.podcast_generator import podcast_generator
 
 logger = logging.getLogger(__name__)
@@ -151,13 +155,50 @@ async def generate_podcast_audio(
         logger.info(f"  File size: {output_file.stat().st_size / 1024 / 1024:.2f} MB")
         logger.info("=" * 80)
 
-        # Return response with file path
+        podcast_id = None
+        audio_url = f"/api/v1/podcast/download/{output_file.name}"
+        saved_path = output_file
+
+        if request.save_to_library:
+            podcast_id = str(uuid4())
+            # Derive title if missing
+            title = (request.title or "").strip()
+            if not title:
+                title = f"Podcast {podcast_id[:8]}"
+
+            # Save audio into podcasts dir (so delete is safe and contained)
+            config.PODCASTS_DIR.mkdir(parents=True, exist_ok=True)
+            saved_audio_path = config.PODCASTS_DIR / f"{podcast_id}.wav"
+            shutil.copy2(output_file, saved_audio_path)
+
+            # Save script to file
+            saved_script_path = config.PODCASTS_DIR / f"{podcast_id}.txt"
+            saved_script_path.write_text(request.script)
+
+            podcast_storage.add_podcast(
+                podcast_id=podcast_id,
+                title=title,
+                voices=request.voices,
+                audio_path=saved_audio_path,
+                script_path=saved_script_path,
+                source_url=request.source_url,
+                genre=request.genre,
+                duration=request.duration,
+                extra={
+                    "file_size_bytes": saved_audio_path.stat().st_size,
+                },
+            )
+
+            audio_url = f"/api/v1/podcasts/{podcast_id}/download"
+            saved_path = saved_audio_path
+
         return PodcastGenerateResponse(
             success=True,
             message="Podcast audio generated successfully",
-            audio_url=f"/api/v1/podcast/download/{output_file.name}",
-            file_path=str(output_path),
+            audio_url=audio_url,
+            file_path=str(saved_path),
             script=request.script,
+            podcast_id=podcast_id,
         )
 
     except ValueError as e:

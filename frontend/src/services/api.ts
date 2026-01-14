@@ -14,8 +14,11 @@ import {
   PodcastScriptResponse,
   PodcastGenerateRequest,
   PodcastGenerateResponse,
+  PodcastListResponse,
   VoiceProfileResponse,
   VoiceProfileRequest,
+  VoiceProfileApplyRequest,
+  VoiceProfileFromAudioResponse,
   VoiceUpdateRequest,
   VoiceUpdateResponse,
 } from '../types/api';
@@ -242,6 +245,64 @@ class ApiClient {
     const response = await this.client.get(`/api/v1/podcast/download/${filename}`, {
       responseType: 'blob',
     });
+    return response.data;
+  }
+
+  /**
+   * List/search saved podcasts
+   */
+  async listPodcasts(query?: string): Promise<PodcastListResponse> {
+    const response = await this.client.get<PodcastListResponse>('/api/v1/podcasts', {
+      params: query ? { query } : undefined,
+    });
+    return response.data;
+  }
+
+  /**
+   * Delete a saved podcast
+   */
+  async deletePodcast(podcastId: string): Promise<void> {
+    await this.client.delete(`/api/v1/podcasts/${podcastId}`);
+  }
+
+  /**
+   * Download saved podcast audio by id
+   */
+  async downloadPodcastById(podcastId: string): Promise<Blob> {
+    const response = await this.client.get(`/api/v1/podcasts/${podcastId}/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  }
+
+  /**
+   * Analyze audio file to derive a voice profile
+   */
+  async analyzeVoiceProfileFromAudio(
+    audioFile: File,
+    keywords?: string,
+    ollamaUrl?: string,
+    ollamaModel?: string
+  ): Promise<VoiceProfileFromAudioResponse> {
+    const formData = new FormData();
+    formData.append('audio_file', audioFile);
+    if (keywords) formData.append('keywords', keywords);
+    if (ollamaUrl) formData.append('ollama_url', ollamaUrl);
+    if (ollamaModel) formData.append('ollama_model', ollamaModel);
+
+    const response = await this.client.post<VoiceProfileFromAudioResponse>(
+      '/api/v1/voices/profile/analyze-audio',
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  }
+
+  /**
+   * Apply a full voice profile payload to a voice
+   */
+  async applyVoiceProfile(voiceId: string, request: VoiceProfileApplyRequest): Promise<VoiceProfileResponse> {
+    const response = await this.client.put<VoiceProfileResponse>(`/api/v1/voices/${voiceId}/profile`, request);
     return response.data;
   }
 }

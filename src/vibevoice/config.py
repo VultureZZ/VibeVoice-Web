@@ -31,6 +31,7 @@ class Config:
     MODEL_PATH: Path = Path(os.getenv("MODEL_PATH", "models/VibeVoice-1.5B"))
     CUSTOM_VOICES_DIR: Path = Path(os.getenv("CUSTOM_VOICES_DIR", "custom_voices"))
     OUTPUT_DIR: Path = Path(os.getenv("OUTPUT_DIR", "outputs"))
+    PODCASTS_DIR: Path = Path(os.getenv("PODCASTS_DIR", "podcasts"))
     VIBEVOICE_REPO_DIR: Path = Path(os.getenv("VIBEVOICE_REPO_DIR", "VibeVoice"))
 
     # Server
@@ -50,12 +51,15 @@ class Config:
             self.CUSTOM_VOICES_DIR = PROJECT_ROOT / self.CUSTOM_VOICES_DIR
         if not self.OUTPUT_DIR.is_absolute():
             self.OUTPUT_DIR = PROJECT_ROOT / self.OUTPUT_DIR
+        if not self.PODCASTS_DIR.is_absolute():
+            self.PODCASTS_DIR = PROJECT_ROOT / self.PODCASTS_DIR
         if not self.VIBEVOICE_REPO_DIR.is_absolute():
             self.VIBEVOICE_REPO_DIR = PROJECT_ROOT / self.VIBEVOICE_REPO_DIR
 
         # Ensure directories exist
         self.CUSTOM_VOICES_DIR.mkdir(parents=True, exist_ok=True)
         self.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        self.PODCASTS_DIR.mkdir(parents=True, exist_ok=True)
 
     @property
     def requires_api_key(self) -> bool:

@@ -91,6 +91,11 @@ export interface PodcastGenerateRequest {
   script: string;
   voices: string[];
   settings?: SpeechSettings;
+  title?: string;
+  source_url?: string;
+  genre?: string;
+  duration?: string;
+  save_to_library?: boolean;
 }
 
 export interface PodcastGenerateResponse {
@@ -99,6 +104,23 @@ export interface PodcastGenerateResponse {
   audio_url?: string;
   file_path?: string;
   script?: string;
+  podcast_id?: string;
+}
+
+export interface PodcastItem {
+  id: string;
+  title: string;
+  voices: string[];
+  source_url?: string;
+  genre?: string;
+  duration?: string;
+  created_at?: string;
+  audio_url?: string;
+}
+
+export interface PodcastListResponse {
+  podcasts: PodcastItem[];
+  total: number;
 }
 
 export interface VoiceProfile {
@@ -113,6 +135,16 @@ export interface VoiceProfile {
   updated_at?: string;
 }
 
+export interface VoiceProfileApplyRequest {
+  cadence?: string;
+  tone?: string;
+  vocabulary_style?: string;
+  sentence_structure?: string;
+  unique_phrases?: string[];
+  keywords?: string[];
+  profile_text?: string;
+}
+
 export interface VoiceProfileRequest {
   keywords?: string[];
   ollama_url?: string;
@@ -123,6 +155,14 @@ export interface VoiceProfileResponse {
   success: boolean;
   message: string;
   profile?: VoiceProfile;
+}
+
+export interface VoiceProfileFromAudioResponse {
+  success: boolean;
+  message: string;
+  profile?: VoiceProfile;
+  transcript?: string;
+  validation_feedback?: AudioValidationFeedback;
 }
 
 export interface VoiceUpdateRequest {

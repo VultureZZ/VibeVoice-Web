@@ -37,18 +37,22 @@ export function PodcastPage() {
     generatePodcastScript,
     generatePodcastAudio,
     downloadPodcastAudio,
+    downloadPodcastById,
     loading,
     error,
   } = useApi();
 
   const [url, setUrl] = useState('');
+  const [title, setTitle] = useState('');
   const [selectedVoices, setSelectedVoices] = useState<string[]>([]);
   const [genre, setGenre] = useState('News');
   const [duration, setDuration] = useState('10 min');
+  const [saveToLibrary, setSaveToLibrary] = useState(true);
   const [script, setScript] = useState<string | null>(null);
   const [isEditingScript, setIsEditingScript] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioFilename, setAudioFilename] = useState<string | null>(null);
+  const [podcastId, setPodcastId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
@@ -76,6 +80,7 @@ export function PodcastPage() {
     setScript(null);
     setAudioUrl(null);
     setAudioFilename(null);
+    setPodcastId(null);
     setSuccessMessage(null);
     setIsEditingScript(false);
 
@@ -111,33 +116,55 @@ export function PodcastPage() {
 
     setAudioUrl(null);
     setAudioFilename(null);
+    setPodcastId(null);
     setSuccessMessage(null);
 
     const response = await generatePodcastAudio({
       script: script.trim(),
       voices: selectedVoices,
+      title: title.trim() || undefined,
+      source_url: url.trim() || undefined,
+      genre,
+      duration,
+      save_to_library: saveToLibrary,
     });
 
     if (response && response.audio_url) {
       const fullUrl = `${settings.apiEndpoint}${response.audio_url}`;
       setAudioUrl(fullUrl);
-      setAudioFilename(response.audio_url.split('/').pop() || null);
-      setSuccessMessage('Podcast audio generated successfully!');
+      setPodcastId(response.podcast_id || null);
+      // Only set a filename when we are using the legacy filename-download endpoint
+      if (response.audio_url.includes('/api/v1/podcast/download/')) {
+        setAudioFilename(response.audio_url.split('/').pop() || null);
+      } else {
+        setAudioFilename(null);
+      }
+      setSuccessMessage(
+        response.podcast_id
+          ? 'Podcast audio generated and saved to the library!'
+          : 'Podcast audio generated successfully!'
+      );
     }
   };
 
   const handleDownload = async () => {
-    if (!audioFilename) return;
-
     setDownloading(true);
-    const blob = await downloadPodcastAudio(audioFilename);
+    let blob: Blob | null = null;
+
+    if (podcastId) {
+      blob = await downloadPodcastById(podcastId);
+    } else if (audioFilename) {
+      blob = await downloadPodcastAudio(audioFilename);
+    }
+
     setDownloading(false);
 
     if (blob) {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = audioFilename;
+      const fileBase = title.trim() || podcastId || audioFilename || 'podcast';
+      a.download = `${fileBase}.wav`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -156,6 +183,16 @@ export function PodcastPage() {
       {successMessage && <Alert type="success" message={successMessage} />}
 
       <div className="bg-white rounded-lg shadow p-6 space-y-6">
+        <div>
+          <Input
+            label="Title (Optional)"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g., Weekly Tech Briefing"
+          />
+          <p className="mt-1 text-xs text-gray-500">Used when saving to the Podcast Library</p>
+        </div>
+
         <div>
           <Input
             label="Article URL"
@@ -220,6 +257,32 @@ export function PodcastPage() {
           </div>
         </div>
 
+        <div className="flex items-center justify-between bg-gray-50 border rounded-lg p-4">
+          <div>
+            <p className="text-sm font-medium text-gray-900">Save to Podcast Library</p>
+            <p className="text-xs text-gray-500">If enabled, the generated audio will be saved and appear in Podcast Library</p>
+          </div>
+          <label className="inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={saveToLibrary}
+              onChange={(e) => setSaveToLibrary(e.target.checked)}
+            />
+            <div
+              className={`w-11 h-6 rounded-full transition-colors ${
+                saveToLibrary ? 'bg-primary-600' : 'bg-gray-300'
+              }`}
+            >
+              <div
+                className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform translate-y-0.5 ${
+                  saveToLibrary ? 'translate-x-5' : 'translate-x-1'
+                }`}
+              />
+            </div>
+          </label>
+        </div>
+
         <div className="flex gap-4">
           <Button
             variant="primary"
@@ -281,11 +344,12 @@ export function PodcastPage() {
       {audioUrl && (
         <div className="bg-white rounded-lg shadow p-6 space-y-4">
           <h2 className="text-xl font-semibold text-gray-900">Generated Podcast</h2>
-          <AudioPlayer src={audioUrl} filename={audioFilename || undefined} />
+          <AudioPlayer src={audioUrl} filename={title.trim() || audioFilename || undefined} />
           <Button
             variant="secondary"
             onClick={handleDownload}
             isLoading={downloading}
+            disabled={!podcastId && !audioFilename}
             className="w-full"
           >
             Download Audio

@@ -12,6 +12,7 @@ import { Input } from '../components/Input';
 import { FileUpload } from '../components/FileUpload';
 import { VoiceCard } from '../components/VoiceCard';
 import { VoiceProfileModal } from '../components/VoiceProfileModal';
+import { VoiceProfileFromAudioModal } from '../components/VoiceProfileFromAudioModal';
 import { Alert } from '../components/Alert';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 
@@ -26,6 +27,8 @@ export function VoicesPage() {
     createOrUpdateVoiceProfile,
     updateVoiceProfileKeywords,
     generateVoiceProfile,
+    analyzeVoiceProfileFromAudio,
+    applyVoiceProfile,
     loading: apiLoading,
     error: apiError,
   } = useApi();
@@ -41,6 +44,7 @@ export function VoicesPage() {
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [profileModalVoiceId, setProfileModalVoiceId] = useState<string | null>(null);
+  const [profileFromAudioOpen, setProfileFromAudioOpen] = useState(false);
   const [voiceProfiles, setVoiceProfiles] = useState<Record<string, boolean>>({});
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -146,7 +150,7 @@ export function VoicesPage() {
   useEffect(() => {
     const loadProfiles = async () => {
       const profiles: Record<string, boolean> = {};
-      for (const voice of voices.filter((v) => v.type === 'custom')) {
+      for (const voice of voices) {
         try {
           const response = await getVoiceProfile(voice.id);
           profiles[voice.id] = !!(response && response.profile);
@@ -164,6 +168,16 @@ export function VoicesPage() {
 
   const handleViewProfile = (voiceId: string) => {
     setProfileModalVoiceId(voiceId);
+  };
+
+  const handleApplyProfileFromAudio = async (voiceId: string, profile: import('../types/api').VoiceProfileApplyRequest) => {
+    const resp = await applyVoiceProfile(voiceId, profile);
+    if (resp && resp.success) {
+      setVoiceProfiles((prev) => ({ ...prev, [voiceId]: true }));
+      setSuccessMessage('Profile applied successfully');
+      return true;
+    }
+    return false;
   };
 
   const handleUpdateProfileKeywords = async (voiceId: string, keywords: string[]) => {
@@ -211,12 +225,14 @@ export function VoicesPage() {
           <h1 className="text-3xl font-bold text-gray-900">Voice Management</h1>
           <p className="mt-2 text-gray-600">Manage custom voices and view default voices</p>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => setShowCreateForm(!showCreateForm)}
-        >
-          {showCreateForm ? 'Cancel' : 'Create Voice'}
-        </Button>
+        <div className="flex gap-3">
+          <Button variant="secondary" onClick={() => setProfileFromAudioOpen(true)}>
+            Analyze Audio → Profile
+          </Button>
+          <Button variant="primary" onClick={() => setShowCreateForm(!showCreateForm)}>
+            {showCreateForm ? 'Cancel' : 'Create Voice'}
+          </Button>
+        </div>
       </div>
 
       {apiError && <Alert type="error" message={apiError} />}
@@ -385,6 +401,18 @@ export function VoicesPage() {
           onGetProfile={getVoiceProfile}
           onUpdateProfile={handleUpdateProfileKeywords}
           onGenerateProfile={handleGenerateProfile}
+        />
+      )}
+
+      {profileFromAudioOpen && (
+        <VoiceProfileFromAudioModal
+          isOpen={profileFromAudioOpen}
+          onClose={() => setProfileFromAudioOpen(false)}
+          voices={voices}
+          defaultOllamaUrl={settings.ollamaServerUrl}
+          defaultOllamaModel={settings.ollamaModel}
+          onAnalyze={analyzeVoiceProfileFromAudio}
+          onApply={handleApplyProfileFromAudio}
         />
       )}
     </div>

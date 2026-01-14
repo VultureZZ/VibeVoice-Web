@@ -5,7 +5,7 @@ Thread-safe operations for managing voice metadata.
 """
 import json
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -33,7 +33,9 @@ class VoiceStorage:
         if not self.storage_file.exists():
             with self.lock:
                 self.storage_file.parent.mkdir(parents=True, exist_ok=True)
-                initial_data = {"voices": {}}
+                # `voices`: custom voice metadata keyed by voice_id
+                # `profiles`: optional profiles for any voice_id (including default voices)
+                initial_data = {"voices": {}, "profiles": {}}
                 self.storage_file.write_text(json.dumps(initial_data, indent=2))
 
     def _load(self) -> Dict:
@@ -41,15 +43,23 @@ class VoiceStorage:
         try:
             if self.storage_file.exists():
                 content = self.storage_file.read_text()
-                return json.loads(content)
-            return {"voices": {}}
+                data = json.loads(content)
+                if not isinstance(data, dict):
+                    return {"voices": {}, "profiles": {}}
+                # Back-compat: older files may only have `voices`
+                data.setdefault("voices", {})
+                data.setdefault("profiles", {})
+                return data
+            return {"voices": {}, "profiles": {}}
         except (json.JSONDecodeError, IOError):
-            return {"voices": {}}
+            return {"voices": {}, "profiles": {}}
 
     def _save(self, data: Dict) -> None:
         """Save metadata to storage file."""
         with self.lock:
             self.storage_file.parent.mkdir(parents=True, exist_ok=True)
+            data.setdefault("voices", {})
+            data.setdefault("profiles", {})
             self.storage_file.write_text(json.dumps(data, indent=2))
 
     def add_voice(
@@ -71,11 +81,12 @@ class VoiceStorage:
             profile: Optional voice profile data
         """
         data = self._load()
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         voice_data = {
             "name": name,
             "description": description or "",
             "type": "custom",
-            "created_at": datetime.utcnow().isoformat() + "Z",
+            "created_at": now,
             "audio_files": audio_files or [],
         }
         if profile:
@@ -203,19 +214,26 @@ class VoiceStorage:
             True if updated, False if not found
         """
         data = self._load()
-        if voice_id not in data["voices"]:
-            return False
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
-        if "profile" not in data["voices"][voice_id]:
-            data["voices"][voice_id]["profile"] = {}
+        # If this is a custom voice, store profile inside the voice record.
+        if voice_id in data["voices"]:
+            if "profile" not in data["voices"][voice_id]:
+                data["voices"][voice_id]["profile"] = {}
 
-        # Update profile fields
-        data["voices"][voice_id]["profile"].update(profile)
-        data["voices"][voice_id]["profile"]["updated_at"] = datetime.utcnow().isoformat() + "Z"
-
-        # Set created_at if not present
-        if "created_at" not in data["voices"][voice_id]["profile"]:
-            data["voices"][voice_id]["profile"]["created_at"] = datetime.utcnow().isoformat() + "Z"
+            data["voices"][voice_id]["profile"].update(profile)
+            data["voices"][voice_id]["profile"]["updated_at"] = now
+            if "created_at" not in data["voices"][voice_id]["profile"]:
+                data["voices"][voice_id]["profile"]["created_at"] = now
+        else:
+            # Otherwise store it in the global `profiles` mapping so we can
+            # attach profiles to default voices without polluting the custom-voice list.
+            if voice_id not in data["profiles"]:
+                data["profiles"][voice_id] = {}
+            data["profiles"][voice_id].update(profile)
+            data["profiles"][voice_id]["updated_at"] = now
+            if "created_at" not in data["profiles"][voice_id]:
+                data["profiles"][voice_id]["created_at"] = now
 
         self._save(data)
         return True
@@ -232,8 +250,15 @@ class VoiceStorage:
         """
         data = self._load()
         voice = data["voices"].get(voice_id)
-        if voice:
-            return voice.get("profile")
+        if voice and isinstance(voice, dict):
+            profile = voice.get("profile")
+            if profile:
+                return profile
+
+        profile = data.get("profiles", {}).get(voice_id)
+        if profile and isinstance(profile, dict):
+            return profile
+
         return None
 
 

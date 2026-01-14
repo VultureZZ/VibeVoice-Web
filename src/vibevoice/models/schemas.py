@@ -121,6 +121,11 @@ class PodcastGenerateRequest(BaseModel):
     script: str = Field(..., description="Podcast script with speaker labels")
     voices: List[str] = Field(..., min_length=1, max_length=4, description="List of voice names (1-4 voices)")
     settings: Optional[SpeechSettings] = Field(default_factory=SpeechSettings, description="Speech generation settings")
+    title: Optional[str] = Field(None, description="Optional title for saving into the podcast library")
+    source_url: Optional[str] = Field(None, description="Optional source URL (e.g., article URL)")
+    genre: Optional[str] = Field(None, description="Optional genre metadata")
+    duration: Optional[str] = Field(None, description="Optional duration metadata (e.g., '10 min')")
+    save_to_library: bool = Field(default=True, description="Whether to save the generated podcast to the library")
 
 
 class PodcastGenerateResponse(BaseModel):
@@ -131,6 +136,27 @@ class PodcastGenerateResponse(BaseModel):
     audio_url: Optional[str] = Field(None, description="URL to generated audio file")
     file_path: Optional[str] = Field(None, description="Path to generated audio file")
     script: Optional[str] = Field(None, description="Script used for generation")
+    podcast_id: Optional[str] = Field(None, description="Podcast library identifier (if saved)")
+
+
+class PodcastItem(BaseModel):
+    """Podcast library item metadata."""
+
+    id: str = Field(..., description="Podcast identifier")
+    title: str = Field(..., description="Podcast title")
+    voices: List[str] = Field(default_factory=list, description="Voices used in this podcast")
+    source_url: Optional[str] = Field(None, description="Source URL (if any)")
+    genre: Optional[str] = Field(None, description="Genre metadata (if any)")
+    duration: Optional[str] = Field(None, description="Target duration metadata (if any)")
+    created_at: Optional[datetime] = Field(None, description="Creation timestamp")
+    audio_url: Optional[str] = Field(None, description="Download URL for the podcast audio")
+
+
+class PodcastListResponse(BaseModel):
+    """Podcast library list response."""
+
+    podcasts: List[PodcastItem] = Field(default_factory=list, description="Podcast library items")
+    total: int = Field(..., description="Total number of items")
 
 
 class VoiceProfile(BaseModel):
@@ -147,6 +173,18 @@ class VoiceProfile(BaseModel):
     updated_at: Optional[datetime] = Field(None, description="Profile last update timestamp")
 
 
+class VoiceProfileApplyRequest(BaseModel):
+    """Request model for applying a full voice profile payload to a voice."""
+
+    cadence: Optional[str] = Field(None, description="Description of speech rhythm/pace")
+    tone: Optional[str] = Field(None, description="Emotional tone and delivery style")
+    vocabulary_style: Optional[str] = Field(None, description="Word choice patterns (formal, casual, technical, etc.)")
+    sentence_structure: Optional[str] = Field(None, description="Typical sentence patterns (short, long, complex)")
+    unique_phrases: List[str] = Field(default_factory=list, description="Common phrases or expressions")
+    keywords: List[str] = Field(default_factory=list, description="Keywords for context (e.g., person names)")
+    profile_text: Optional[str] = Field(None, description="Full text description of the voice")
+
+
 class VoiceProfileRequest(BaseModel):
     """Request model for creating/updating voice profiles."""
 
@@ -161,6 +199,26 @@ class VoiceProfileResponse(BaseModel):
     success: bool = Field(..., description="Whether operation was successful")
     message: str = Field(..., description="Status message")
     profile: Optional[VoiceProfile] = Field(None, description="Voice profile data")
+
+
+class VoiceProfileFromAudioRequest(BaseModel):
+    """Request model (logical) for deriving a profile from audio."""
+
+    keywords: Optional[List[str]] = Field(None, description="Optional keywords/context to help profiling")
+    ollama_url: Optional[str] = Field(None, description="Optional custom Ollama server URL")
+    ollama_model: Optional[str] = Field(None, description="Optional custom Ollama model name")
+
+
+class VoiceProfileFromAudioResponse(BaseModel):
+    """Response model for audio-derived voice profile."""
+
+    success: bool = Field(..., description="Whether profiling was successful")
+    message: str = Field(..., description="Status message")
+    profile: Optional[VoiceProfile] = Field(None, description="Derived voice profile")
+    transcript: Optional[str] = Field(None, description="Transcript derived from the audio")
+    validation_feedback: Optional[AudioValidationFeedback] = Field(
+        None, description="Audio validation feedback and recommendations"
+    )
 
 
 class VoiceUpdateRequest(BaseModel):

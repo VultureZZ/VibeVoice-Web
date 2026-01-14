@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import config
 from .middleware.auth import APIKeyAuthMiddleware
 from .middleware.rate_limit import RateLimitMiddleware
-from .routes import speech, voices
+from .routes import speech, voices, podcasts
 
 # Import podcast router using file-based import
 from pathlib import Path
@@ -73,6 +73,7 @@ app.add_middleware(RateLimitMiddleware)
 app.include_router(speech.router)
 app.include_router(voices.router)
 app.include_router(podcast_router)
+app.include_router(podcasts.router)
 
 
 @app.get("/health")

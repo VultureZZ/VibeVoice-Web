@@ -13,6 +13,8 @@ from ..models.schemas import (
     IndividualFileAnalysis,
     VoiceCreateResponse,
     VoiceListResponse,
+    VoiceProfileApplyRequest,
+    VoiceProfileFromAudioResponse,
     VoiceProfile,
     VoiceProfileRequest,
     VoiceProfileResponse,
@@ -21,6 +23,7 @@ from ..models.schemas import (
     VoiceUpdateResponse,
 )
 from ..services.voice_manager import voice_manager
+from ..services.voice_profile_from_audio import voice_profile_from_audio
 
 router = APIRouter(prefix="/api/v1/voices", tags=["voices"])
 
@@ -158,6 +161,102 @@ async def create_voice(
         for temp_file in temp_files:
             if temp_file.exists():
                 temp_file.unlink()
+
+
+@router.post(
+    "/profile/analyze-audio",
+    response_model=VoiceProfileFromAudioResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
+    },
+)
+async def analyze_voice_profile_from_audio(
+    audio_file: UploadFile = File(...),
+    keywords: str = Form(None),
+    ollama_url: str = Form(None),
+    ollama_model: str = Form(None),
+) -> VoiceProfileFromAudioResponse:
+    """
+    Analyze an audio file and derive a style-oriented VoiceProfile.
+
+    This does NOT create a new voice; it returns a profile that can be applied to any voice.
+    """
+    if not audio_file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Audio file must have a filename")
+
+    import tempfile
+    from pathlib import Path
+
+    suffix = Path(audio_file.filename).suffix
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    temp_path = Path(temp_file.name)
+
+    try:
+        content = await audio_file.read()
+        if not content:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Audio file is empty")
+        temp_file.write(content)
+        temp_file.close()
+
+        keywords_list = None
+        if keywords:
+            keywords_list = [k.strip() for k in keywords.split(",") if k.strip()]
+
+        profile_dict, validation_dict, transcript = voice_profile_from_audio.analyze(
+            audio_path=temp_path,
+            keywords=keywords_list,
+            ollama_url=ollama_url,
+            ollama_model=ollama_model,
+        )
+
+        # Parse validation feedback
+        individual_files = [
+            IndividualFileAnalysis(**file_data) for file_data in validation_dict.get("individual_files", [])
+        ]
+        validation_feedback = AudioValidationFeedback(
+            total_duration_seconds=validation_dict.get("total_duration_seconds", 0.0),
+            individual_files=individual_files,
+            warnings=validation_dict.get("warnings", []),
+            recommendations=validation_dict.get("recommendations", []),
+            quality_metrics=validation_dict.get("quality_metrics", {}),
+        )
+
+        profile = VoiceProfile(
+            cadence=profile_dict.get("cadence"),
+            tone=profile_dict.get("tone"),
+            vocabulary_style=profile_dict.get("vocabulary_style"),
+            sentence_structure=profile_dict.get("sentence_structure"),
+            unique_phrases=profile_dict.get("unique_phrases", []),
+            keywords=profile_dict.get("keywords", []),
+            profile_text=profile_dict.get("profile_text"),
+            created_at=None,
+            updated_at=None,
+        )
+
+        return VoiceProfileFromAudioResponse(
+            success=True,
+            message="Voice profile generated from audio",
+            profile=profile,
+            transcript=transcript or None,
+            validation_feedback=validation_feedback,
+        )
+    except HTTPException:
+        raise
+    except RuntimeError as e:
+        # RuntimeError is used for Ollama unavailable / model missing, etc.
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to analyze audio: {str(e)}",
+        ) from e
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
 
 
 @router.get(
@@ -421,6 +520,77 @@ async def get_voice_profile(voice_id: str) -> VoiceProfileResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get voice profile: {str(e)}",
+        ) from e
+
+
+@router.put(
+    "/{voice_id}/profile",
+    response_model=VoiceProfileResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+async def apply_voice_profile(
+    voice_id: str,
+    request: VoiceProfileApplyRequest,
+) -> VoiceProfileResponse:
+    """
+    Apply a provided VoiceProfile payload to a voice.
+
+    This supports both custom voices and default voices.
+    """
+    try:
+        # Ensure voice exists (default voices are valid here too)
+        voice_data = voice_manager.get_voice(voice_id)
+        if not voice_data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Voice '{voice_id}' not found")
+
+        from ..models.voice_storage import voice_storage
+
+        profile_payload = request.model_dump()
+        voice_storage.update_voice_profile(voice_id, profile_payload)
+
+        profile_data = voice_storage.get_voice_profile(voice_id)
+        if not profile_data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Profile applied but no profile data available",
+            )
+
+        created_at = profile_data.get("created_at")
+        updated_at = profile_data.get("updated_at")
+        if isinstance(created_at, str):
+            try:
+                created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                created_at = None
+        if isinstance(updated_at, str):
+            try:
+                updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                updated_at = None
+
+        profile = VoiceProfile(
+            cadence=profile_data.get("cadence"),
+            tone=profile_data.get("tone"),
+            vocabulary_style=profile_data.get("vocabulary_style"),
+            sentence_structure=profile_data.get("sentence_structure"),
+            unique_phrases=profile_data.get("unique_phrases", []),
+            keywords=profile_data.get("keywords", []),
+            profile_text=profile_data.get("profile_text"),
+            created_at=created_at,
+            updated_at=updated_at,
+        )
+
+        return VoiceProfileResponse(success=True, message="Profile applied successfully", profile=profile)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to apply profile: {str(e)}",
         ) from e
 
 
