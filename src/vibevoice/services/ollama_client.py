@@ -130,14 +130,14 @@ class OllamaClient:
         Returns:
             Formatted prompt string
         """
-        # Map duration to approximate word count
+        # Map duration to approximate word count (without "words" suffix)
         duration_map = {
-            "5 min": "500-700 words",
-            "10 min": "1000-1400 words",
-            "15 min": "1500-2100 words",
-            "30 min": "3000-4200 words",
+            "5 min": "500-700",
+            "10 min": "1000-1400",
+            "15 min": "1500-2100",
+            "30 min": "3000-4200",
         }
-        word_target = duration_map.get(duration, "1000-1400 words")
+        word_target = duration_map.get(duration, "1000-1400")
 
         # Genre-specific instructions
         genre_instructions = {
@@ -151,36 +151,76 @@ class OllamaClient:
         }
         genre_style = genre_instructions.get(genre, "Keep it informative and engaging.")
 
-        # Build speaker labels based on num_voices
+        # Build speaker examples based on num_voices (1-4)
         speaker_examples = []
         for i in range(1, num_voices + 1):
-            speaker_examples.append(f"Speaker {i}: [dialogue here]")
+            speaker_examples.append(f"Speaker {i}: [dialogue]")
 
-        prompt = f"""You are a professional podcast script writer. Create a podcast script based on the following article.
+        # Build conditional speaker differentiation section
+        speaker_differentiation = ""
+        if num_voices == 1:
+            speaker_differentiation = "   - Speaker 1: Solo host, presents all information and guides the narrative"
+        elif num_voices == 2:
+            speaker_differentiation = """   - Speaker 1: Primary host, guides the conversation, asks questions
+   - Speaker 2: Co-host/expert, provides insights and elaboration"""
+        else:
+            # num_voices > 2
+            speaker_differentiation = """   - Speaker 1: Primary host, guides the conversation, asks questions
+   - Speaker 2: Co-host/expert, provides insights and elaboration
+   - Additional speakers: Contribute unique perspectives or counterpoints"""
 
-Article Content:
+        prompt = f"""You are an expert podcast script writer specializing in creating natural, engaging dialogue for text-to-speech synthesis.
+
+**ARTICLE TO ADAPT:**
 {article_text}
 
-Requirements:
+**PODCAST SPECIFICATIONS:**
 - Genre: {genre}
-- Style: {genre_style}
-- Target length: {word_target} (approximately {duration})
-- Number of speakers: {num_voices}
-- Format: Use "Speaker 1:", "Speaker 2:", etc. to indicate different speakers
+- Tone/Style: {genre_style}
+- Target word count: {word_target} words (~{duration})
+- Speakers: {num_voices}
 
-Format the script exactly like this example:
+**OUTPUT FORMAT:**
+Use exactly this format with no additional markup:
+
 {chr(10).join(speaker_examples)}
 
-Guidelines:
-1. Distribute dialogue evenly among all {num_voices} speakers
-2. Make the conversation natural and engaging
-3. Cover the main points of the article
-4. Adapt the style to match the {genre} genre
-5. Ensure the script is approximately {duration} long when read at a normal pace
-6. Start with an introduction and end with a conclusion
-7. Use clear speaker labels: "Speaker 1:", "Speaker 2:", etc.
+**SCRIPT REQUIREMENTS:**
 
-Generate the podcast script now:"""
+1. **Natural Speech Patterns**
+   - Use contractions (don't, we're, that's)
+   - Include verbal fillers sparingly (well, you know, I mean)
+   - Add brief reactions (Exactly, Right, Interesting)
+   - Vary sentence length—mix short punchy lines with longer explanations
+
+2. **Speaker Differentiation**
+{speaker_differentiation}
+
+3. **Structure**
+   - Opening hook (grab attention in first 2-3 exchanges)
+   - Brief intro of topic
+   - Main content covering key article points
+   - Smooth transitions between subtopics
+   - Memorable conclusion with takeaway
+
+4. **TTS Optimization**
+   - Avoid abbreviations (write "versus" not "vs.")
+   - Spell out numbers under 10
+   - Use em-dashes for natural pauses
+   - Avoid complex punctuation that may confuse TTS
+
+5. **Pacing**
+   - Balance information density with breathing room
+   - Include moments of agreement/reaction between substantive points
+   - Aim for 130-150 words per minute of target duration
+
+**DO NOT:**
+- Include stage directions or notes in parentheses
+- Use asterisks or other formatting
+- Add sound effect cues
+- Include timestamps
+
+Generate the complete podcast script now:"""
 
         return prompt
 
