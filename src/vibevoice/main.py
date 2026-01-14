@@ -12,9 +12,13 @@ from .middleware.auth import APIKeyAuthMiddleware
 from .middleware.rate_limit import RateLimitMiddleware
 from .routes import speech, voices
 
-# Import podcast router - use absolute import to avoid package issues
-import importlib
-_podcast_module = importlib.import_module('vibevoice.routes.podcast')
+# Import podcast router using file-based import
+from pathlib import Path
+import importlib.util
+_podcast_file = Path(__file__).parent / "routes" / "podcast.py"
+_spec = importlib.util.spec_from_file_location("vibevoice.routes.podcast", _podcast_file)
+_podcast_module = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_podcast_module)
 podcast_router = _podcast_module.router
 
 # Configure logging
