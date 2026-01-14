@@ -34,7 +34,7 @@ Start the development server:
 npm run dev
 ```
 
-The app will be available at `http://localhost:3000`.
+The app will be available at `http://server-ai.mrhelpmann.com:3001`.
 
 The dev server includes a proxy to the API server, so API requests will be forwarded to `http://localhost:8000` automatically.
 
