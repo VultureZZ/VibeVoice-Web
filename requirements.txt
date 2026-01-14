@@ -12,6 +12,12 @@ python-dotenv>=1.0.0
 pydantic>=2.0.0
 requests>=2.31.0
 
+# Article scraping and LLM dependencies
+beautifulsoup4>=4.12.0
+newspaper3k>=0.2.8
+httpx>=0.25.0
+lxml>=4.9.0
+
 # Optional: FlashAttention2 for faster inference (recommended but not required)
 # Install with: pip install flash-attn --no-build-isolation
 # Note: Requires CUDA and may need specific CUDA/PyTorch versions

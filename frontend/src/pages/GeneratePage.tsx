@@ -13,6 +13,7 @@ import { Select, MultiSelect } from '../components/Select';
 import { AudioPlayer } from '../components/AudioPlayer';
 import { Alert } from '../components/Alert';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { SUPPORTED_LANGUAGES } from '../utils/languages';
 
 export function GeneratePage() {
   const { settings } = useSettings();
@@ -95,10 +96,7 @@ Speaker 2: Yes, speech generation is successful.`);
     label: voice.name,
   }));
 
-  const languageOptions = [
-    { value: 'en', label: 'English' },
-    { value: 'zh', label: 'Chinese' },
-  ];
+  const languageOptions = SUPPORTED_LANGUAGES;
 
   const formatOptions = [
     { value: 'wav', label: 'WAV' },

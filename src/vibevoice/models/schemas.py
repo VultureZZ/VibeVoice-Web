@@ -94,3 +94,40 @@ class ErrorResponse(BaseModel):
 
     error: str = Field(..., description="Error message")
     detail: Optional[str] = Field(None, description="Detailed error information")
+
+
+class PodcastScriptRequest(BaseModel):
+    """Request model for generating podcast script from URL."""
+
+    url: str = Field(..., description="URL of the article to convert to podcast")
+    voices: List[str] = Field(..., min_length=1, max_length=4, description="List of voice names (1-4 voices)")
+    genre: str = Field(..., description="Podcast genre (Comedy, Serious, News, Educational, Storytelling, Interview, Documentary)")
+    duration: str = Field(..., description="Target duration (5 min, 10 min, 15 min, 30 min)")
+    ollama_url: Optional[str] = Field(None, description="Optional custom Ollama server URL")
+    ollama_model: Optional[str] = Field(None, description="Optional custom Ollama model name")
+
+
+class PodcastScriptResponse(BaseModel):
+    """Response model for podcast script generation."""
+
+    success: bool = Field(..., description="Whether script generation was successful")
+    message: str = Field(..., description="Status message")
+    script: Optional[str] = Field(None, description="Generated podcast script with speaker labels")
+
+
+class PodcastGenerateRequest(BaseModel):
+    """Request model for generating podcast audio from script."""
+
+    script: str = Field(..., description="Podcast script with speaker labels")
+    voices: List[str] = Field(..., min_length=1, max_length=4, description="List of voice names (1-4 voices)")
+    settings: Optional[SpeechSettings] = Field(default_factory=SpeechSettings, description="Speech generation settings")
+
+
+class PodcastGenerateResponse(BaseModel):
+    """Response model for podcast audio generation."""
+
+    success: bool = Field(..., description="Whether generation was successful")
+    message: str = Field(..., description="Status message")
+    audio_url: Optional[str] = Field(None, description="URL to generated audio file")
+    file_path: Optional[str] = Field(None, description="Path to generated audio file")
+    script: Optional[str] = Field(None, description="Script used for generation")

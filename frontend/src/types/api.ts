@@ -71,3 +71,32 @@ export interface HealthCheckResponse {
   service: string;
   version: string;
 }
+
+export interface PodcastScriptRequest {
+  url: string;
+  voices: string[];
+  genre: string;
+  duration: string;
+  ollama_url?: string;
+  ollama_model?: string;
+}
+
+export interface PodcastScriptResponse {
+  success: boolean;
+  message: string;
+  script?: string;
+}
+
+export interface PodcastGenerateRequest {
+  script: string;
+  voices: string[];
+  settings?: SpeechSettings;
+}
+
+export interface PodcastGenerateResponse {
+  success: boolean;
+  message: string;
+  audio_url?: string;
+  file_path?: string;
+  script?: string;
+}

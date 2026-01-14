@@ -10,6 +10,10 @@ import {
   VoiceCreateResponse,
   HealthCheckResponse,
   ErrorResponse,
+  PodcastScriptRequest,
+  PodcastScriptResponse,
+  PodcastGenerateRequest,
+  PodcastGenerateResponse,
 } from '../types/api';
 import { AppSettings } from '../types/settings';
 
@@ -133,6 +137,38 @@ class ApiClient {
    */
   async deleteVoice(voiceId: string): Promise<void> {
     await this.client.delete(`/api/v1/voices/${voiceId}`);
+  }
+
+  /**
+   * Generate podcast script from article URL
+   */
+  async generatePodcastScript(request: PodcastScriptRequest): Promise<PodcastScriptResponse> {
+    const response = await this.client.post<PodcastScriptResponse>(
+      '/api/v1/podcast/generate-script',
+      request
+    );
+    return response.data;
+  }
+
+  /**
+   * Generate podcast audio from script
+   */
+  async generatePodcastAudio(request: PodcastGenerateRequest): Promise<PodcastGenerateResponse> {
+    const response = await this.client.post<PodcastGenerateResponse>(
+      '/api/v1/podcast/generate',
+      request
+    );
+    return response.data;
+  }
+
+  /**
+   * Download generated podcast audio file
+   */
+  async downloadPodcastAudio(filename: string): Promise<Blob> {
+    const response = await this.client.get(`/api/v1/podcast/download/${filename}`, {
+      responseType: 'blob',
+    });
+    return response.data;
   }
 }
 

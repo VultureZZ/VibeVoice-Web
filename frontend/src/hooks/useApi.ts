@@ -10,6 +10,10 @@ import {
   VoiceListResponse,
   VoiceCreateResponse,
   HealthCheckResponse,
+  PodcastScriptRequest,
+  PodcastScriptResponse,
+  PodcastGenerateRequest,
+  PodcastGenerateResponse,
 } from '../types/api';
 
 export function useApi() {
@@ -71,6 +75,27 @@ export function useApi() {
     [execute]
   );
 
+  const generatePodcastScript = useCallback(
+    async (request: PodcastScriptRequest): Promise<PodcastScriptResponse | null> => {
+      return execute(() => apiClient.generatePodcastScript(request));
+    },
+    [execute]
+  );
+
+  const generatePodcastAudio = useCallback(
+    async (request: PodcastGenerateRequest): Promise<PodcastGenerateResponse | null> => {
+      return execute(() => apiClient.generatePodcastAudio(request));
+    },
+    [execute]
+  );
+
+  const downloadPodcastAudio = useCallback(
+    async (filename: string): Promise<Blob | null> => {
+      return execute(() => apiClient.downloadPodcastAudio(filename));
+    },
+    [execute]
+  );
+
   return {
     loading,
     error,
@@ -80,5 +105,8 @@ export function useApi() {
     listVoices,
     createVoice,
     deleteVoice,
+    generatePodcastScript,
+    generatePodcastAudio,
+    downloadPodcastAudio,
   };
 }

@@ -25,7 +25,7 @@ class Config:
     API_KEY: Optional[str] = os.getenv("API_KEY", None)
 
     # Rate limiting
-    RATE_LIMIT_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "10"))
+    RATE_LIMIT_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "100"))
 
     # Paths
     MODEL_PATH: Path = Path(os.getenv("MODEL_PATH", "models/VibeVoice-1.5B"))
@@ -36,6 +36,10 @@ class Config:
     # Server
     PORT: int = int(os.getenv("PORT", "8000"))
     HOST: str = os.getenv("HOST", "0.0.0.0")
+
+    # Ollama configuration
+    OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3.2")
 
     def __init__(self):
         """Initialize configuration and ensure directories exist."""

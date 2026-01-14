@@ -10,18 +10,35 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Select } from '../components/Select';
 import { Alert } from '../components/Alert';
+import { SUPPORTED_LANGUAGES } from '../utils/languages';
 
 export function SettingsPage() {
   const { settings, saveSettings, clearSettings } = useSettings();
   const { healthCheck, loading, error } = useApi();
 
-  const [apiEndpoint, setApiEndpoint] = useState(settings.apiEndpoint);
+  const [apiEndpoint, setApiEndpoint] = useState(
+    settings.apiEndpoint
+  );
   const [apiKey, setApiKey] = useState(settings.apiKey || '');
-  const [defaultLanguage, setDefaultLanguage] = useState(settings.defaultLanguage);
-  const [defaultOutputFormat, setDefaultOutputFormat] = useState(settings.defaultOutputFormat);
-  const [defaultSampleRate, setDefaultSampleRate] = useState(settings.defaultSampleRate.toString());
-  
-  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [defaultLanguage, setDefaultLanguage] = useState(
+    settings.defaultLanguage
+  );
+  const [defaultOutputFormat, setDefaultOutputFormat] = useState(
+    settings.defaultOutputFormat
+  );
+  const [defaultSampleRate, setDefaultSampleRate] = useState(
+    settings.defaultSampleRate.toString()
+  );
+  const [ollamaServerUrl, setOllamaServerUrl] = useState(
+    settings.ollamaServerUrl || 'http://localhost:11434'
+  );
+  const [ollamaModel, setOllamaModel] = useState(
+    settings.ollamaModel || 'llama3.2'
+  );
+
+  const [testStatus, setTestStatus] = useState<
+    'idle' | 'testing' | 'success' | 'error'
+  >('idle');
   const [testMessage, setTestMessage] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
@@ -31,6 +48,10 @@ export function SettingsPage() {
     setDefaultLanguage(settings.defaultLanguage);
     setDefaultOutputFormat(settings.defaultOutputFormat);
     setDefaultSampleRate(settings.defaultSampleRate.toString());
+    setOllamaServerUrl(
+      settings.ollamaServerUrl || 'http://localhost:11434'
+    );
+    setOllamaModel(settings.ollamaModel || 'llama3.2');
   }, [settings]);
 
   const endpointValidation = validateApiEndpoint(apiEndpoint);
@@ -42,7 +63,7 @@ export function SettingsPage() {
     // Temporarily update API client config
     const originalEndpoint = settings.apiEndpoint;
     const originalKey = settings.apiKey;
-    
+
     saveSettings({
       ...settings,
       apiEndpoint,
@@ -53,7 +74,9 @@ export function SettingsPage() {
 
     if (response) {
       setTestStatus('success');
-      setTestMessage(`Connected successfully! Service: ${response.service}, Version: ${response.version}`);
+      setTestMessage(
+        `Connected successfully! Service: ${response.service}, Version: ${response.version}`
+      );
     } else {
       setTestStatus('error');
       setTestMessage(error || 'Connection failed');
@@ -79,6 +102,8 @@ export function SettingsPage() {
       defaultLanguage,
       defaultOutputFormat,
       defaultSampleRate: parseInt(defaultSampleRate),
+      ollamaServerUrl: ollamaServerUrl.trim() || undefined,
+      ollamaModel: ollamaModel.trim() || undefined,
     });
 
     setSaveMessage('Settings saved successfully!');
@@ -86,21 +111,20 @@ export function SettingsPage() {
   };
 
   const handleClear = () => {
-    if (confirm('Are you sure you want to clear all settings? This will reset to defaults.')) {
+    if (
+      confirm(
+        'Are you sure you want to clear all settings? This will reset to defaults.'
+      )
+    ) {
       clearSettings();
       setSaveMessage('Settings cleared!');
       setTimeout(() => setSaveMessage(null), 3000);
     }
   };
 
-  const languageOptions = [
-    { value: 'en', label: 'English' },
-    { value: 'zh', label: 'Chinese' },
-  ];
+  const languageOptions = SUPPORTED_LANGUAGES;
 
-  const formatOptions = [
-    { value: 'wav', label: 'WAV' },
-  ];
+  const formatOptions = [{ value: 'wav', label: 'WAV' }];
 
   const sampleRateOptions = [
     { value: '24000', label: '24000 Hz' },
@@ -112,7 +136,9 @@ export function SettingsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-        <p className="mt-2 text-gray-600">Configure API connection and default preferences</p>
+        <p className="mt-2 text-gray-600">
+          Configure API connection and default preferences
+        </p>
       </div>
 
       {saveMessage && (
@@ -125,8 +151,10 @@ export function SettingsPage() {
 
       <div className="bg-white rounded-lg shadow p-6 space-y-6">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">API Configuration</h2>
-          
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            API Configuration
+          </h2>
+
           <div className="space-y-4">
             <Input
               label="API Endpoint"
@@ -154,7 +182,7 @@ export function SettingsPage() {
               >
                 Test Connection
               </Button>
-              
+
               {testStatus === 'success' && testMessage && (
                 <Alert type="success" message={testMessage} />
               )}
@@ -166,8 +194,34 @@ export function SettingsPage() {
         </div>
 
         <div className="border-t pt-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Default Settings</h2>
-          
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            Ollama Configuration
+          </h2>
+
+          <div className="space-y-4">
+            <Input
+              label="Ollama Server URL"
+              type="url"
+              value={ollamaServerUrl}
+              onChange={(e) => setOllamaServerUrl(e.target.value)}
+              placeholder="http://localhost:11434"
+            />
+
+            <Input
+              label="Ollama Model"
+              type="text"
+              value={ollamaModel}
+              onChange={(e) => setOllamaModel(e.target.value)}
+              placeholder="llama3.2"
+            />
+          </div>
+        </div>
+
+        <div className="border-t pt-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            Default Settings
+          </h2>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Select
               label="Default Language"
@@ -200,11 +254,8 @@ export function SettingsPage() {
           >
             Save Settings
           </Button>
-          
-          <Button
-            variant="secondary"
-            onClick={handleClear}
-          >
+
+          <Button variant="secondary" onClick={handleClear}>
             Clear Settings
           </Button>
         </div>

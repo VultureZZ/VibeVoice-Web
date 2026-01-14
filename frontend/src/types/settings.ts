@@ -8,6 +8,8 @@ export interface AppSettings {
   defaultLanguage: string;
   defaultOutputFormat: string;
   defaultSampleRate: number;
+  ollamaServerUrl?: string;
+  ollamaModel?: string;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -16,4 +18,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultLanguage: 'en',
   defaultOutputFormat: 'wav',
   defaultSampleRate: 24000,
+  ollamaServerUrl: 'http://localhost:11434',
+  ollamaModel: 'llama3.2',
 };
