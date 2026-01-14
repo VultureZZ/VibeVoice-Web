@@ -87,6 +87,10 @@ async def create_voice(
         if keywords:
             keywords_list = [k.strip() for k in keywords.split(",") if k.strip()]
 
+        # Get Ollama settings from form (optional)
+        ollama_url = None  # Could be added as form field if needed
+        ollama_model = None  # Could be added as form field if needed
+
         # Create voice
         try:
             voice_data = voice_manager.create_custom_voice(
@@ -94,6 +98,8 @@ async def create_voice(
                 description=description,
                 audio_files=temp_files,
                 keywords=keywords_list,
+                ollama_url=ollama_url,
+                ollama_model=ollama_model,
             )
 
             # Parse created_at if it's a string
@@ -460,33 +466,42 @@ async def create_or_update_voice_profile(
         import logging
         logger = logging.getLogger(__name__)
         
-        if existing_profile and request.keywords:
-            # Enhance existing profile
-            logger.info(f"Enhancing existing profile for voice {voice_id} with keywords: {request.keywords}")
-            updated_voice = voice_manager.enhance_voice_profile(
-                voice_id=voice_id,
-                keywords=request.keywords or [],
-            )
-            message = "Profile enhanced successfully"
-        else:
-            # Create new profile
-            logger.info(f"Creating new profile for voice {voice_id} with keywords: {request.keywords}")
-            profile = voice_profiler.profile_voice_from_audio(
-                voice_name=voice_data.get("name", voice_id),
-                voice_description=voice_data.get("description"),
-                keywords=request.keywords,
-            )
-
-            if profile:
-                # Ensure keywords are saved
-                if request.keywords:
-                    profile["keywords"] = request.keywords
-                voice_storage.update_voice_profile(voice_id, profile)
-                logger.info(f"Profile created and saved for voice {voice_id}")
-                message = "Profile created successfully"
+        try:
+            if existing_profile and request.keywords:
+                # Enhance existing profile
+                logger.info(f"Enhancing existing profile for voice {voice_id} with keywords: {request.keywords}")
+                updated_voice = voice_manager.enhance_voice_profile(
+                    voice_id=voice_id,
+                    keywords=request.keywords or [],
+                )
+                message = "Profile enhanced successfully"
             else:
-                logger.warning(f"Profile creation returned empty profile for voice {voice_id}")
-                message = "Profile creation attempted but returned empty result"
+                # Create new profile
+                logger.info(f"Creating new profile for voice {voice_id} with keywords: {request.keywords}")
+                profile = voice_profiler.profile_voice_from_audio(
+                    voice_name=voice_data.get("name", voice_id),
+                    voice_description=voice_data.get("description"),
+                    keywords=request.keywords,
+                    ollama_url=request.ollama_url,
+                    ollama_model=request.ollama_model,
+                )
+
+                if profile:
+                    # Ensure keywords are saved
+                    if request.keywords:
+                        profile["keywords"] = request.keywords
+                    voice_storage.update_voice_profile(voice_id, profile)
+                    logger.info(f"Profile created and saved for voice {voice_id}")
+                    message = "Profile created successfully"
+                else:
+                    logger.warning(f"Profile creation returned empty profile for voice {voice_id}")
+                    message = "Profile creation attempted but returned empty result"
+        except RuntimeError as e:
+            # RuntimeError means Ollama is not available or model missing
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(e),
+            ) from e
 
         # Get updated profile
         profile_data = voice_storage.get_voice_profile(voice_id)
@@ -585,10 +600,19 @@ async def update_voice_profile_keywords(
             )
 
         # Enhance profile with keywords
-        updated_voice = voice_manager.enhance_voice_profile(
-            voice_id=voice_id,
-            keywords=request.keywords,
-        )
+        try:
+            updated_voice = voice_manager.enhance_voice_profile(
+                voice_id=voice_id,
+                keywords=request.keywords,
+                ollama_url=request.ollama_url,
+                ollama_model=request.ollama_model,
+            )
+        except RuntimeError as e:
+            # RuntimeError means Ollama is not available or model missing
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(e),
+            ) from e
 
         # Get updated profile
         from ..models.voice_storage import voice_storage
@@ -694,22 +718,33 @@ async def generate_voice_profile(
         logger.info(f"Manually generating profile for voice {voice_id} with keywords: {request.keywords}")
 
         # Generate or enhance profile
-        if existing_profile and request.keywords:
-            # Enhance existing profile
-            profile = voice_profiler.enhance_profile_with_keywords(
-                voice_name=voice_data.get("name", voice_id),
-                existing_profile=existing_profile,
-                keywords=request.keywords or [],
-            )
-            message = "Profile enhanced successfully"
-        else:
-            # Create new profile
-            profile = voice_profiler.profile_voice_from_audio(
-                voice_name=voice_data.get("name", voice_id),
-                voice_description=voice_data.get("description"),
-                keywords=request.keywords,
-            )
-            message = "Profile generated successfully"
+        try:
+            if existing_profile and request.keywords:
+                # Enhance existing profile
+                profile = voice_profiler.enhance_profile_with_keywords(
+                    voice_name=voice_data.get("name", voice_id),
+                    existing_profile=existing_profile,
+                    keywords=request.keywords or [],
+                    ollama_url=request.ollama_url,
+                    ollama_model=request.ollama_model,
+                )
+                message = "Profile enhanced successfully"
+            else:
+                # Create new profile
+                profile = voice_profiler.profile_voice_from_audio(
+                    voice_name=voice_data.get("name", voice_id),
+                    voice_description=voice_data.get("description"),
+                    keywords=request.keywords,
+                    ollama_url=request.ollama_url,
+                    ollama_model=request.ollama_model,
+                )
+                message = "Profile generated successfully"
+        except RuntimeError as e:
+            # RuntimeError means Ollama is not available or model missing
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(e),
+            ) from e
 
         if not profile:
             raise HTTPException(

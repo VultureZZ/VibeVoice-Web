@@ -71,6 +71,8 @@ class VoiceManager:
         description: Optional[str],
         audio_files: List[Path],
         keywords: Optional[List[str]] = None,
+        ollama_url: Optional[str] = None,
+        ollama_model: Optional[str] = None,
     ) -> dict:
         """
         Create a custom voice from uploaded audio files.
@@ -201,6 +203,8 @@ class VoiceManager:
                     voice_name=name,
                     voice_description=description,
                     keywords=keywords,
+                    ollama_url=ollama_url,
+                    ollama_model=ollama_model,
                 )
                 if profile:
                     # Ensure keywords are included in profile
@@ -211,6 +215,9 @@ class VoiceManager:
                     logger.info(f"Successfully created and saved profile for voice: {name}")
                 else:
                     logger.warning(f"Profile creation returned empty profile for voice: {name}")
+            except RuntimeError as e:
+                # RuntimeError means Ollama is not available or model missing - log as warning
+                logger.warning(f"Could not profile voice {name}: {e}")
             except Exception as e:
                 # Log error but don't fail voice creation
                 logger.error(f"Failed to automatically profile voice {name}: {e}", exc_info=True)
@@ -377,6 +384,8 @@ class VoiceManager:
         self,
         voice_id: str,
         keywords: List[str],
+        ollama_url: Optional[str] = None,
+        ollama_model: Optional[str] = None,
     ) -> dict:
         """
         Enhance voice profile with keywords.
@@ -404,6 +413,8 @@ class VoiceManager:
                 voice_name=voice_data.get("name", voice_id),
                 existing_profile=existing_profile,
                 keywords=keywords,
+                ollama_url=ollama_url,
+                ollama_model=ollama_model,
             )
             if enhanced_profile:
                 voice_storage.update_voice_profile(voice_id, enhanced_profile)

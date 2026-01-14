@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import { useApi } from '../hooks/useApi';
 import { useVoices } from '../hooks/useVoices';
+import { useSettings } from '../hooks/useSettings';
 import { validateVoiceName } from '../utils/validation';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -166,10 +167,18 @@ export function VoicesPage() {
 
   const handleUpdateProfileKeywords = async (voiceId: string, keywords: string[]) => {
     // Try to update keywords first, if that fails, create profile
-    let response = await updateVoiceProfileKeywords(voiceId, { keywords });
+    let response = await updateVoiceProfileKeywords(voiceId, {
+      keywords,
+      ollama_url: settings.ollamaServerUrl,
+      ollama_model: settings.ollamaModel,
+    });
     if (!response || !response.profile) {
       // If update failed, try creating profile
-      response = await createOrUpdateVoiceProfile(voiceId, { keywords });
+      response = await createOrUpdateVoiceProfile(voiceId, {
+        keywords,
+        ollama_url: settings.ollamaServerUrl,
+        ollama_model: settings.ollamaModel,
+      });
     }
     if (response && response.profile) {
       setVoiceProfiles((prev) => ({ ...prev, [voiceId]: true }));
@@ -179,7 +188,11 @@ export function VoicesPage() {
   };
 
   const handleGenerateProfile = async (voiceId: string, keywords: string[]) => {
-    const response = await generateVoiceProfile(voiceId, { keywords: keywords.length > 0 ? keywords : undefined });
+    const response = await generateVoiceProfile(voiceId, {
+      keywords: keywords.length > 0 ? keywords : undefined,
+      ollama_url: settings.ollamaServerUrl,
+      ollama_model: settings.ollamaModel,
+    });
     if (response && response.profile) {
       setVoiceProfiles((prev) => ({ ...prev, [voiceId]: true }));
       return response;

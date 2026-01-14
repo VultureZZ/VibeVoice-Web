@@ -115,6 +115,8 @@ export interface VoiceProfile {
 
 export interface VoiceProfileRequest {
   keywords?: string[];
+  ollama_url?: string;
+  ollama_model?: string;
 }
 
 export interface VoiceProfileResponse {

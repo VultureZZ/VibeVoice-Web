@@ -16,15 +16,23 @@ logger = logging.getLogger(__name__)
 class VoiceProfiler:
     """Service for profiling voices using LLM analysis."""
 
-    def __init__(self):
-        """Initialize voice profiler."""
-        self.ollama = OllamaClient()
+    def __init__(self, base_url: Optional[str] = None, model: Optional[str] = None):
+        """
+        Initialize voice profiler.
+        
+        Args:
+            base_url: Optional Ollama server base URL (defaults to config)
+            model: Optional Ollama model name (defaults to config)
+        """
+        self.ollama = OllamaClient(base_url=base_url, model=model)
 
     def profile_voice_from_audio(
         self,
         voice_name: str,
         voice_description: Optional[str] = None,
         keywords: Optional[List[str]] = None,
+        ollama_url: Optional[str] = None,
+        ollama_model: Optional[str] = None,
     ) -> Dict:
         """
         Profile a voice using LLM analysis.
@@ -41,6 +49,18 @@ class VoiceProfiler:
         if keywords:
             logger.info(f"Using keywords: {keywords}")
 
+        # Use custom Ollama settings if provided
+        ollama_client = self.ollama
+        if ollama_url or ollama_model:
+            ollama_client = OllamaClient(base_url=ollama_url, model=ollama_model)
+            logger.info(f"Using custom Ollama settings: URL={ollama_url or 'default'}, Model={ollama_model or 'default'}")
+
+        # Check Ollama connection first
+        if not ollama_client.check_connection():
+            error_msg = f"Ollama server not available at {ollama_client.base_url}. Please ensure Ollama is running."
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
         # Build prompt for profiling
         prompt = self.generate_profile_prompt(voice_name, voice_description, keywords)
 
@@ -48,9 +68,9 @@ class VoiceProfiler:
             # Call Ollama to generate profile
             with httpx.Client(timeout=300) as client:
                 response = client.post(
-                    f"{self.ollama.base_url}/api/generate",
+                    f"{ollama_client.base_url}/api/generate",
                     json={
-                        "model": self.ollama.model,
+                        "model": ollama_client.model,
                         "prompt": prompt,
                         "stream": False,
                         "options": {
@@ -81,16 +101,31 @@ class VoiceProfiler:
             logger.debug(f"Profile data: {profile}")
             return profile
 
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                error_msg = f"Ollama model '{ollama_client.model}' not found. Please ensure the model is installed: ollama pull {ollama_client.model}"
+                logger.error(error_msg)
+                raise RuntimeError(error_msg) from e
+            else:
+                error_msg = f"Ollama API error (HTTP {e.response.status_code}): {e.response.text}"
+                logger.error(error_msg)
+                raise RuntimeError(error_msg) from e
+        except httpx.RequestError as e:
+            error_msg = f"Failed to connect to Ollama at {ollama_client.base_url}: {e}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg) from e
         except Exception as e:
-            logger.error(f"Failed to profile voice {voice_name}: {e}")
-            # Return empty profile on error
-            return self._create_empty_profile()
+            error_msg = f"Failed to profile voice {voice_name}: {e}"
+            logger.error(error_msg, exc_info=True)
+            raise RuntimeError(error_msg) from e
 
     def enhance_profile_with_keywords(
         self,
         voice_name: str,
         existing_profile: Optional[Dict],
         keywords: List[str],
+        ollama_url: Optional[str] = None,
+        ollama_model: Optional[str] = None,
     ) -> Dict:
         """
         Enhance existing profile using keywords.
@@ -105,6 +140,18 @@ class VoiceProfiler:
         """
         logger.info(f"Enhancing profile for {voice_name} with keywords: {keywords}")
 
+        # Use custom Ollama settings if provided
+        ollama_client = self.ollama
+        if ollama_url or ollama_model:
+            ollama_client = OllamaClient(base_url=ollama_url, model=ollama_model)
+            logger.info(f"Using custom Ollama settings: URL={ollama_url or 'default'}, Model={ollama_model or 'default'}")
+
+        # Check Ollama connection first
+        if not ollama_client.check_connection():
+            error_msg = f"Ollama server not available at {ollama_client.base_url}. Please ensure Ollama is running."
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
         # Build enhancement prompt
         prompt = self.generate_enhancement_prompt(voice_name, existing_profile, keywords)
 
@@ -112,9 +159,9 @@ class VoiceProfiler:
             # Call Ollama to enhance profile
             with httpx.Client(timeout=300) as client:
                 response = client.post(
-                    f"{self.ollama.base_url}/api/generate",
+                    f"{ollama_client.base_url}/api/generate",
                     json={
-                        "model": self.ollama.model,
+                        "model": ollama_client.model,
                         "prompt": prompt,
                         "stream": False,
                         "options": {
@@ -152,9 +199,23 @@ class VoiceProfiler:
             logger.debug(f"Enhanced profile data: {enhanced_profile}")
             return enhanced_profile
 
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                error_msg = f"Ollama model '{ollama_client.model}' not found. Please ensure the model is installed: ollama pull {ollama_client.model}"
+                logger.error(error_msg)
+                raise RuntimeError(error_msg) from e
+            else:
+                error_msg = f"Ollama API error (HTTP {e.response.status_code}): {e.response.text}"
+                logger.error(error_msg)
+                raise RuntimeError(error_msg) from e
+        except httpx.RequestError as e:
+            error_msg = f"Failed to connect to Ollama at {ollama_client.base_url}: {e}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg) from e
         except Exception as e:
-            logger.error(f"Failed to enhance profile for {voice_name}: {e}")
-            return existing_profile or self._create_empty_profile()
+            error_msg = f"Failed to enhance profile for {voice_name}: {e}"
+            logger.error(error_msg, exc_info=True)
+            raise RuntimeError(error_msg) from e
 
     def generate_profile_prompt(
         self,

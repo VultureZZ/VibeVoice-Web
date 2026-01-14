@@ -151,6 +151,8 @@ class VoiceProfileRequest(BaseModel):
     """Request model for creating/updating voice profiles."""
 
     keywords: Optional[List[str]] = Field(None, description="Keywords to enhance profile (e.g., person names)")
+    ollama_url: Optional[str] = Field(None, description="Optional custom Ollama server URL")
+    ollama_model: Optional[str] = Field(None, description="Optional custom Ollama model name")
 
 
 class VoiceProfileResponse(BaseModel):
