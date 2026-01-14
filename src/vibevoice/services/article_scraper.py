@@ -7,7 +7,14 @@ from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
-from newspaper import Article
+
+# Optional import for newspaper3k (fallback scraper)
+try:
+    from newspaper import Article
+    NEWSPAPER_AVAILABLE = True
+except ImportError:
+    NEWSPAPER_AVAILABLE = False
+    Article = None
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +119,10 @@ class ArticleScraper:
         Returns:
             Extracted article text or None if failed
         """
+        if not NEWSPAPER_AVAILABLE:
+            logger.debug("Newspaper3k not available, skipping")
+            return None
+
         try:
             logger.info(f"Scraping with newspaper3k: {url}")
             article = Article(url)

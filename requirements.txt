@@ -14,9 +14,12 @@ requests>=2.31.0
 
 # Article scraping and LLM dependencies
 beautifulsoup4>=4.12.0
-newspaper3k>=0.2.8
 httpx>=0.25.0
 lxml>=4.9.0
+# Optional: newspaper3k for fallback scraping (requires lxml_html_clean)
+# Uncomment the following lines if you want to use newspaper3k as a fallback scraper:
+# newspaper3k>=0.2.8
+# lxml_html_clean>=0.1.0
 
 # Optional: FlashAttention2 for faster inference (recommended but not required)
 # Install with: pip install flash-attn --no-build-isolation
