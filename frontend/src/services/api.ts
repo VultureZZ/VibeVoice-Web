@@ -200,6 +200,20 @@ class ApiClient {
   }
 
   /**
+   * Manually generate voice profile
+   */
+  async generateVoiceProfile(
+    voiceId: string,
+    request: VoiceProfileRequest
+  ): Promise<VoiceProfileResponse> {
+    const response = await this.client.post<VoiceProfileResponse>(
+      `/api/v1/voices/${voiceId}/profile/generate`,
+      request
+    );
+    return response.data;
+  }
+
+  /**
    * Generate podcast script from article URL
    */
   async generatePodcastScript(request: PodcastScriptRequest): Promise<PodcastScriptResponse> {

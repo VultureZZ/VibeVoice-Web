@@ -128,6 +128,13 @@ export function useApi() {
     [execute]
   );
 
+  const generateVoiceProfile = useCallback(
+    async (voiceId: string, request: VoiceProfileRequest): Promise<VoiceProfileResponse | null> => {
+      return execute(() => apiClient.generateVoiceProfile(voiceId, request));
+    },
+    [execute]
+  );
+
   return {
     loading,
     error,
@@ -141,6 +148,7 @@ export function useApi() {
     getVoiceProfile,
     createOrUpdateVoiceProfile,
     updateVoiceProfileKeywords,
+    generateVoiceProfile,
     generatePodcastScript,
     generatePodcastAudio,
     downloadPodcastAudio,

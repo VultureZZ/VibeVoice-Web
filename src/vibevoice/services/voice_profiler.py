@@ -70,8 +70,15 @@ class VoiceProfiler:
 
             # Parse profile response
             profile = self.parse_profile_response(profile_text, keywords)
+            
+            # Ensure keywords are always included in the profile
+            if keywords:
+                profile["keywords"] = keywords
+            elif "keywords" not in profile:
+                profile["keywords"] = []
 
             logger.info(f"Profile generated successfully for {voice_name}")
+            logger.debug(f"Profile data: {profile}")
             return profile
 
         except Exception as e:
@@ -127,12 +134,22 @@ class VoiceProfiler:
 
             # Parse enhanced profile
             enhanced_profile = self.parse_profile_response(profile_text, keywords)
+            
+            # Ensure keywords are always included
+            if keywords:
+                enhanced_profile["keywords"] = keywords
+            elif "keywords" not in enhanced_profile:
+                enhanced_profile["keywords"] = []
 
             # Merge with existing profile if present
             if existing_profile:
                 enhanced_profile = self._merge_profiles(existing_profile, enhanced_profile)
+                # Ensure merged profile has keywords
+                if keywords:
+                    enhanced_profile["keywords"] = list(set(existing_profile.get("keywords", []) + keywords))
 
             logger.info(f"Profile enhanced successfully for {voice_name}")
+            logger.debug(f"Enhanced profile data: {enhanced_profile}")
             return enhanced_profile
 
         except Exception as e:

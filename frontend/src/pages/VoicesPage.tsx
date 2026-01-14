@@ -23,6 +23,7 @@ export function VoicesPage() {
     getVoiceProfile,
     createOrUpdateVoiceProfile,
     updateVoiceProfileKeywords,
+    generateVoiceProfile,
     loading: apiLoading,
     error: apiError,
   } = useApi();
@@ -170,6 +171,15 @@ export function VoicesPage() {
       // If update failed, try creating profile
       response = await createOrUpdateVoiceProfile(voiceId, { keywords });
     }
+    if (response && response.profile) {
+      setVoiceProfiles((prev) => ({ ...prev, [voiceId]: true }));
+      return response;
+    }
+    return null;
+  };
+
+  const handleGenerateProfile = async (voiceId: string, keywords: string[]) => {
+    const response = await generateVoiceProfile(voiceId, { keywords: keywords.length > 0 ? keywords : undefined });
     if (response && response.profile) {
       setVoiceProfiles((prev) => ({ ...prev, [voiceId]: true }));
       return response;
@@ -360,6 +370,7 @@ export function VoicesPage() {
           onClose={() => setProfileModalVoiceId(null)}
           onGetProfile={getVoiceProfile}
           onUpdateProfile={handleUpdateProfileKeywords}
+          onGenerateProfile={handleGenerateProfile}
         />
       )}
     </div>

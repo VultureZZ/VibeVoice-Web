@@ -188,20 +188,32 @@ class VoiceManager:
             )
 
             # Automatically profile the voice (non-blocking - don't fail if profiling fails)
+            import logging
+            logger = logging.getLogger(__name__)
             try:
+                logger.info(f"Starting automatic profiling for voice: {name} (ID: {voice_id})")
+                if keywords:
+                    logger.info(f"Using keywords for profiling: {keywords}")
+                else:
+                    logger.info("No keywords provided for profiling")
+                
                 profile = voice_profiler.profile_voice_from_audio(
                     voice_name=name,
                     voice_description=description,
                     keywords=keywords,
                 )
                 if profile:
+                    # Ensure keywords are included in profile
+                    if keywords:
+                        profile["keywords"] = keywords
                     # Store profile in voice metadata
                     voice_storage.update_voice_profile(voice_id, profile)
+                    logger.info(f"Successfully created and saved profile for voice: {name}")
+                else:
+                    logger.warning(f"Profile creation returned empty profile for voice: {name}")
             except Exception as e:
                 # Log error but don't fail voice creation
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"Failed to automatically profile voice {name}: {e}")
+                logger.error(f"Failed to automatically profile voice {name}: {e}", exc_info=True)
 
             # Return voice metadata with validation feedback
             voice_data = voice_storage.get_voice(voice_id)

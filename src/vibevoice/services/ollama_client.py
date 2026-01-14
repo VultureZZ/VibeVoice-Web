@@ -2,6 +2,7 @@
 Ollama client service for LLM script generation.
 """
 import logging
+import re
 from typing import Dict, List, Optional
 
 import httpx
@@ -252,10 +253,12 @@ Use exactly this format with no additional markup:
    - Aim for 130-150 words per minute of target duration
 
 **DO NOT:**
-- Include stage directions or notes in parentheses
+- Include stage directions or notes in parentheses or brackets
+- Use placeholders like [Host Name], [Co-host Name], [Name], etc. - write actual dialogue only
 - Use asterisks or other formatting
 - Add sound effect cues
 - Include timestamps
+- Include any bracketed placeholders or notes
 
 Generate the complete podcast script now:"""
 
@@ -283,6 +286,12 @@ Generate the complete podcast script now:"""
                 lines = lines[:-1]
             script = "\n".join(lines)
 
+        # Remove placeholders in brackets (e.g., [Host Name], [Co-host Name], [Name], etc.)
+        # Pattern matches brackets with text inside, but preserves speaker labels like "Speaker 1:"
+        # Remove placeholder and any space before it if followed by punctuation
+        placeholder_pattern = r'\s*\[[^\]]+\]'
+        script = re.sub(placeholder_pattern, '', script)
+
         # Ensure proper speaker labels
         lines = script.split("\n")
         cleaned_lines = []
@@ -302,7 +311,16 @@ Generate the complete podcast script now:"""
 
             cleaned_lines.append(line)
 
-        return "\n".join(cleaned_lines)
+        # Clean up any extra whitespace that might have been left after removing placeholders
+        cleaned_script = "\n".join(cleaned_lines)
+        # Remove multiple spaces and clean up spacing around punctuation
+        cleaned_script = re.sub(r' +', ' ', cleaned_script)
+        cleaned_script = re.sub(r' \.', '.', cleaned_script)
+        cleaned_script = re.sub(r' ,', ',', cleaned_script)
+        cleaned_script = re.sub(r' \?', '?', cleaned_script)
+        cleaned_script = re.sub(r' !', '!', cleaned_script)
+
+        return cleaned_script
 
     def __del__(self):
         """Clean up HTTP client."""

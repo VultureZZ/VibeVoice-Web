@@ -16,6 +16,7 @@ interface VoiceProfileModalProps {
   onClose: () => void;
   onGetProfile: (voiceId: string) => Promise<VoiceProfileResponse | null>;
   onUpdateProfile: (voiceId: string, keywords: string[]) => Promise<VoiceProfileResponse | null>;
+  onGenerateProfile?: (voiceId: string, keywords: string[]) => Promise<VoiceProfileResponse | null>;
 }
 
 export function VoiceProfileModal({
@@ -25,11 +26,13 @@ export function VoiceProfileModal({
   onClose,
   onGetProfile,
   onUpdateProfile,
+  onGenerateProfile,
 }: VoiceProfileModalProps) {
   const [profile, setProfile] = useState<VoiceProfile | null>(null);
   const [keywords, setKeywords] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -92,6 +95,38 @@ export function VoiceProfileModal({
       setError(err instanceof Error ? err.message : 'Failed to update profile');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleGenerateProfile = async () => {
+    if (!onGenerateProfile) {
+      setError('Profile generation not available');
+      return;
+    }
+
+    setGenerating(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const keywordsList = keywords
+        .split(',')
+        .map((k) => k.trim())
+        .filter((k) => k.length > 0);
+
+      const response = await onGenerateProfile(voiceId, keywordsList.length > 0 ? keywordsList : []);
+      if (response && response.profile) {
+        setProfile(response.profile);
+        setSuccess('Profile generated successfully');
+        // Reload profile to get updated data
+        await loadProfile();
+      } else {
+        setError('Failed to generate profile');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate profile');
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -177,14 +212,26 @@ export function VoiceProfileModal({
                 placeholder="e.g., Donald Trump, President, Politician"
                 helpText="Enter keywords to enhance the voice profile. These help identify unique speech patterns."
               />
-              <Button
-                variant="primary"
-                onClick={handleSaveKeywords}
-                isLoading={saving}
-                className="mt-4"
-              >
-                Update Keywords
-              </Button>
+              <div className="flex gap-3 mt-4">
+                {onGenerateProfile && (
+                  <Button
+                    variant="primary"
+                    onClick={handleGenerateProfile}
+                    isLoading={generating}
+                    className="flex-1"
+                  >
+                    Regenerate Profile
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  onClick={handleSaveKeywords}
+                  isLoading={saving}
+                  className="flex-1"
+                >
+                  Update Keywords
+                </Button>
+              </div>
             </div>
           </div>
         ) : (
@@ -199,14 +246,26 @@ export function VoiceProfileModal({
                 placeholder="e.g., Donald Trump, President, Politician"
                 helpText="Enter keywords to create a voice profile. These help identify unique speech patterns."
               />
-              <Button
-                variant="primary"
-                onClick={handleSaveKeywords}
-                isLoading={saving}
-                className="mt-4"
-              >
-                Create Profile
-              </Button>
+              <div className="flex gap-3 mt-4">
+                {onGenerateProfile && (
+                  <Button
+                    variant="primary"
+                    onClick={handleGenerateProfile}
+                    isLoading={generating}
+                    className="flex-1"
+                  >
+                    Generate Profile
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  onClick={handleSaveKeywords}
+                  isLoading={saving}
+                  className="flex-1"
+                >
+                  Create with Keywords
+                </Button>
+              </div>
             </div>
           </div>
         )}

@@ -456,8 +456,13 @@ async def create_or_update_voice_profile(
         existing_profile = voice_storage.get_voice_profile(voice_id)
 
         # Enhance or create profile
+        from ..services.voice_profiler import voice_profiler
+        import logging
+        logger = logging.getLogger(__name__)
+        
         if existing_profile and request.keywords:
             # Enhance existing profile
+            logger.info(f"Enhancing existing profile for voice {voice_id} with keywords: {request.keywords}")
             updated_voice = voice_manager.enhance_voice_profile(
                 voice_id=voice_id,
                 keywords=request.keywords or [],
@@ -465,8 +470,7 @@ async def create_or_update_voice_profile(
             message = "Profile enhanced successfully"
         else:
             # Create new profile
-            from ..services.voice_profiler import voice_profiler
-
+            logger.info(f"Creating new profile for voice {voice_id} with keywords: {request.keywords}")
             profile = voice_profiler.profile_voice_from_audio(
                 voice_name=voice_data.get("name", voice_id),
                 voice_description=voice_data.get("description"),
@@ -474,8 +478,15 @@ async def create_or_update_voice_profile(
             )
 
             if profile:
+                # Ensure keywords are saved
+                if request.keywords:
+                    profile["keywords"] = request.keywords
                 voice_storage.update_voice_profile(voice_id, profile)
-            message = "Profile created successfully"
+                logger.info(f"Profile created and saved for voice {voice_id}")
+                message = "Profile created successfully"
+            else:
+                logger.warning(f"Profile creation returned empty profile for voice {voice_id}")
+                message = "Profile creation attempted but returned empty result"
 
         # Get updated profile
         profile_data = voice_storage.get_voice_profile(voice_id)
@@ -636,4 +647,140 @@ async def update_voice_profile_keywords(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update profile keywords: {str(e)}",
+        ) from e
+
+
+@router.post(
+    "/{voice_id}/profile/generate",
+    response_model=VoiceProfileResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+async def generate_voice_profile(
+    voice_id: str,
+    request: VoiceProfileRequest,
+) -> VoiceProfileResponse:
+    """
+    Manually trigger voice profile generation.
+
+    Args:
+        voice_id: Voice identifier
+        request: Profile request with optional keywords
+
+    Returns:
+        Voice profile response
+    """
+    try:
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Check if voice exists
+        voice_data = voice_manager.get_voice(voice_id)
+        if not voice_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Voice '{voice_id}' not found",
+            )
+
+        # Get existing profile
+        from ..models.voice_storage import voice_storage
+        from ..services.voice_profiler import voice_profiler
+
+        existing_profile = voice_storage.get_voice_profile(voice_id)
+
+        logger.info(f"Manually generating profile for voice {voice_id} with keywords: {request.keywords}")
+
+        # Generate or enhance profile
+        if existing_profile and request.keywords:
+            # Enhance existing profile
+            profile = voice_profiler.enhance_profile_with_keywords(
+                voice_name=voice_data.get("name", voice_id),
+                existing_profile=existing_profile,
+                keywords=request.keywords or [],
+            )
+            message = "Profile enhanced successfully"
+        else:
+            # Create new profile
+            profile = voice_profiler.profile_voice_from_audio(
+                voice_name=voice_data.get("name", voice_id),
+                voice_description=voice_data.get("description"),
+                keywords=request.keywords,
+            )
+            message = "Profile generated successfully"
+
+        if not profile:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Profile generation returned empty result",
+            )
+
+        # Ensure keywords are saved
+        if request.keywords:
+            profile["keywords"] = request.keywords
+
+        # Save profile
+        voice_storage.update_voice_profile(voice_id, profile)
+        logger.info(f"Profile saved for voice {voice_id}")
+
+        # Get updated profile
+        profile_data = voice_storage.get_voice_profile(voice_id)
+
+        if not profile_data:
+            return VoiceProfileResponse(
+                success=True,
+                message=message,
+                profile=None,
+            )
+
+        # Parse timestamps
+        created_at = profile_data.get("created_at")
+        updated_at = profile_data.get("updated_at")
+
+        if isinstance(created_at, str):
+            try:
+                created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                created_at = None
+
+        if isinstance(updated_at, str):
+            try:
+                updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                updated_at = None
+
+        profile_response = VoiceProfile(
+            cadence=profile_data.get("cadence"),
+            tone=profile_data.get("tone"),
+            vocabulary_style=profile_data.get("vocabulary_style"),
+            sentence_structure=profile_data.get("sentence_structure"),
+            unique_phrases=profile_data.get("unique_phrases", []),
+            keywords=profile_data.get("keywords", []),
+            profile_text=profile_data.get("profile_text"),
+            created_at=created_at,
+            updated_at=updated_at,
+        )
+
+        return VoiceProfileResponse(
+            success=True,
+            message=message,
+            profile=profile_response,
+        )
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to generate profile: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate profile: {str(e)}",
         ) from e
