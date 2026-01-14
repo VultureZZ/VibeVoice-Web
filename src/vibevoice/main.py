@@ -12,9 +12,10 @@ from .middleware.auth import APIKeyAuthMiddleware
 from .middleware.rate_limit import RateLimitMiddleware
 from .routes import speech, voices
 
-# Import podcast router using relative import
-from .routes import podcast
-podcast_router = podcast.router
+# Import podcast router - use absolute import to avoid package issues
+import importlib
+_podcast_module = importlib.import_module('vibevoice.routes.podcast')
+podcast_router = _podcast_module.router
 
 # Configure logging
 logging.basicConfig(
