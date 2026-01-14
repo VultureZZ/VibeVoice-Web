@@ -17,6 +17,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 
 export function VoicesPage() {
   const { voices, loading: voicesLoading, refresh } = useVoices();
+  const { settings } = useSettings();
   const {
     createVoice,
     deleteVoice,
