@@ -9,10 +9,20 @@ import { Button } from './Button';
 interface VoiceCardProps {
   voice: VoiceResponse;
   onDelete?: (voiceId: string) => void;
+  onEdit?: (voiceId: string) => void;
+  onViewProfile?: (voiceId: string) => void;
   isDeleting?: boolean;
+  hasProfile?: boolean;
 }
 
-export function VoiceCard({ voice, onDelete, isDeleting }: VoiceCardProps) {
+export function VoiceCard({
+  voice,
+  onDelete,
+  onEdit,
+  onViewProfile,
+  isDeleting,
+  hasProfile,
+}: VoiceCardProps) {
   const isCustom = voice.type === 'custom';
 
   return (
@@ -30,6 +40,11 @@ export function VoiceCard({ voice, onDelete, isDeleting }: VoiceCardProps) {
             >
               {voice.type}
             </span>
+            {hasProfile && (
+              <span className="px-2 py-1 text-xs font-medium rounded bg-green-100 text-green-800">
+                Profiled
+              </span>
+            )}
           </div>
 
           {voice.description && (
@@ -47,15 +62,41 @@ export function VoiceCard({ voice, onDelete, isDeleting }: VoiceCardProps) {
           </div>
         </div>
 
-        {isCustom && onDelete && (
-          <Button
-            variant="danger"
-            onClick={() => onDelete(voice.id)}
-            isLoading={isDeleting}
-            className="ml-4"
-          >
-            Delete
-          </Button>
+        {isCustom && (
+          <div className="flex flex-col gap-2 ml-4">
+            <div className="flex gap-2">
+              {onEdit && (
+                <Button
+                  variant="secondary"
+                  onClick={() => onEdit(voice.id)}
+                  disabled={isDeleting}
+                  className="text-xs"
+                >
+                  Edit
+                </Button>
+              )}
+              {onViewProfile && (
+                <Button
+                  variant="secondary"
+                  onClick={() => onViewProfile(voice.id)}
+                  disabled={isDeleting}
+                  className="text-xs"
+                >
+                  Profile
+                </Button>
+              )}
+            </div>
+            {onDelete && (
+              <Button
+                variant="danger"
+                onClick={() => onDelete(voice.id)}
+                isLoading={isDeleting}
+                className="text-xs"
+              >
+                Delete
+              </Button>
+            )}
+          </div>
         )}
       </div>
     </div>

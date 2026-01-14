@@ -58,6 +58,7 @@ class VoiceStorage:
         name: str,
         description: Optional[str] = None,
         audio_files: Optional[List[str]] = None,
+        profile: Optional[Dict] = None,
     ) -> None:
         """
         Add a new voice to storage.
@@ -67,15 +68,19 @@ class VoiceStorage:
             name: Voice name
             description: Voice description
             audio_files: List of audio file names
+            profile: Optional voice profile data
         """
         data = self._load()
-        data["voices"][voice_id] = {
+        voice_data = {
             "name": name,
             "description": description or "",
             "type": "custom",
             "created_at": datetime.utcnow().isoformat() + "Z",
             "audio_files": audio_files or [],
         }
+        if profile:
+            voice_data["profile"] = profile
+        data["voices"][voice_id] = voice_data
         self._save(data)
 
     def get_voice(self, voice_id: str) -> Optional[Dict]:
@@ -156,6 +161,80 @@ class VoiceStorage:
             if voice_data["name"].lower() == name.lower():
                 return True
         return False
+
+    def update_voice(
+        self,
+        voice_id: str,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> bool:
+        """
+        Update voice name and/or description.
+
+        Args:
+            voice_id: Voice identifier
+            name: New voice name (optional)
+            description: New voice description (optional)
+
+        Returns:
+            True if updated, False if not found
+        """
+        data = self._load()
+        if voice_id not in data["voices"]:
+            return False
+
+        if name is not None:
+            data["voices"][voice_id]["name"] = name
+        if description is not None:
+            data["voices"][voice_id]["description"] = description
+
+        self._save(data)
+        return True
+
+    def update_voice_profile(self, voice_id: str, profile: Dict) -> bool:
+        """
+        Update voice profile data.
+
+        Args:
+            voice_id: Voice identifier
+            profile: Profile data dictionary
+
+        Returns:
+            True if updated, False if not found
+        """
+        data = self._load()
+        if voice_id not in data["voices"]:
+            return False
+
+        if "profile" not in data["voices"][voice_id]:
+            data["voices"][voice_id]["profile"] = {}
+
+        # Update profile fields
+        data["voices"][voice_id]["profile"].update(profile)
+        data["voices"][voice_id]["profile"]["updated_at"] = datetime.utcnow().isoformat() + "Z"
+
+        # Set created_at if not present
+        if "created_at" not in data["voices"][voice_id]["profile"]:
+            data["voices"][voice_id]["profile"]["created_at"] = datetime.utcnow().isoformat() + "Z"
+
+        self._save(data)
+        return True
+
+    def get_voice_profile(self, voice_id: str) -> Optional[Dict]:
+        """
+        Get voice profile by ID.
+
+        Args:
+            voice_id: Voice identifier
+
+        Returns:
+            Voice profile dict or None if not found
+        """
+        data = self._load()
+        voice = data["voices"].get(voice_id)
+        if voice:
+            return voice.get("profile")
+        return None
 
 
 # Global storage instance

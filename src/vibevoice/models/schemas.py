@@ -131,3 +131,46 @@ class PodcastGenerateResponse(BaseModel):
     audio_url: Optional[str] = Field(None, description="URL to generated audio file")
     file_path: Optional[str] = Field(None, description="Path to generated audio file")
     script: Optional[str] = Field(None, description="Script used for generation")
+
+
+class VoiceProfile(BaseModel):
+    """Structured voice profile with speech pattern characteristics."""
+
+    cadence: Optional[str] = Field(None, description="Description of speech rhythm/pace")
+    tone: Optional[str] = Field(None, description="Emotional tone and delivery style")
+    vocabulary_style: Optional[str] = Field(None, description="Word choice patterns (formal, casual, technical, etc.)")
+    sentence_structure: Optional[str] = Field(None, description="Typical sentence patterns (short, long, complex)")
+    unique_phrases: List[str] = Field(default_factory=list, description="Common phrases or expressions")
+    keywords: List[str] = Field(default_factory=list, description="Keywords for context (e.g., person names)")
+    profile_text: Optional[str] = Field(None, description="Full text description of the voice")
+    created_at: Optional[datetime] = Field(None, description="Profile creation timestamp")
+    updated_at: Optional[datetime] = Field(None, description="Profile last update timestamp")
+
+
+class VoiceProfileRequest(BaseModel):
+    """Request model for creating/updating voice profiles."""
+
+    keywords: Optional[List[str]] = Field(None, description="Keywords to enhance profile (e.g., person names)")
+
+
+class VoiceProfileResponse(BaseModel):
+    """Response model for voice profile data."""
+
+    success: bool = Field(..., description="Whether operation was successful")
+    message: str = Field(..., description="Status message")
+    profile: Optional[VoiceProfile] = Field(None, description="Voice profile data")
+
+
+class VoiceUpdateRequest(BaseModel):
+    """Request model for updating voice details."""
+
+    name: Optional[str] = Field(None, min_length=1, description="New voice name")
+    description: Optional[str] = Field(None, description="New voice description")
+
+
+class VoiceUpdateResponse(BaseModel):
+    """Response model for voice update."""
+
+    success: bool = Field(..., description="Whether update was successful")
+    message: str = Field(..., description="Status message")
+    voice: Optional[VoiceResponse] = Field(None, description="Updated voice details")

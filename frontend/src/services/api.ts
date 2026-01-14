@@ -14,6 +14,10 @@ import {
   PodcastScriptResponse,
   PodcastGenerateRequest,
   PodcastGenerateResponse,
+  VoiceProfileResponse,
+  VoiceProfileRequest,
+  VoiceUpdateRequest,
+  VoiceUpdateResponse,
 } from '../types/api';
 import { AppSettings } from '../types/settings';
 
@@ -113,12 +117,16 @@ class ApiClient {
   async createVoice(
     name: string,
     description: string | undefined,
-    files: File[]
+    files: File[],
+    keywords?: string
   ): Promise<VoiceCreateResponse> {
     const formData = new FormData();
     formData.append('name', name);
     if (description) {
       formData.append('description', description);
+    }
+    if (keywords) {
+      formData.append('keywords', keywords);
     }
     files.forEach((file) => {
       formData.append('audio_files', file);
@@ -137,6 +145,58 @@ class ApiClient {
    */
   async deleteVoice(voiceId: string): Promise<void> {
     await this.client.delete(`/api/v1/voices/${voiceId}`);
+  }
+
+  /**
+   * Update voice details (name and/or description)
+   */
+  async updateVoice(
+    voiceId: string,
+    request: VoiceUpdateRequest
+  ): Promise<VoiceUpdateResponse> {
+    const response = await this.client.put<VoiceUpdateResponse>(
+      `/api/v1/voices/${voiceId}`,
+      request
+    );
+    return response.data;
+  }
+
+  /**
+   * Get voice profile
+   */
+  async getVoiceProfile(voiceId: string): Promise<VoiceProfileResponse> {
+    const response = await this.client.get<VoiceProfileResponse>(
+      `/api/v1/voices/${voiceId}/profile`
+    );
+    return response.data;
+  }
+
+  /**
+   * Create or update voice profile
+   */
+  async createOrUpdateVoiceProfile(
+    voiceId: string,
+    request: VoiceProfileRequest
+  ): Promise<VoiceProfileResponse> {
+    const response = await this.client.post<VoiceProfileResponse>(
+      `/api/v1/voices/${voiceId}/profile`,
+      request
+    );
+    return response.data;
+  }
+
+  /**
+   * Update voice profile keywords
+   */
+  async updateVoiceProfileKeywords(
+    voiceId: string,
+    request: VoiceProfileRequest
+  ): Promise<VoiceProfileResponse> {
+    const response = await this.client.put<VoiceProfileResponse>(
+      `/api/v1/voices/${voiceId}/profile/keywords`,
+      request
+    );
+    return response.data;
   }
 
   /**

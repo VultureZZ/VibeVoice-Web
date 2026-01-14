@@ -13,6 +13,7 @@ from pydub import AudioSegment
 from ..config import config
 from ..models.voice_storage import voice_storage
 from .audio_validator import AudioValidator
+from .voice_profiler import voice_profiler
 
 # Default voices that cannot be deleted
 # Mapping of short names to full voice file names
@@ -69,6 +70,7 @@ class VoiceManager:
         name: str,
         description: Optional[str],
         audio_files: List[Path],
+        keywords: Optional[List[str]] = None,
     ) -> dict:
         """
         Create a custom voice from uploaded audio files.
@@ -185,6 +187,22 @@ class VoiceManager:
                 audio_files=saved_files,
             )
 
+            # Automatically profile the voice (non-blocking - don't fail if profiling fails)
+            try:
+                profile = voice_profiler.profile_voice_from_audio(
+                    voice_name=name,
+                    voice_description=description,
+                    keywords=keywords,
+                )
+                if profile:
+                    # Store profile in voice metadata
+                    voice_storage.update_voice_profile(voice_id, profile)
+            except Exception as e:
+                # Log error but don't fail voice creation
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to automatically profile voice {name}: {e}")
+
             # Return voice metadata with validation feedback
             voice_data = voice_storage.get_voice(voice_id)
             voice_data["validation_feedback"] = validation_feedback
@@ -236,11 +254,30 @@ class VoiceManager:
         voices = []
         seen_voices = set()
 
+        # Get list of custom voice IDs to exclude symlinks
+        custom_voice_ids = {v["id"] for v in voice_storage.list_voices()}
+
         # Add default voices from actual files in the directory
         if self.default_voices_dir.exists():
             for voice_file in self.default_voices_dir.glob("*.wav"):
                 full_name = voice_file.stem
                 if full_name.startswith("."):
+                    continue
+
+                # Check if this is a symlink to a custom voice
+                is_custom_symlink = False
+                if voice_file.is_symlink():
+                    try:
+                        target_path = voice_file.resolve()
+                        # Check if target is in a custom voice directory
+                        if self.custom_voices_dir in target_path.parents:
+                            is_custom_symlink = True
+                    except (OSError, RuntimeError):
+                        # If symlink is broken, skip it
+                        continue
+
+                # Skip if it's a symlink to a custom voice or if the name matches a custom voice ID
+                if is_custom_symlink or full_name in custom_voice_ids:
                     continue
 
                 # Add the full name
@@ -323,6 +360,99 @@ class VoiceManager:
             }
 
         return None
+
+    def enhance_voice_profile(
+        self,
+        voice_id: str,
+        keywords: List[str],
+    ) -> dict:
+        """
+        Enhance voice profile with keywords.
+
+        Args:
+            voice_id: Voice identifier
+            keywords: Keywords for enhancement
+
+        Returns:
+            Updated voice data with enhanced profile
+
+        Raises:
+            ValueError: If voice is not found
+        """
+        voice_data = voice_storage.get_voice(voice_id)
+        if not voice_data:
+            raise ValueError(f"Voice '{voice_id}' not found")
+
+        # Get existing profile
+        existing_profile = voice_storage.get_voice_profile(voice_id)
+
+        # Enhance profile with keywords
+        try:
+            enhanced_profile = voice_profiler.enhance_profile_with_keywords(
+                voice_name=voice_data.get("name", voice_id),
+                existing_profile=existing_profile,
+                keywords=keywords,
+            )
+            if enhanced_profile:
+                voice_storage.update_voice_profile(voice_id, enhanced_profile)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to enhance profile for voice {voice_id}: {e}")
+            raise ValueError(f"Failed to enhance profile: {e}") from e
+
+        # Return updated voice data
+        return voice_storage.get_voice(voice_id)
+
+    def update_voice(
+        self,
+        voice_id: str,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> dict:
+        """
+        Update voice metadata.
+
+        Args:
+            voice_id: Voice identifier
+            name: New voice name (optional)
+            description: New voice description (optional)
+
+        Returns:
+            Updated voice data
+
+        Raises:
+            ValueError: If voice is not found or is a default voice
+        """
+        voice_data = voice_storage.get_voice(voice_id)
+        if not voice_data:
+            raise ValueError(f"Voice '{voice_id}' not found")
+
+        # Check if it's a default voice
+        if voice_data.get("type") == "default" or self.is_default_voice(voice_data.get("name", "")):
+            raise ValueError("Cannot update default voices")
+
+        # Validate new name if provided
+        if name is not None:
+            if not name or not name.strip():
+                raise ValueError("Voice name cannot be empty")
+            if self.is_default_voice(name):
+                raise ValueError(f"Voice name '{name}' is reserved for default voices")
+            if voice_storage.name_exists(name, exclude_voice_id=voice_id):
+                raise ValueError(f"Voice with name '{name}' already exists")
+
+        # Update via storage
+        updated = voice_storage.update_voice(
+            voice_id=voice_id,
+            name=name,
+            description=description,
+        )
+
+        if not updated:
+            raise ValueError(f"Failed to update voice '{voice_id}'")
+
+        # Return updated voice data
+        return voice_storage.get_voice(voice_id)
 
     def get_voice_by_name(self, name: str) -> Optional[dict]:
         """

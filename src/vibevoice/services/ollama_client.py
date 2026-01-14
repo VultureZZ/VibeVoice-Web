@@ -2,7 +2,7 @@
 Ollama client service for LLM script generation.
 """
 import logging
-from typing import Optional
+from typing import Dict, List, Optional
 
 import httpx
 
@@ -51,6 +51,8 @@ class OllamaClient:
         duration: str,
         num_voices: int,
         custom_model: Optional[str] = None,
+        voice_profiles: Optional[Dict[str, Dict]] = None,
+        voice_names: Optional[List[str]] = None,
     ) -> str:
         """
         Generate podcast script from article using Ollama.
@@ -61,6 +63,8 @@ class OllamaClient:
             duration: Target duration (e.g., "5 min", "30 min")
             num_voices: Number of voices/speakers (1-4)
             custom_model: Optional custom model name (overrides default)
+            voice_profiles: Optional dict mapping voice names to profile data
+            voice_names: Optional list of voice names in order (maps to Speaker 1, 2, etc.)
 
         Returns:
             Generated podcast script with speaker labels
@@ -77,7 +81,7 @@ class OllamaClient:
             article_text = article_text[:max_article_length] + "\n[... article truncated ...]"
 
         # Build prompt for script generation
-        prompt = self._build_prompt(article_text, genre, duration, num_voices)
+        prompt = self._build_prompt(article_text, genre, duration, num_voices, voice_profiles, voice_names)
 
         logger.info(f"Generating script with Ollama (model: {model}, genre: {genre}, duration: {duration})")
 
@@ -117,7 +121,15 @@ class OllamaClient:
             logger.error(error_msg)
             raise RuntimeError(error_msg) from e
 
-    def _build_prompt(self, article_text: str, genre: str, duration: str, num_voices: int) -> str:
+    def _build_prompt(
+        self,
+        article_text: str,
+        genre: str,
+        duration: str,
+        num_voices: int,
+        voice_profiles: Optional[Dict[str, Dict]] = None,
+        voice_names: Optional[List[str]] = None,
+    ) -> str:
         """
         Build prompt for Ollama script generation.
 
@@ -126,6 +138,8 @@ class OllamaClient:
             genre: Podcast genre
             duration: Target duration
             num_voices: Number of voices
+            voice_profiles: Optional dict mapping voice names to profile data
+            voice_names: Optional list of voice names in order
 
         Returns:
             Formatted prompt string
@@ -156,6 +170,28 @@ class OllamaClient:
         for i in range(1, num_voices + 1):
             speaker_examples.append(f"Speaker {i}: [dialogue]")
 
+        # Build voice profiles section if available
+        voice_profiles_section = ""
+        if voice_profiles and voice_names:
+            voice_profiles_section = "\n\n**VOICE PROFILES:**\n"
+            for i, voice_name in enumerate(voice_names[:num_voices], 1):
+                profile = voice_profiles.get(voice_name)
+                if profile:
+                    voice_profiles_section += f"\nSpeaker {i} ({voice_name}):\n"
+                    if profile.get("cadence"):
+                        voice_profiles_section += f"- Cadence: {profile['cadence']}\n"
+                    if profile.get("tone"):
+                        voice_profiles_section += f"- Tone: {profile['tone']}\n"
+                    if profile.get("vocabulary_style"):
+                        voice_profiles_section += f"- Vocabulary: {profile['vocabulary_style']}\n"
+                    if profile.get("sentence_structure"):
+                        voice_profiles_section += f"- Sentence Structure: {profile['sentence_structure']}\n"
+                    if profile.get("unique_phrases"):
+                        phrases = ", ".join(profile['unique_phrases'][:5])  # Limit to 5 phrases
+                        voice_profiles_section += f"- Unique Phrases: {phrases}\n"
+                    voice_profiles_section += f"\nWhen writing dialogue for Speaker {i}, ensure the script reflects these characteristics. "
+                    voice_profiles_section += "Match the cadence, tone, vocabulary style, and sentence structure described above.\n"
+
         # Build conditional speaker differentiation section
         speaker_differentiation = ""
         if num_voices == 1:
@@ -170,6 +206,7 @@ class OllamaClient:
    - Additional speakers: Contribute unique perspectives or counterpoints"""
 
         prompt = f"""You are an expert podcast script writer specializing in creating natural, engaging dialogue for text-to-speech synthesis.
+{voice_profiles_section}
 
 **ARTICLE TO ADAPT:**
 {article_text}

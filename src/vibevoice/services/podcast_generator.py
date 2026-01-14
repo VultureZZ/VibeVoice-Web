@@ -61,16 +61,53 @@ class PodcastGenerator:
         article_text = self.scraper.scrape_article(url)
         logger.info(f"Scraped {len(article_text)} characters from article")
 
-        # Step 2: Generate script with Ollama
-        logger.info("Step 2: Generating script with Ollama...")
+        # Step 2: Load voice profiles
+        logger.info("Step 2: Loading voice profiles...")
+        voice_profiles = {}
+        from ..models.voice_storage import voice_storage
+        from .voice_manager import voice_manager
+
+        for voice_name in voices:
+            # Get voice data to find voice_id
+            voice_data = voice_manager.get_voice_by_name(voice_name)
+            if voice_data and voice_data.get("type") == "custom":
+                voice_id = voice_data.get("id")
+                if voice_id:
+                    profile = voice_storage.get_voice_profile(voice_id)
+                    if profile:
+                        voice_profiles[voice_name] = profile
+                        logger.info(f"Loaded profile for voice: {voice_name}")
+            else:
+                # Try direct lookup by name as ID
+                profile = voice_storage.get_voice_profile(voice_name)
+                if profile:
+                    voice_profiles[voice_name] = profile
+                    logger.info(f"Loaded profile for voice: {voice_name}")
+
+        # Step 3: Generate script with Ollama
+        logger.info("Step 3: Generating script with Ollama...")
         if ollama_url or ollama_model:
             # Create temporary client with custom settings
             from .ollama_client import OllamaClient
 
             custom_client = OllamaClient(base_url=ollama_url, model=ollama_model)
-            script = custom_client.generate_script(article_text, genre, duration, num_voices)
+            script = custom_client.generate_script(
+                article_text,
+                genre,
+                duration,
+                num_voices,
+                voice_profiles=voice_profiles if voice_profiles else None,
+                voice_names=voices,
+            )
         else:
-            script = self.ollama.generate_script(article_text, genre, duration, num_voices)
+            script = self.ollama.generate_script(
+                article_text,
+                genre,
+                duration,
+                num_voices,
+                voice_profiles=voice_profiles if voice_profiles else None,
+                voice_names=voices,
+            )
 
         logger.info(f"Generated script: {len(script)} characters")
         return script

@@ -7,6 +7,7 @@ import { InputHTMLAttributes, TextareaHTMLAttributes, ReactNode } from 'react';
 interface BaseInputProps {
   label?: string;
   error?: string;
+  helpText?: string;
 }
 
 interface TextInputProps extends InputHTMLAttributes<HTMLInputElement>, BaseInputProps {
@@ -21,7 +22,7 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement>, Bas
 type InputProps = TextInputProps | TextareaProps;
 
 export function Input(props: InputProps) {
-  const { label, error, className = '', ...inputProps } = props;
+  const { label, error, helpText, className = '', ...inputProps } = props;
   const isMultiline = 'multiline' in props && props.multiline;
 
   const baseInputClasses = 'w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
@@ -49,6 +50,7 @@ export function Input(props: InputProps) {
       )}
       {inputElement}
       {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+      {helpText && !error && <p className="mt-1 text-sm text-gray-500">{helpText}</p>}
     </div>
   );
 }

@@ -14,6 +14,10 @@ import {
   PodcastScriptResponse,
   PodcastGenerateRequest,
   PodcastGenerateResponse,
+  VoiceProfileResponse,
+  VoiceProfileRequest,
+  VoiceUpdateRequest,
+  VoiceUpdateResponse,
 } from '../types/api';
 
 export function useApi() {
@@ -61,8 +65,8 @@ export function useApi() {
   }, [execute]);
 
   const createVoice = useCallback(
-    async (name: string, description: string | undefined, files: File[]): Promise<VoiceCreateResponse | null> => {
-      return execute(() => apiClient.createVoice(name, description, files));
+    async (name: string, description: string | undefined, files: File[], keywords?: string): Promise<VoiceCreateResponse | null> => {
+      return execute(() => apiClient.createVoice(name, description, files, keywords));
     },
     [execute]
   );
@@ -96,6 +100,34 @@ export function useApi() {
     [execute]
   );
 
+  const updateVoice = useCallback(
+    async (voiceId: string, request: VoiceUpdateRequest): Promise<VoiceUpdateResponse | null> => {
+      return execute(() => apiClient.updateVoice(voiceId, request));
+    },
+    [execute]
+  );
+
+  const getVoiceProfile = useCallback(
+    async (voiceId: string): Promise<VoiceProfileResponse | null> => {
+      return execute(() => apiClient.getVoiceProfile(voiceId));
+    },
+    [execute]
+  );
+
+  const createOrUpdateVoiceProfile = useCallback(
+    async (voiceId: string, request: VoiceProfileRequest): Promise<VoiceProfileResponse | null> => {
+      return execute(() => apiClient.createOrUpdateVoiceProfile(voiceId, request));
+    },
+    [execute]
+  );
+
+  const updateVoiceProfileKeywords = useCallback(
+    async (voiceId: string, request: VoiceProfileRequest): Promise<VoiceProfileResponse | null> => {
+      return execute(() => apiClient.updateVoiceProfileKeywords(voiceId, request));
+    },
+    [execute]
+  );
+
   return {
     loading,
     error,
@@ -105,6 +137,10 @@ export function useApi() {
     listVoices,
     createVoice,
     deleteVoice,
+    updateVoice,
+    getVoiceProfile,
+    createOrUpdateVoiceProfile,
+    updateVoiceProfileKeywords,
     generatePodcastScript,
     generatePodcastAudio,
     downloadPodcastAudio,

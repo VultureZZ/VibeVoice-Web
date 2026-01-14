@@ -100,3 +100,36 @@ export interface PodcastGenerateResponse {
   file_path?: string;
   script?: string;
 }
+
+export interface VoiceProfile {
+  cadence?: string;
+  tone?: string;
+  vocabulary_style?: string;
+  sentence_structure?: string;
+  unique_phrases: string[];
+  keywords: string[];
+  profile_text?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface VoiceProfileRequest {
+  keywords?: string[];
+}
+
+export interface VoiceProfileResponse {
+  success: boolean;
+  message: string;
+  profile?: VoiceProfile;
+}
+
+export interface VoiceUpdateRequest {
+  name?: string;
+  description?: string;
+}
+
+export interface VoiceUpdateResponse {
+  success: boolean;
+  message: string;
+  voice?: VoiceResponse;
+}
