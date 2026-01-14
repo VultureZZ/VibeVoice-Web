@@ -1,97 +1,92 @@
 /**
- * Main speech generation interface.
+ * Main speech generation interface
  */
 
 import { useState, useEffect } from 'react';
-import { useSettings } from '@/hooks/useSettings';
-import { useVoices } from '@/hooks/useVoices';
-import { apiClient } from '@/services/api';
-import { SpeechGenerateRequest } from '@/types/api';
-import { Button } from '@/components/Button';
-import { Input } from '@/components/Input';
-import { Select } from '@/components/Select';
-import { AudioPlayer } from '@/components/AudioPlayer';
-import { Alert } from '@/components/Alert';
-import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { useApi } from '../hooks/useApi';
+import { useVoices } from '../hooks/useVoices';
+import { useSettings } from '../hooks/useSettings';
+import { SpeechSettings } from '../types/api';
+import { Button } from '../components/Button';
+import { Input } from '../components/Input';
+import { Select, MultiSelect } from '../components/Select';
+import { AudioPlayer } from '../components/AudioPlayer';
+import { Alert } from '../components/Alert';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 
 export function GeneratePage() {
   const { settings } = useSettings();
   const { voices, loading: voicesLoading } = useVoices();
+  const { generateSpeech, downloadAudio, loading, error } = useApi();
+
   const [transcript, setTranscript] = useState('');
   const [selectedSpeakers, setSelectedSpeakers] = useState<string[]>([]);
-  const [language, setLanguage] = useState(settings.defaultSettings.language);
-  const [outputFormat, setOutputFormat] = useState(settings.defaultSettings.output_format);
-  const [sampleRate, setSampleRate] = useState(settings.defaultSettings.sample_rate);
+  const [speechSettings, setSpeechSettings] = useState<SpeechSettings>({
+    language: settings.defaultLanguage,
+    output_format: settings.defaultOutputFormat,
+    sample_rate: settings.defaultSampleRate,
+  });
   const [showSettings, setShowSettings] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [audioFilename, setAudioFilename] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
+  // Initialize with example transcript
   useEffect(() => {
-    setLanguage(settings.defaultSettings.language);
-    setOutputFormat(settings.defaultSettings.output_format);
-    setSampleRate(settings.defaultSettings.sample_rate);
-  }, [settings]);
+    if (!transcript) {
+      setTranscript(`Speaker 1: Hello, this is a test of the VibeVoice API.
+Speaker 2: The API is working correctly.
+Speaker 1: This is great news!
+Speaker 2: Yes, speech generation is successful.`);
+    }
+  }, []);
 
   const handleGenerate = async () => {
     if (!transcript.trim()) {
-      setError('Transcript is required');
+      setSuccessMessage(null);
       return;
     }
+
     if (selectedSpeakers.length === 0) {
-      setError('At least one speaker must be selected');
+      setSuccessMessage(null);
       return;
     }
 
-    setGenerating(true);
-    setError(null);
-    setSuccess(null);
     setAudioUrl(null);
+    setAudioFilename(null);
+    setSuccessMessage(null);
 
-    try {
-      const request: SpeechGenerateRequest = {
-        transcript,
-        speakers: selectedSpeakers,
-        settings: {
-          language,
-          output_format: outputFormat,
-          sample_rate: sampleRate,
-        },
-      };
+    const response = await generateSpeech({
+      transcript,
+      speakers: selectedSpeakers,
+      settings: speechSettings,
+    });
 
-      const response = await apiClient.generateSpeech(request);
-      setSuccess(response.message);
-      
-      if (response.audio_url) {
-        const fullAudioUrl = `${settings.apiUrl}${response.audio_url}`;
-        setAudioUrl(fullAudioUrl);
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to generate speech';
-      setError(message);
-    } finally {
-      setGenerating(false);
+    if (response && response.audio_url) {
+      const fullUrl = `${settings.apiEndpoint}${response.audio_url}`;
+      setAudioUrl(fullUrl);
+      setAudioFilename(response.audio_url.split('/').pop() || null);
+      setSuccessMessage(response.message || 'Speech generated successfully!');
     }
   };
 
   const handleDownload = async () => {
-    if (!audioUrl) return;
+    if (!audioFilename) return;
 
-    try {
-      const filename = audioUrl.split('/').pop() || 'audio.wav';
-      const blob = await apiClient.downloadAudio(filename);
+    setDownloading(true);
+    const blob = await downloadAudio(audioFilename);
+    setDownloading(false);
+
+    if (blob) {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename;
+      a.download = audioFilename;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to download audio';
-      setError(message);
     }
   };
 
@@ -105,145 +100,127 @@ export function GeneratePage() {
     { value: 'zh', label: 'Chinese' },
   ];
 
+  const formatOptions = [
+    { value: 'wav', label: 'WAV' },
+  ];
+
   const sampleRateOptions = [
-    { value: '16000', label: '16 kHz' },
-    { value: '24000', label: '24 kHz' },
-    { value: '44100', label: '44.1 kHz' },
-    { value: '48000', label: '48 kHz' },
+    { value: '24000', label: '24000 Hz' },
+    { value: '44100', label: '44100 Hz' },
+    { value: '48000', label: '48000 Hz' },
   ];
 
   return (
-    <div className="px-4 sm:px-0">
-      <div className="mb-6">
+    <div className="space-y-6">
+      <div>
         <h1 className="text-3xl font-bold text-gray-900">Generate Speech</h1>
-        <p className="mt-2 text-sm text-gray-600">
-          Convert text to speech using VibeVoice
-        </p>
+        <p className="mt-2 text-gray-600">Convert text to speech using VibeVoice</p>
       </div>
 
-      {error && (
-        <div className="mb-6">
-          <Alert type="error" message={error} onClose={() => setError(null)} />
-        </div>
-      )}
+      {error && <Alert type="error" message={error} />}
+      {successMessage && <Alert type="success" message={successMessage} />}
 
-      {success && (
-        <div className="mb-6">
-          <Alert type="success" message={success} onClose={() => setSuccess(null)} />
+      <div className="bg-white rounded-lg shadow p-6 space-y-6">
+        <div>
+          <Input
+            label="Transcript"
+            multiline
+            rows={8}
+            value={transcript}
+            onChange={(e) => setTranscript(e.target.value)}
+            placeholder="Enter transcript with speaker labels (e.g., 'Speaker 1: Hello')"
+            required
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            Format: Use "Speaker 1:", "Speaker 2:", etc. to indicate different speakers
+          </p>
         </div>
-      )}
 
-      <div className="bg-white shadow rounded-lg">
-        <div className="p-6 space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Transcript
-            </label>
-            <Input
-              textarea
-              rows={10}
-              value={transcript}
-              onChange={(e) => setTranscript(e.target.value)}
-              placeholder="Speaker 1: Hello, this is a test.&#10;Speaker 2: The API is working correctly."
-              className="font-mono text-sm"
+        <div>
+          {voicesLoading ? (
+            <div className="flex items-center gap-2">
+              <LoadingSpinner size="sm" />
+              <span className="text-sm text-gray-600">Loading voices...</span>
+            </div>
+          ) : (
+            <MultiSelect
+              label="Speakers"
+              options={speakerOptions}
+              selected={selectedSpeakers}
+              onChange={setSelectedSpeakers}
+              required
+              error={selectedSpeakers.length === 0 && transcript.trim() ? 'At least one speaker is required' : undefined}
             />
-            <p className="mt-2 text-sm text-gray-500">
-              Format: Speaker 1: text, Speaker 2: text, etc.
-            </p>
-          </div>
+          )}
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Speakers (Select {selectedSpeakers.length > 0 ? selectedSpeakers.length : 'one or more'})
-            </label>
-            {voicesLoading ? (
-              <LoadingSpinner />
-            ) : (
+        <div>
+          <Button
+            variant="secondary"
+            onClick={() => setShowSettings(!showSettings)}
+            className="mb-4"
+          >
+            {showSettings ? 'Hide' : 'Show'} Advanced Settings
+          </Button>
+
+          {showSettings && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
               <Select
-                multiple
-                value={selectedSpeakers.join(',')}
-                onChange={(e) => {
-                  const values = Array.from(
-                    e.target.selectedOptions,
-                    (option) => option.value
-                  );
-                  setSelectedSpeakers(values);
-                }}
-                options={speakerOptions}
+                label="Language"
+                options={languageOptions}
+                value={speechSettings.language}
+                onChange={(e) =>
+                  setSpeechSettings({ ...speechSettings, language: e.target.value })
+                }
               />
-            )}
-            <p className="mt-2 text-sm text-gray-500">
-              Select speakers matching the transcript format (Speaker 1, Speaker 2, etc.)
-            </p>
-          </div>
-
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowSettings(!showSettings)}
-              className="text-sm font-medium text-blue-600 hover:text-blue-500"
-            >
-              {showSettings ? 'Hide' : 'Show'} Advanced Settings
-            </button>
-            {showSettings && (
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <Select
-                  label="Language"
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  options={languageOptions}
-                />
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Output Format
-                  </label>
-                  <Input
-                    type="text"
-                    value={outputFormat}
-                    onChange={(e) => setOutputFormat(e.target.value)}
-                    disabled
-                    className="bg-gray-100"
-                  />
-                </div>
-                <Select
-                  label="Sample Rate"
-                  value={sampleRate.toString()}
-                  onChange={(e) => setSampleRate(parseInt(e.target.value, 10))}
-                  options={sampleRateOptions}
-                />
-              </div>
-            )}
-          </div>
-
-          <div>
-            <Button
-              variant="primary"
-              onClick={handleGenerate}
-              loading={generating}
-              disabled={!transcript.trim() || selectedSpeakers.length === 0}
-              className="w-full sm:w-auto"
-            >
-              Generate Speech
-            </Button>
-          </div>
-
-          {audioUrl && (
-            <div className="space-y-4 border-t pt-6">
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">
-                  Generated Audio
-                </h3>
-                <AudioPlayer src={audioUrl} />
-              </div>
-              <div>
-                <Button variant="secondary" onClick={handleDownload}>
-                  Download Audio
-                </Button>
-              </div>
+              <Select
+                label="Output Format"
+                options={formatOptions}
+                value={speechSettings.output_format}
+                onChange={(e) =>
+                  setSpeechSettings({ ...speechSettings, output_format: e.target.value })
+                }
+              />
+              <Select
+                label="Sample Rate"
+                options={sampleRateOptions}
+                value={speechSettings.sample_rate.toString()}
+                onChange={(e) =>
+                  setSpeechSettings({
+                    ...speechSettings,
+                    sample_rate: parseInt(e.target.value),
+                  })
+                }
+              />
             </div>
           )}
         </div>
+
+        <Button
+          variant="primary"
+          onClick={handleGenerate}
+          isLoading={loading}
+          disabled={!transcript.trim() || selectedSpeakers.length === 0 || voicesLoading}
+          className="w-full"
+        >
+          Generate Speech
+        </Button>
       </div>
+
+      {audioUrl && (
+        <div className="bg-white rounded-lg shadow p-6 space-y-4">
+          <h2 className="text-xl font-semibold text-gray-900">Generated Audio</h2>
+          <AudioPlayer src={audioUrl} filename={audioFilename || undefined} />
+          <Button
+            variant="secondary"
+            onClick={handleDownload}
+            isLoading={downloading}
+            className="w-full"
+          >
+            Download Audio
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

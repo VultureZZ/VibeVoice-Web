@@ -1,5 +1,5 @@
 /**
- * TypeScript interfaces matching the VibeVoice API schemas.
+ * TypeScript interfaces matching API schemas
  */
 
 export interface SpeechSettings {

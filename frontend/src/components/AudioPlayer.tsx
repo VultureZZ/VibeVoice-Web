@@ -1,36 +1,44 @@
 /**
- * Audio playback component.
+ * Audio playback component
  */
 
 import { useRef, useEffect, useState } from 'react';
+import { formatDuration } from '../utils/format';
 
 interface AudioPlayerProps {
   src: string;
-  className?: string;
+  filename?: string;
 }
 
-export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
+export function AudioPlayer({ src, filename }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
     const updateTime = () => setCurrentTime(audio.currentTime);
-    const updateDuration = () => setDuration(audio.duration);
+    const updateDuration = () => {
+      setDuration(audio.duration);
+      setIsLoading(false);
+    };
     const handleEnded = () => setIsPlaying(false);
+    const handleLoadedData = () => setIsLoading(false);
 
     audio.addEventListener('timeupdate', updateTime);
     audio.addEventListener('loadedmetadata', updateDuration);
     audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('loadeddata', handleLoadedData);
 
     return () => {
       audio.removeEventListener('timeupdate', updateTime);
       audio.removeEventListener('loadedmetadata', updateDuration);
       audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('loadeddata', handleLoadedData);
     };
   }, []);
 
@@ -55,44 +63,25 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
     setCurrentTime(newTime);
   };
 
-  const formatTime = (time: number) => {
-    if (isNaN(time)) return '0:00';
-    const mins = Math.floor(time / 60);
-    const secs = Math.floor(time % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className={`bg-gray-50 rounded-lg p-4 ${className}`}>
+    <div className="w-full bg-gray-50 border rounded-lg p-4">
       <audio ref={audioRef} src={src} preload="metadata" />
-      <div className="flex items-center gap-4">
+      
+      {filename && (
+        <p className="text-sm font-medium text-gray-700 mb-2 truncate">{filename}</p>
+      )}
+
+      <div className="flex items-center gap-3">
         <button
           onClick={togglePlayPause}
-          className="flex-shrink-0 w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center justify-center"
-          aria-label={isPlaying ? 'Pause' : 'Play'}
+          disabled={isLoading}
+          className="w-10 h-10 rounded-full bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
         >
-          {isPlaying ? (
-            <svg
-              className="w-5 h-5"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fillRule="evenodd"
-                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z"
-                clipRule="evenodd"
-              />
-            </svg>
-          ) : (
-            <svg
-              className="w-5 h-5 ml-0.5"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
-            </svg>
-          )}
+          {isPlaying ? '⏸' : '▶'}
         </button>
+
         <div className="flex-1">
           <input
             type="range"
@@ -100,11 +89,15 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
             max={duration || 0}
             value={currentTime}
             onChange={handleSeek}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+            style={{
+              background: `linear-gradient(to right, #2563eb 0%, #2563eb ${progress}%, #e5e7eb ${progress}%, #e5e7eb 100%)`,
+            }}
           />
         </div>
-        <div className="flex-shrink-0 text-sm text-gray-600 min-w-[80px] text-right">
-          {formatTime(currentTime)} / {formatTime(duration)}
+
+        <div className="text-sm text-gray-600 whitespace-nowrap">
+          {formatDuration(currentTime)} / {formatDuration(duration)}
         </div>
       </div>
     </div>

@@ -1,40 +1,43 @@
 /**
- * Card component for displaying voice information.
+ * Card component for displaying voice information
  */
 
-import { VoiceResponse } from '@/types/api';
-import { formatDate } from '@/utils/format';
+import { VoiceResponse } from '../types/api';
+import { formatDate } from '../utils/format';
 import { Button } from './Button';
 
 interface VoiceCardProps {
   voice: VoiceResponse;
   onDelete?: (voiceId: string) => void;
-  deleting?: boolean;
+  isDeleting?: boolean;
 }
 
-export function VoiceCard({ voice, onDelete, deleting = false }: VoiceCardProps) {
+export function VoiceCard({ voice, onDelete, isDeleting }: VoiceCardProps) {
   const isCustom = voice.type === 'custom';
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+    <div className="border rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2">
             <h3 className="text-lg font-semibold text-gray-900">{voice.name}</h3>
             <span
-              className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+              className={`px-2 py-1 text-xs font-medium rounded ${
                 isCustom
-                  ? 'bg-purple-100 text-purple-800'
-                  : 'bg-blue-100 text-blue-800'
+                  ? 'bg-blue-100 text-blue-800'
+                  : 'bg-gray-100 text-gray-800'
               }`}
             >
               {voice.type}
             </span>
           </div>
+
           {voice.description && (
-            <p className="mt-1 text-sm text-gray-600">{voice.description}</p>
+            <p className="text-sm text-gray-600 mb-2">{voice.description}</p>
           )}
-          <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
+
+          <div className="flex flex-wrap gap-4 text-xs text-gray-500">
+            <span>ID: {voice.id}</span>
             {voice.created_at && (
               <span>Created: {formatDate(voice.created_at)}</span>
             )}
@@ -43,17 +46,16 @@ export function VoiceCard({ voice, onDelete, deleting = false }: VoiceCardProps)
             )}
           </div>
         </div>
+
         {isCustom && onDelete && (
-          <div className="ml-4 flex-shrink-0">
-            <Button
-              variant="danger"
-              onClick={() => onDelete(voice.id)}
-              disabled={deleting}
-              className="text-sm px-3 py-1"
-            >
-              Delete
-            </Button>
-          </div>
+          <Button
+            variant="danger"
+            onClick={() => onDelete(voice.id)}
+            isLoading={isDeleting}
+            className="ml-4"
+          >
+            Delete
+          </Button>
         )}
       </div>
     </div>

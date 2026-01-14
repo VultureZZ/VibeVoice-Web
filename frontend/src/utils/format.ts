@@ -1,9 +1,9 @@
 /**
- * Formatting utility functions.
+ * Formatting utility functions
  */
 
 /**
- * Format duration in seconds to mm:ss format.
+ * Format duration in seconds to mm:ss format
  */
 export function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60);
@@ -12,21 +12,24 @@ export function formatDuration(seconds: number): string {
 }
 
 /**
- * Format file size in bytes to human-readable format.
+ * Format file size in bytes to human-readable format
  */
 export function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 B';
+  if (bytes === 0) return '0 Bytes';
+  
   const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+  
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 }
 
 /**
- * Format date/time to readable string.
+ * Format date/time string
  */
 export function formatDateTime(dateString: string | undefined): string {
   if (!dateString) return 'N/A';
+  
   try {
     const date = new Date(dateString);
     return date.toLocaleString();
@@ -36,10 +39,11 @@ export function formatDateTime(dateString: string | undefined): string {
 }
 
 /**
- * Format date to short format.
+ * Format date only
  */
 export function formatDate(dateString: string | undefined): string {
   if (!dateString) return 'N/A';
+  
   try {
     const date = new Date(dateString);
     return date.toLocaleDateString();

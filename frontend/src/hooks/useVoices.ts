@@ -1,29 +1,24 @@
 /**
- * Custom hook for voice management with cached data.
+ * Custom hook for voice management with caching
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { VoiceResponse } from '@/types/api';
-import { apiClient } from '@/services/api';
+import { VoiceResponse } from '../types/api';
+import { useApi } from './useApi';
 
 export function useVoices() {
+  const { listVoices: apiListVoices, loading, error } = useApi();
   const [voices, setVoices] = useState<VoiceResponse[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const fetchVoices = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await apiClient.listVoices();
+    setIsLoading(true);
+    const response = await apiListVoices();
+    if (response) {
       setVoices(response.voices);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch voices';
-      setError(message);
-    } finally {
-      setLoading(false);
     }
-  }, []);
+    setIsLoading(false);
+  }, [apiListVoices]);
 
   useEffect(() => {
     fetchVoices();
@@ -31,7 +26,7 @@ export function useVoices() {
 
   return {
     voices,
-    loading,
+    loading: isLoading || loading,
     error,
     refresh: fetchVoices,
   };

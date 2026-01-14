@@ -1,48 +1,60 @@
 /**
- * File upload component for voice creation.
+ * File upload component for voice creation
  */
 
-import { useRef, useState } from 'react';
-import { validateAudioFiles } from '@/utils/validation';
-import { formatFileSize } from '@/utils/format';
-import { Button } from './Button';
-import { Alert } from './Alert';
+import { useCallback, useState } from 'react';
+import { isValidAudioFile, validateFileSize } from '../utils/validation';
+import { formatFileSize } from '../utils/format';
 
 interface FileUploadProps {
-  files: File[];
-  onChange: (files: File[]) => void;
+  onFilesChange: (files: File[]) => void;
   maxFiles?: number;
-  className?: string;
+  maxSizeMB?: number;
+  error?: string;
 }
 
-export function FileUpload({
-  files,
-  onChange,
-  maxFiles,
-  className = '',
-}: FileUploadProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
+export function FileUpload({ onFilesChange, maxFiles = 10, maxSizeMB = 100, error }: FileUploadProps) {
+  const [files, setFiles] = useState<File[]>([]);
   const [dragActive, setDragActive] = useState(false);
-  const [errors, setErrors] = useState<string[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
-  const handleFiles = (newFiles: FileList | null) => {
-    if (!newFiles || newFiles.length === 0) return;
+  const validateAndAddFiles = useCallback((newFiles: File[]) => {
+    const validFiles: File[] = [];
+    const errors: string[] = [];
 
-    const fileArray = Array.from(newFiles);
-    const validation = validateAudioFiles(fileArray);
+    Array.from(newFiles).forEach((file) => {
+      if (!isValidAudioFile(file)) {
+        errors.push(`${file.name}: Invalid audio file type`);
+        return;
+      }
 
-    if (validation.valid) {
-      const updatedFiles = maxFiles
-        ? [...files, ...fileArray].slice(0, maxFiles)
-        : [...files, ...fileArray];
-      onChange(updatedFiles);
-      setErrors([]);
+      const sizeCheck = validateFileSize(file, maxSizeMB);
+      if (!sizeCheck.valid) {
+        errors.push(`${file.name}: ${sizeCheck.error}`);
+        return;
+      }
+
+      validFiles.push(file);
+    });
+
+    if (errors.length > 0) {
+      setUploadError(errors.join(', '));
     } else {
-      setErrors(validation.errors);
+      setUploadError(null);
     }
-  };
 
-  const handleDrag = (e: React.DragEvent) => {
+    const totalFiles = files.length + validFiles.length;
+    if (totalFiles > maxFiles) {
+      setUploadError(`Maximum ${maxFiles} files allowed`);
+      return;
+    }
+
+    const updatedFiles = [...files, ...validFiles];
+    setFiles(updatedFiles);
+    onFilesChange(updatedFiles);
+  }, [files, maxFiles, maxSizeMB, onFilesChange]);
+
+  const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.type === 'dragenter' || e.type === 'dragover') {
@@ -50,31 +62,42 @@ export function FileUpload({
     } else if (e.type === 'dragleave') {
       setDragActive(false);
     }
-  };
+  }, []);
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    handleFiles(e.dataTransfer.files);
-  };
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      validateAndAddFiles(Array.from(e.dataTransfer.files));
+    }
+  }, [validateAndAddFiles]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleFiles(e.target.files);
-  };
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      validateAndAddFiles(Array.from(e.target.files));
+    }
+  }, [validateAndAddFiles]);
 
-  const removeFile = (index: number) => {
-    const newFiles = files.filter((_, i) => i !== index);
-    onChange(newFiles);
-  };
+  const removeFile = useCallback((index: number) => {
+    const updatedFiles = files.filter((_, i) => i !== index);
+    setFiles(updatedFiles);
+    onFilesChange(updatedFiles);
+    setUploadError(null);
+  }, [files, onFilesChange]);
+
+  const displayError = error || uploadError;
 
   return (
-    <div className={className}>
+    <div className="w-full">
       <div
         className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
           dragActive
-            ? 'border-blue-500 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400'
+            ? 'border-primary-500 bg-primary-50'
+            : displayError
+            ? 'border-red-300'
+            : 'border-gray-300'
         }`}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
@@ -82,87 +105,52 @@ export function FileUpload({
         onDrop={handleDrop}
       >
         <input
-          ref={inputRef}
           type="file"
+          id="file-upload"
           multiple
           accept="audio/*"
-          onChange={handleChange}
+          onChange={handleFileInput}
           className="hidden"
         />
-        <div className="space-y-2">
-          <svg
-            className="mx-auto h-12 w-12 text-gray-400"
-            stroke="currentColor"
-            fill="none"
-            viewBox="0 0 48 48"
-          >
-            <path
-              d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <div className="text-sm text-gray-600">
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              className="font-medium text-blue-600 hover:text-blue-500"
-            >
-              Click to upload
-            </button>{' '}
-            or drag and drop
+        <label htmlFor="file-upload" className="cursor-pointer">
+          <div className="space-y-2">
+            <p className="text-sm text-gray-600">
+              Drag and drop audio files here, or click to select
+            </p>
+            <p className="text-xs text-gray-500">
+              Supported: WAV, MP3, M4A, OGG, WebM, FLAC (max {maxSizeMB}MB per file, {maxFiles} files)
+            </p>
           </div>
-          <p className="text-xs text-gray-500">Audio files (WAV, MP3, M4A, etc.)</p>
-        </div>
+        </label>
       </div>
 
-      {errors.length > 0 && (
-        <div className="mt-4">
-          <Alert type="error" message={errors.join(', ')} />
-        </div>
+      {displayError && (
+        <p className="mt-2 text-sm text-red-600">{displayError}</p>
       )}
 
       {files.length > 0 && (
         <div className="mt-4 space-y-2">
-          <h4 className="text-sm font-medium text-gray-700">
-            Selected Files ({files.length})
-          </h4>
-          <ul className="space-y-2">
+          <p className="text-sm font-medium text-gray-700">Selected files ({files.length}):</p>
+          <div className="space-y-1">
             {files.map((file, index) => (
-              <li
+              <div
                 key={`${file.name}-${index}`}
-                className="flex items-center justify-between bg-gray-50 rounded-md p-3"
+                className="flex items-center justify-between p-2 bg-gray-50 rounded border"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {file.name}
-                  </p>
+                  <p className="text-sm text-gray-900 truncate">{file.name}</p>
                   <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => removeFile(index)}
-                  className="ml-4 text-red-600 hover:text-red-800 focus:outline-none"
-                  aria-label={`Remove ${file.name}`}
+                  className="ml-2 text-red-600 hover:text-red-800"
                 >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
+                  Remove
                 </button>
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       )}
     </div>

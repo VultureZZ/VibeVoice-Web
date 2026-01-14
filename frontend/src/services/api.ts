@@ -1,5 +1,5 @@
 /**
- * API client service using Axios.
+ * API client service using Axios
  */
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
@@ -10,35 +10,32 @@ import {
   VoiceCreateResponse,
   HealthCheckResponse,
   ErrorResponse,
-} from '@/types/api';
-import { AppSettings } from '@/types/settings';
-import { loadSettings } from './storage';
+} from '../types/api';
+import { AppSettings } from '../types/settings';
 
 class ApiClient {
   private client: AxiosInstance;
-  private settings: AppSettings;
+  private baseURL: string;
+  private apiKey?: string;
 
   constructor() {
-    this.settings = loadSettings();
+    this.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    this.apiKey = undefined;
+
     this.client = axios.create({
-      baseURL: this.settings.apiUrl,
+      baseURL: this.baseURL,
       headers: {
         'Content-Type': 'application/json',
       },
     });
 
     // Request interceptor for API key
-    this.client.interceptors.request.use(
-      (config) => {
-        const currentSettings = loadSettings();
-        if (currentSettings.apiKey) {
-          config.headers['X-API-Key'] = currentSettings.apiKey;
-        }
-        config.baseURL = currentSettings.apiUrl;
-        return config;
-      },
-      (error) => Promise.reject(error)
-    );
+    this.client.interceptors.request.use((config) => {
+      if (this.apiKey) {
+        config.headers['X-API-Key'] = this.apiKey;
+      }
+      return config;
+    });
 
     // Response interceptor for error handling
     this.client.interceptors.response.use(
@@ -46,35 +43,31 @@ class ApiClient {
       (error: AxiosError<ErrorResponse>) => {
         if (error.response) {
           // Server responded with error status
-          const errorMessage =
-            error.response.data?.detail ||
-            error.response.data?.error ||
-            error.message ||
-            'An error occurred';
-          return Promise.reject(new Error(errorMessage));
+          const errorData = error.response.data;
+          const errorMessage = errorData?.detail || errorData?.error || error.message;
+          throw new Error(errorMessage);
         } else if (error.request) {
-          // Request was made but no response received
-          return Promise.reject(
-            new Error('Network error: Unable to connect to the API server')
-          );
+          // Request made but no response received
+          throw new Error('Network error: Could not reach the API server');
         } else {
           // Something else happened
-          return Promise.reject(error);
+          throw new Error(error.message || 'An unexpected error occurred');
         }
       }
     );
   }
 
   /**
-   * Update settings and recreate client.
+   * Update API configuration
    */
-  updateSettings(settings: AppSettings): void {
-    this.settings = settings;
-    this.client.defaults.baseURL = settings.apiUrl;
+  updateConfig(settings: AppSettings): void {
+    this.baseURL = settings.apiEndpoint;
+    this.apiKey = settings.apiKey;
+    this.client.defaults.baseURL = this.baseURL;
   }
 
   /**
-   * Health check endpoint.
+   * Health check endpoint
    */
   async healthCheck(): Promise<HealthCheckResponse> {
     const response = await this.client.get<HealthCheckResponse>('/health');
@@ -82,11 +75,9 @@ class ApiClient {
   }
 
   /**
-   * Generate speech from text.
+   * Generate speech from text
    */
-  async generateSpeech(
-    request: SpeechGenerateRequest
-  ): Promise<SpeechGenerateResponse> {
+  async generateSpeech(request: SpeechGenerateRequest): Promise<SpeechGenerateResponse> {
     const response = await this.client.post<SpeechGenerateResponse>(
       '/api/v1/speech/generate',
       request
@@ -95,7 +86,7 @@ class ApiClient {
   }
 
   /**
-   * Download generated audio file.
+   * Download generated audio file
    */
   async downloadAudio(filename: string): Promise<Blob> {
     const response = await this.client.get(`/api/v1/speech/download/${filename}`, {
@@ -105,7 +96,7 @@ class ApiClient {
   }
 
   /**
-   * List all available voices.
+   * List all available voices
    */
   async listVoices(): Promise<VoiceListResponse> {
     const response = await this.client.get<VoiceListResponse>('/api/v1/voices');
@@ -113,7 +104,7 @@ class ApiClient {
   }
 
   /**
-   * Create a custom voice from uploaded audio files.
+   * Create a custom voice
    */
   async createVoice(
     name: string,
@@ -129,20 +120,16 @@ class ApiClient {
       formData.append('audio_files', file);
     });
 
-    const response = await this.client.post<VoiceCreateResponse>(
-      '/api/v1/voices',
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      }
-    );
+    const response = await this.client.post<VoiceCreateResponse>('/api/v1/voices', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   }
 
   /**
-   * Delete a custom voice.
+   * Delete a custom voice
    */
   async deleteVoice(voiceId: string): Promise<void> {
     await this.client.delete(`/api/v1/voices/${voiceId}`);

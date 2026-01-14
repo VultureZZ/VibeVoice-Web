@@ -1,21 +1,19 @@
 /**
- * Settings interface for storing API endpoint, API key, and default preferences.
+ * Settings interface for storing API endpoint, API key, and default preferences
  */
 
-import { SpeechSettings } from './api';
-
 export interface AppSettings {
-  apiUrl: string;
+  apiEndpoint: string;
   apiKey?: string;
-  defaultSettings: SpeechSettings;
+  defaultLanguage: string;
+  defaultOutputFormat: string;
+  defaultSampleRate: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:8000',
-  apiKey: undefined,
-  defaultSettings: {
-    language: 'en',
-    output_format: 'wav',
-    sample_rate: 24000,
-  },
+  apiEndpoint: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+  apiKey: '',
+  defaultLanguage: 'en',
+  defaultOutputFormat: 'wav',
+  defaultSampleRate: 24000,
 };

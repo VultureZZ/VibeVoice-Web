@@ -1,19 +1,19 @@
 /**
- * Validation utility functions.
+ * Validation utility functions
  */
 
 /**
- * Validate API endpoint URL.
+ * Validate API endpoint URL
  */
-export function validateApiUrl(url: string): { valid: boolean; error?: string } {
-  if (!url || url.trim() === '') {
-    return { valid: false, error: 'API URL is required' };
+export function validateApiEndpoint(url: string): { valid: boolean; error?: string } {
+  if (!url.trim()) {
+    return { valid: false, error: 'API endpoint is required' };
   }
 
   try {
-    const urlObj = new URL(url);
-    if (!['http:', 'https:'].includes(urlObj.protocol)) {
-      return { valid: false, error: 'API URL must use http:// or https://' };
+    const parsedUrl = new URL(url);
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return { valid: false, error: 'API endpoint must use HTTP or HTTPS' };
     }
     return { valid: true };
   } catch {
@@ -22,97 +22,65 @@ export function validateApiUrl(url: string): { valid: boolean; error?: string } 
 }
 
 /**
- * Allowed audio file extensions.
+ * Validate audio file type
  */
-export const ALLOWED_AUDIO_EXTENSIONS = [
-  '.wav',
-  '.mp3',
-  '.m4a',
-  '.flac',
-  '.ogg',
-  '.aac',
-];
+export function isValidAudioFile(file: File): boolean {
+  const validTypes = [
+    'audio/wav',
+    'audio/wave',
+    'audio/x-wav',
+    'audio/mpeg',
+    'audio/mp3',
+    'audio/mp4',
+    'audio/x-m4a',
+    'audio/ogg',
+    'audio/webm',
+    'audio/flac',
+  ];
 
-/**
- * Allowed audio MIME types.
- */
-export const ALLOWED_AUDIO_TYPES = [
-  'audio/wav',
-  'audio/wave',
-  'audio/x-wav',
-  'audio/mpeg',
-  'audio/mp3',
-  'audio/mp4',
-  'audio/m4a',
-  'audio/flac',
-  'audio/ogg',
-  'audio/aac',
-];
+  const validExtensions = ['.wav', '.mp3', '.m4a', '.ogg', '.webm', '.flac', '.mp4'];
+  const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
 
-/**
- * Maximum file size (100 MB).
- */
-export const MAX_FILE_SIZE = 100 * 1024 * 1024;
-
-/**
- * Validate audio file type.
- */
-export function validateAudioFileType(file: File): { valid: boolean; error?: string } {
-  const extension = '.' + file.name.split('.').pop()?.toLowerCase();
-  const isValidExtension = ALLOWED_AUDIO_EXTENSIONS.includes(extension);
-  const isValidMimeType =
-    ALLOWED_AUDIO_TYPES.some((type) => file.type.includes(type)) ||
-    file.type === '';
-
-  if (!isValidExtension && !isValidMimeType) {
-    return {
-      valid: false,
-      error: `Invalid file type. Allowed: ${ALLOWED_AUDIO_EXTENSIONS.join(', ')}`,
-    };
-  }
-
-  return { valid: true };
+  return (
+    validTypes.includes(file.type) ||
+    validExtensions.includes(fileExtension) ||
+    file.type.startsWith('audio/')
+  );
 }
 
 /**
- * Validate audio file size.
+ * Validate file size (in bytes)
  */
-export function validateAudioFileSize(file: File): { valid: boolean; error?: string } {
-  if (file.size > MAX_FILE_SIZE) {
+export function validateFileSize(file: File, maxSizeMB: number = 100): { valid: boolean; error?: string } {
+  const maxSizeBytes = maxSizeMB * 1024 * 1024;
+  if (file.size > maxSizeBytes) {
     return {
       valid: false,
-      error: `File size exceeds maximum of ${MAX_FILE_SIZE / 1024 / 1024} MB`,
+      error: `File size exceeds ${maxSizeMB}MB limit (${(file.size / 1024 / 1024).toFixed(2)}MB)`,
     };
   }
   return { valid: true };
 }
 
 /**
- * Validate multiple audio files.
+ * Validate voice name
  */
-export function validateAudioFiles(
-  files: File[]
-): { valid: boolean; errors: string[] } {
-  const errors: string[] = [];
-
-  if (files.length === 0) {
-    errors.push('At least one audio file is required');
+export function validateVoiceName(name: string): { valid: boolean; error?: string } {
+  if (!name.trim()) {
+    return { valid: false, error: 'Voice name is required' };
   }
-
-  files.forEach((file, index) => {
-    const typeValidation = validateAudioFileType(file);
-    if (!typeValidation.valid) {
-      errors.push(`${file.name}: ${typeValidation.error}`);
-    }
-
-    const sizeValidation = validateAudioFileSize(file);
-    if (!sizeValidation.valid) {
-      errors.push(`${file.name}: ${sizeValidation.error}`);
-    }
-  });
-
-  return {
-    valid: errors.length === 0,
-    errors,
-  };
+  if (name.length < 1) {
+    return { valid: false, error: 'Voice name must be at least 1 character' };
+  }
+  if (name.length > 100) {
+    return { valid: false, error: 'Voice name must be less than 100 characters' };
+  }
+  // Check for invalid characters
+  if (!/^[a-zA-Z0-9\s\-_]+$/.test(name)) {
+    return {
+      valid: false,
+      error: 'Voice name can only contain letters, numbers, spaces, hyphens, and underscores',
+    };
+  }
+  return { valid: true };
 }
