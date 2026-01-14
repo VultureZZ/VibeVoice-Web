@@ -37,7 +37,6 @@ env/
 outputs/
 podcasts/
 custom_voices/
-models/
 *.wav
 *.mp3
 
