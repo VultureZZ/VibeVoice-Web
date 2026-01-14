@@ -11,7 +11,10 @@ from .config import config
 from .middleware.auth import APIKeyAuthMiddleware
 from .middleware.rate_limit import RateLimitMiddleware
 from .routes import speech, voices
-from .routes.podcast import router as podcast_router
+
+# Import podcast router using relative import
+from .routes import podcast
+podcast_router = podcast.router
 
 # Configure logging
 logging.basicConfig(
