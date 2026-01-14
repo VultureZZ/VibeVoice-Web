@@ -36,7 +36,6 @@ env/
 # VibeVoice specific
 outputs/
 models/
-VibeVoice/
 *.wav
 *.mp3
 
