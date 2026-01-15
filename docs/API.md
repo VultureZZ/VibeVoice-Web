@@ -40,6 +40,26 @@ Rate limiting is **per API key** (or `"anonymous"` if no key is provided) and is
     - The backend currently **does not apply `settings` to VibeVoice inference**; generation uses VibeVoice defaults.
   - Returns: `{ success, message, audio_url, file_path }`
 
+- `WS /api/v1/speech/realtime`
+  - Description: **Realtime streaming** text-to-speech over WebSocket (PCM audio chunks).
+  - Auth:
+    - Query param: `?api_key=<key>` (recommended for browsers)
+    - Or header: `X-API-Key: <key>`
+  - Client → server messages (JSON text frames):
+    - `start`: `{ "type": "start", "cfg_scale"?: number, "inference_steps"?: number, "voice"?: string }`
+    - `text`: `{ "type": "text", "text": string }` (buffered)
+    - `flush`: `{ "type": "flush" }` (begins generation of the buffered text)
+    - `stop`: `{ "type": "stop" }` (cancels current generation and clears buffer)
+  - Server → client messages:
+    - **Binary frames**: raw **PCM16LE mono @ 24000 Hz** audio chunks
+    - JSON text frames:
+      - `status`: `{ "type": "status", "event": string, "data"?: any }`
+      - `error`: `{ "type": "error", "message": string }`
+      - `end`: `{ "type": "end" }`
+  - Notes / limitations:
+    - The upstream VibeVoice realtime demo accepts the **full text at connect time**, so this API **buffers** `text` messages until you send `flush`.
+    - Only one generation runs at a time per connection; additional `flush` calls during generation return an error.
+
 - `GET /api/v1/speech/download/{filename}`
   - Returns: audio file (`audio/wav`)
 

@@ -1,0 +1,179 @@
+"""
+Realtime model server subprocess manager.
+
+This backend does NOT run VibeVoice-Realtime-0.5B in-process. Instead, it launches
+the official VibeVoice realtime websocket demo server as a subprocess and bridges
+client WebSocket connections to it.
+
+Upstream docs:
+  - https://raw.githubusercontent.com/microsoft/VibeVoice/main/docs/vibevoice-realtime-0.5b.md
+  - Usage 1: python demo/vibevoice_realtime_demo.py --model_path microsoft/VibeVoice-Realtime-0.5B
+
+The upstream demo server exposes:
+  - WS: /stream?text=...&cfg=...&steps=...&voice=...
+  - GET: /config
+"""
+
+from __future__ import annotations
+
+import os
+import shlex
+import socket
+import subprocess
+import sys
+import threading
+import time
+from dataclasses import dataclass
+from typing import Optional
+
+from ..config import config
+
+
+@dataclass(frozen=True)
+class RealtimeServerConfig:
+    host: str
+    port: int
+    model_id: str
+    device: str
+    repo_dir: str
+    startup_timeout_seconds: float
+    server_command: Optional[str]
+
+
+class RealtimeProcessManager:
+    """
+    Manages a single local realtime server subprocess.
+
+    Notes:
+    - The upstream demo server is not designed for multi-tenant concurrency; it
+      uses a global lock. We treat it as a single shared resource.
+    - We keep this manager process-global (module singleton) for simplicity.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._process: Optional[subprocess.Popen] = None
+        self._last_start_time: Optional[float] = None
+
+    def _current_cfg(self) -> RealtimeServerConfig:
+        return RealtimeServerConfig(
+            host=config.REALTIME_HOST,
+            port=config.REALTIME_PORT,
+            model_id=config.REALTIME_MODEL_ID,
+            device=config.REALTIME_DEVICE,
+            repo_dir=str(config.REALTIME_VIBEVOICE_REPO_DIR),
+            startup_timeout_seconds=config.REALTIME_STARTUP_TIMEOUT_SECONDS,
+            server_command=config.REALTIME_SERVER_COMMAND,
+        )
+
+    @staticmethod
+    def _is_port_open(host: str, port: int) -> bool:
+        try:
+            with socket.create_connection((host, port), timeout=0.5):
+                return True
+        except OSError:
+            return False
+
+    def _build_default_command(self, cfg: RealtimeServerConfig) -> list[str]:
+        script_path = (
+            config.REALTIME_VIBEVOICE_REPO_DIR / "demo" / "vibevoice_realtime_demo.py"
+        )
+        if not script_path.exists():
+            raise RuntimeError(
+                "Realtime demo entrypoint not found. Expected "
+                f"{script_path}. Clone microsoft/VibeVoice (or a compatible fork) "
+                f"into {config.REALTIME_VIBEVOICE_REPO_DIR} and ensure the demo exists."
+            )
+        return [
+            sys.executable,
+            str(script_path),
+            "--port",
+            str(cfg.port),
+            "--model_path",
+            cfg.model_id,
+            "--device",
+            cfg.device,
+        ]
+
+    def _start_locked(self, cfg: RealtimeServerConfig) -> None:
+        # If something is already listening, assume it is the realtime server.
+        if self._is_port_open(cfg.host, cfg.port):
+            return
+
+        if self._process and self._process.poll() is None:
+            # Process is alive but port isn't ready yet; fall through to wait.
+            pass
+        else:
+            self._process = None
+
+        if cfg.server_command:
+            cmd = shlex.split(cfg.server_command)
+        else:
+            cmd = self._build_default_command(cfg)
+
+        env = os.environ.copy()
+        env.setdefault("PYTHONUNBUFFERED", "1")
+
+        self._process = subprocess.Popen(
+            cmd,
+            cwd=cfg.repo_dir,
+            env=env,
+            stdout=None,
+            stderr=None,
+        )
+        self._last_start_time = time.time()
+
+    def ensure_running(self) -> RealtimeServerConfig:
+        """
+        Ensure the realtime server is running and accepting connections.
+
+        Returns:
+            The server config used for the running server.
+        """
+        cfg = self._current_cfg()
+        with self._lock:
+            self._start_locked(cfg)
+
+        # Wait for readiness (port open) outside lock.
+        deadline = time.time() + cfg.startup_timeout_seconds
+        while time.time() < deadline:
+            if self._is_port_open(cfg.host, cfg.port):
+                return cfg
+
+            # If the process died, surface a useful error early.
+            with self._lock:
+                if self._process and self._process.poll() is not None:
+                    code = self._process.returncode
+                    self._process = None
+                    raise RuntimeError(
+                        f"Realtime server process exited early with code {code}. "
+                        "Check logs above for details."
+                    )
+
+            time.sleep(0.2)
+
+        raise TimeoutError(
+            f"Timed out waiting for realtime server on {cfg.host}:{cfg.port} "
+            f"after {cfg.startup_timeout_seconds}s."
+        )
+
+    def stop(self) -> None:
+        """Stop the realtime server subprocess (if started by this process)."""
+        with self._lock:
+            proc = self._process
+            self._process = None
+
+        if not proc or proc.poll() is not None:
+            return
+
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=5)
+
+
+# Global singleton
+realtime_process_manager = RealtimeProcessManager()
+

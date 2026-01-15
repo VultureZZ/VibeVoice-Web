@@ -34,6 +34,26 @@ class Config:
     PODCASTS_DIR: Path = Path(os.getenv("PODCASTS_DIR", "podcasts"))
     VIBEVOICE_REPO_DIR: Path = Path(os.getenv("VIBEVOICE_REPO_DIR", "VibeVoice"))
 
+    # Realtime TTS (VibeVoice-Realtime-0.5B demo server)
+    # These settings are used by the backend to launch/manage a local realtime model server
+    # and bridge WebSocket audio chunks to the frontend.
+    REALTIME_VIBEVOICE_REPO_DIR: Path = Path(
+        os.getenv("REALTIME_VIBEVOICE_REPO_DIR", os.getenv("VIBEVOICE_REPO_DIR", "VibeVoice"))
+    )
+    REALTIME_MODEL_ID: str = os.getenv(
+        "REALTIME_MODEL_ID", "microsoft/VibeVoice-Realtime-0.5B"
+    )
+    REALTIME_DEVICE: str = os.getenv("REALTIME_DEVICE", "cuda")
+    REALTIME_HOST: str = os.getenv("REALTIME_HOST", "127.0.0.1")
+    REALTIME_PORT: int = int(os.getenv("REALTIME_PORT", "3000"))
+    REALTIME_STARTUP_TIMEOUT_SECONDS: float = float(
+        os.getenv("REALTIME_STARTUP_TIMEOUT_SECONDS", "60")
+    )
+    # Optional explicit command for starting the realtime server. If set, overrides defaults.
+    # Example:
+    #   REALTIME_SERVER_COMMAND="python /path/to/VibeVoice/demo/vibevoice_realtime_demo.py --port 3000 --model_path microsoft/VibeVoice-Realtime-0.5B"
+    REALTIME_SERVER_COMMAND: Optional[str] = os.getenv("REALTIME_SERVER_COMMAND", None)
+
     # Server
     PORT: int = int(os.getenv("PORT", "8000"))
     HOST: str = os.getenv("HOST", "0.0.0.0")
@@ -55,6 +75,8 @@ class Config:
             self.PODCASTS_DIR = PROJECT_ROOT / self.PODCASTS_DIR
         if not self.VIBEVOICE_REPO_DIR.is_absolute():
             self.VIBEVOICE_REPO_DIR = PROJECT_ROOT / self.VIBEVOICE_REPO_DIR
+        if not self.REALTIME_VIBEVOICE_REPO_DIR.is_absolute():
+            self.REALTIME_VIBEVOICE_REPO_DIR = PROJECT_ROOT / self.REALTIME_VIBEVOICE_REPO_DIR
 
         # Ensure directories exist
         self.CUSTOM_VOICES_DIR.mkdir(parents=True, exist_ok=True)

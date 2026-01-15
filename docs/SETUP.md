@@ -240,6 +240,41 @@ print("VibeVoice imported successfully")
     - `audio_file` (required)
     - `clip_ranges` (required JSON array like `[{"start_seconds": 0.0, "end_seconds": 4.2}, ...]`)
 
+## Optional: Realtime TTS (VibeVoice-Realtime-0.5B)
+
+This repo supports a realtime streaming TTS mode via `WS /api/v1/speech/realtime`.
+
+Under the hood, the backend launches the official **microsoft/VibeVoice** realtime websocket demo as a subprocess (it is *not* bundled in this repo).
+
+### Step A: Clone the Microsoft VibeVoice repo (realtime demo server)
+
+From the project root:
+
+```bash
+git clone --depth 1 https://github.com/microsoft/VibeVoice.git VibeVoice-Microsoft
+```
+
+### Step B: Install its Python package (in the same `.venv`)
+
+```bash
+pip install -e VibeVoice-Microsoft/
+```
+
+### Step C: Configure the backend to find/run it
+
+Set environment variables (e.g. in your `.env`):
+
+- `REALTIME_VIBEVOICE_REPO_DIR=VibeVoice-Microsoft`
+- `REALTIME_MODEL_ID=microsoft/VibeVoice-Realtime-0.5B`
+- `REALTIME_DEVICE=cuda` (or `cpu`, `mps`)
+- `REALTIME_PORT=3000` (default)
+
+Then start the backend and open the frontend **Realtime** page.
+
+Notes:
+- The upstream demo server streams **PCM16LE mono @ 24kHz**.
+- The upstream demo currently expects the full text at connection time; this repo’s WebSocket API buffers text until you send `flush`.
+
 ## Troubleshooting
 
 ### Issue: FlashAttention2 Warning

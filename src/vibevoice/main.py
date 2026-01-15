@@ -11,6 +11,8 @@ from .config import config
 from .middleware.auth import APIKeyAuthMiddleware
 from .middleware.rate_limit import RateLimitMiddleware
 from .routes import speech, voices, podcasts
+from .routes import realtime_speech
+from .services.realtime_process import realtime_process_manager
 
 # Import podcast router using file-based import
 from pathlib import Path
@@ -71,9 +73,16 @@ app.add_middleware(RateLimitMiddleware)
 
 # Register routes
 app.include_router(speech.router)
+app.include_router(realtime_speech.router)
 app.include_router(voices.router)
 app.include_router(podcast_router)
 app.include_router(podcasts.router)
+
+
+@app.on_event("shutdown")
+async def _shutdown() -> None:
+    # Best-effort shutdown of the realtime subprocess (if we started it).
+    realtime_process_manager.stop()
 
 
 @app.get("/health")

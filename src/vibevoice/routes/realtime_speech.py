@@ -1,0 +1,276 @@
+"""
+Realtime speech generation WebSocket endpoint.
+
+This endpoint bridges the browser to the upstream VibeVoice-Realtime demo server.
+
+Browser protocol (JSON control messages, binary audio frames):
+  - start: { "type": "start", "cfg_scale"?: number, "inference_steps"?: number, "voice"?: string }
+  - text:  { "type": "text", "text": string }   (buffered)
+  - flush: { "type": "flush" }                  (start generating current buffer)
+  - stop:  { "type": "stop" }                   (cancel current generation)
+
+Server -> browser:
+  - binary frames: PCM16LE mono @ 24000Hz chunks
+  - JSON status/log frames: { "type": "status" | "error" | "end", ... }
+
+Upstream server notes:
+  - It expects the full text at WS connect time via the `text` query param.
+  - It may interleave JSON log frames (text) and raw audio bytes.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import time
+from dataclasses import dataclass
+from typing import Any, Optional
+from urllib.parse import quote
+
+import websockets
+from fastapi import APIRouter, WebSocket
+from starlette.websockets import WebSocketDisconnect
+
+from ..config import config
+from ..services.realtime_process import realtime_process_manager
+
+
+router = APIRouter(prefix="/api/v1/speech", tags=["speech"])
+
+
+@dataclass
+class _WsLimiter:
+    requests_per_minute: int
+    window_seconds: float = 60.0
+
+    def __post_init__(self) -> None:
+        self._lock = asyncio.Lock()
+        self._timestamps: dict[str, list[float]] = {}
+
+    async def allow(self, key: str) -> tuple[bool, int, int]:
+        now = time.time()
+        cutoff = now - self.window_seconds
+        async with self._lock:
+            ts = self._timestamps.get(key, [])
+            ts = [t for t in ts if t > cutoff]
+            if len(ts) >= self.requests_per_minute:
+                self._timestamps[key] = ts
+                return False, self.requests_per_minute, 0
+            ts.append(now)
+            self._timestamps[key] = ts
+            remaining = self.requests_per_minute - len(ts)
+            return True, self.requests_per_minute, remaining
+
+
+# One shared limiter instance for WS connections/messages.
+_connection_limiter = _WsLimiter(requests_per_minute=config.RATE_LIMIT_PER_MINUTE)
+_message_limiter = _WsLimiter(requests_per_minute=config.RATE_LIMIT_PER_MINUTE * 10)
+
+
+def _extract_api_key(ws: WebSocket) -> Optional[str]:
+    # Prefer query param (easy for browser WS), fall back to header for advanced clients.
+    key = ws.query_params.get("api_key")
+    if key:
+        return key
+    return ws.headers.get("x-api-key")
+
+
+@router.websocket("/realtime")
+async def realtime_speech(ws: WebSocket) -> None:
+    api_key = _extract_api_key(ws)
+    if not config.validate_api_key(api_key):
+        await ws.close(code=1008, reason="Invalid or missing API key")
+        return
+
+    # Track key for rate limiting.
+    rate_key = api_key or "anonymous"
+    allowed, limit, remaining = await _connection_limiter.allow(rate_key)
+    if not allowed:
+        await ws.accept()
+        await ws.send_text(
+            json.dumps(
+                {
+                    "type": "error",
+                    "message": f"Rate limit exceeded: {limit} connections per minute",
+                    "retry_after_seconds": 60,
+                }
+            )
+        )
+        await ws.close(code=1013, reason="Rate limit exceeded")
+        return
+
+    await ws.accept()
+
+    # Session state
+    buffered_text = ""
+    cfg_scale: float = 1.5
+    inference_steps: Optional[int] = None
+    voice: Optional[str] = None
+
+    upstream_ws: Optional[websockets.WebSocketClientProtocol] = None
+    upstream_task: Optional[asyncio.Task[None]] = None
+
+    async def send_status(event: str, data: Optional[dict[str, Any]] = None) -> None:
+        await ws.send_text(
+            json.dumps(
+                {
+                    "type": "status",
+                    "event": event,
+                    "data": data or {},
+                }
+            )
+        )
+
+    async def send_error(message: str) -> None:
+        await ws.send_text(json.dumps({"type": "error", "message": message}))
+
+    async def close_upstream() -> None:
+        nonlocal upstream_ws, upstream_task
+        task = upstream_task
+        upstream_task = None
+        if task:
+            task.cancel()
+            try:
+                await task
+            except Exception:
+                pass
+        if upstream_ws:
+            try:
+                await upstream_ws.close()
+            except Exception:
+                pass
+            upstream_ws = None
+
+    async def start_generation(text_to_generate: str) -> None:
+        nonlocal upstream_ws, upstream_task
+        if not text_to_generate.strip():
+            await send_error("No text to generate. Send {type:'text'} then {type:'flush'}.")
+            return
+        if upstream_task:
+            await send_error("Generation already in progress.")
+            return
+
+        srv = realtime_process_manager.ensure_running()
+        params = [f"text={quote(text_to_generate)}"]
+        if cfg_scale:
+            params.append(f"cfg={quote(str(cfg_scale))}")
+        if inference_steps is not None:
+            params.append(f"steps={quote(str(inference_steps))}")
+        if voice:
+            params.append(f"voice={quote(voice)}")
+
+        upstream_url = f"ws://{srv.host}:{srv.port}/stream?{'&'.join(params)}"
+        await send_status("upstream_connecting", {"url": upstream_url})
+
+        upstream_ws = await websockets.connect(
+            upstream_url,
+            max_size=None,
+            ping_interval=20,
+            ping_timeout=20,
+        )
+
+        async def _forward() -> None:
+            try:
+                await send_status("upstream_connected")
+                async for message in upstream_ws:
+                    # Upstream interleaves JSON logs (text) and audio bytes.
+                    if isinstance(message, (bytes, bytearray)):
+                        await ws.send_bytes(bytes(message))
+                        continue
+
+                    # Forward upstream log frames as status for UI visibility.
+                    try:
+                        payload = json.loads(message)
+                        await ws.send_text(
+                            json.dumps(
+                                {
+                                    "type": "status",
+                                    "event": "upstream_log",
+                                    "data": payload,
+                                }
+                            )
+                        )
+                    except Exception:
+                        await ws.send_text(
+                            json.dumps(
+                                {
+                                    "type": "status",
+                                    "event": "upstream_text",
+                                    "data": {"message": message},
+                                }
+                            )
+                        )
+            finally:
+                await send_status("generation_complete")
+                await ws.send_text(json.dumps({"type": "end"}))
+                await close_upstream()
+
+        upstream_task = asyncio.create_task(_forward())
+
+    try:
+        await send_status(
+            "connected",
+            {
+                "sample_rate": 24000,
+                "note": "Upstream VibeVoice-Realtime demo accepts full text at connect time. "
+                "This API buffers text until you send {type:'flush'}.",
+                "rate_limit_remaining_connections": remaining,
+            },
+        )
+
+        while True:
+            allowed, _, _ = await _message_limiter.allow(rate_key)
+            if not allowed:
+                await send_error("Rate limit exceeded for messages. Try again later.")
+                await ws.close(code=1013, reason="Rate limit exceeded")
+                return
+
+            raw = await ws.receive_text()
+            try:
+                msg = json.loads(raw)
+            except Exception:
+                await send_error("Invalid JSON message.")
+                continue
+
+            msg_type = msg.get("type")
+            if msg_type == "start":
+                # Optional session parameters; generation starts on flush.
+                cfg_scale = float(msg.get("cfg_scale", cfg_scale))
+                steps_val = msg.get("inference_steps", inference_steps)
+                inference_steps = int(steps_val) if steps_val is not None else None
+                voice = msg.get("voice", voice)
+                await send_status(
+                    "session_started",
+                    {"cfg_scale": cfg_scale, "inference_steps": inference_steps, "voice": voice},
+                )
+            elif msg_type == "text":
+                text = msg.get("text")
+                if not isinstance(text, str):
+                    await send_error("Expected {type:'text', text:string}.")
+                    continue
+                buffered_text += text
+                await send_status("text_buffered", {"length": len(buffered_text)})
+            elif msg_type == "flush":
+                to_generate = buffered_text
+                buffered_text = ""
+                await start_generation(to_generate)
+            elif msg_type == "stop":
+                buffered_text = ""
+                await close_upstream()
+                await send_status("stopped")
+            else:
+                await send_error(f"Unknown message type: {msg_type!r}")
+
+    except WebSocketDisconnect:
+        await close_upstream()
+    except Exception as e:
+        try:
+            await send_error(str(e))
+        except Exception:
+            pass
+        await close_upstream()
+        try:
+            await ws.close(code=1011, reason="Server error")
+        except Exception:
+            pass
+

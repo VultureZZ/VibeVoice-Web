@@ -9,6 +9,7 @@ export function Navigation() {
 
   const navLinks = [
     { path: '/generate', label: 'Generate' },
+    { path: '/realtime', label: 'Realtime' },
     { path: '/podcast', label: 'Article Podcaster' },
     { path: '/podcasts', label: 'Podcast Library' },
     { path: '/voices', label: 'Voices' },

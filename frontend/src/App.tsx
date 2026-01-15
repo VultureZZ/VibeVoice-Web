@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { GeneratePage } from './pages/GeneratePage';
+import { RealtimeGeneratePage } from './pages/RealtimeGeneratePage';
 import { PodcastPage } from './pages/PodcastPage';
 import { PodcastsLibraryPage } from './pages/PodcastsLibraryPage';
 import { VoicesPage } from './pages/VoicesPage';
@@ -13,6 +14,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/generate" replace />} />
           <Route path="/generate" element={<GeneratePage />} />
+          <Route path="/realtime" element={<RealtimeGeneratePage />} />
           <Route path="/podcast" element={<PodcastPage />} />
           <Route path="/podcasts" element={<PodcastsLibraryPage />} />
           <Route path="/voices" element={<VoicesPage />} />
