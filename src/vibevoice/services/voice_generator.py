@@ -46,7 +46,7 @@ class VoiceGenerator:
         """
         logger.debug(f"Validating speakers: {speakers}")
 
-        # Normalize speaker names to canonical form
+        # Normalize speaker names to canonical form (case-insensitive)
         normalized_speakers = [voice_manager.normalize_voice_name(s) for s in speakers]
         logger.debug(f"Normalized speakers: {normalized_speakers}")
 
@@ -54,7 +54,14 @@ class VoiceGenerator:
         available_names = {v["name"] for v in all_voices}
         logger.debug(f"Available voices: {sorted(available_names)}")
 
-        invalid_speakers = [s for s in normalized_speakers if s not in available_names]
+        # Validate normalized names (normalize_voice_name should return correctly-cased names)
+        # Use case-insensitive matching as a safety measure
+        available_names_lower = {name.lower(): name for name in available_names}
+        invalid_speakers = []
+        for normalized in normalized_speakers:
+            if normalized.lower() not in available_names_lower:
+                invalid_speakers.append(normalized)
+        
         if invalid_speakers:
             logger.error(f"Invalid speakers detected: {invalid_speakers}")
             raise ValueError(f"Invalid speakers: {', '.join(invalid_speakers)}")

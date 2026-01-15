@@ -413,6 +413,22 @@ class VoiceManager:
         if voice_data.get("type") == "default" or self.is_default_voice(voice_data.get("name", "")):
             raise ValueError("Cannot delete default voices")
 
+        # Get the canonical voice name to find the symlink
+        voice_name = voice_data.get("name", "")
+        if voice_name:
+            # Normalize to get canonical name (in case it was stored with different casing)
+            canonical_name = self.normalize_voice_name(voice_name)
+            # Remove symlink from default voices directory if it exists
+            symlink_path = self.default_voices_dir / f"{canonical_name}.wav"
+            if symlink_path.exists() or symlink_path.is_symlink():
+                try:
+                    symlink_path.unlink()
+                except OSError as e:
+                    # Log but don't fail deletion if symlink removal fails
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Failed to remove symlink {symlink_path}: {e}")
+
         # Delete voice directory
         voice_dir = self.custom_voices_dir / voice_id
         if voice_dir.exists():
@@ -789,25 +805,44 @@ class VoiceManager:
 
         Accepts both canonical names (e.g., "Alice") and mapped aliases
         (e.g., "en-Alice_woman") and returns the canonical name.
+        Matching is case-insensitive.
 
         Args:
             voice_name: Voice name in any format
 
         Returns:
-            Canonical voice name
+            Canonical voice name with correct casing
 
         Examples:
             - "en-Alice_woman" -> "Alice"
             - "Alice" -> "Alice"
+            - "alice" -> "Alice" (case-insensitive)
             - "en-Carter_man" -> "Carter"
+            - "donaldtrump" -> "DonaldTrump" (if exists, case-insensitive)
             - "zh-Anchen_man_bgm" -> "zh-Anchen_man_bgm" (no mapping, returns as-is)
         """
-        # Check if it's a mapped name (reverse lookup)
+        voice_name_lower = voice_name.lower()
+        
+        # Check if it's a mapped name (reverse lookup, case-insensitive)
         for canonical, mapped in VOICE_NAME_MAPPING.items():
-            if voice_name == mapped:
+            if voice_name_lower == mapped.lower():
                 return canonical
 
-        # If it's already canonical or not in mapping, return as-is
+        # Check if it matches a canonical name (case-insensitive)
+        for canonical in VOICE_NAME_MAPPING.keys():
+            if voice_name_lower == canonical.lower():
+                return canonical
+
+        # If not found in mapping, check against all available voices (case-insensitive)
+        # This handles custom voices and default voices not in the mapping
+        all_voices = self.list_all_voices()
+        for voice in all_voices:
+            voice_name_from_list = voice.get("name", "")
+            if voice_name_lower == voice_name_from_list.lower():
+                return voice_name_from_list
+
+        # If not found, return as-is (preserve original casing)
+        # This allows for future voices that might not be in the list yet
         return voice_name
 
     def resolve_voice_name(self, voice_name: str) -> str:
