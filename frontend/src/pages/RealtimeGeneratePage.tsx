@@ -20,17 +20,22 @@ export function RealtimeGeneratePage() {
   const [voice, setVoice] = useState<string>('');
   const [cfgScale, setCfgScale] = useState<number>(1.5);
   const [inferenceSteps, setInferenceSteps] = useState<number>(5);
+  const [volume, setVolume] = useState<number>(1.0);
 
-  const { state, lastError, messages, connect, disconnect, sendStart, sendText, sendFlush, sendStop, onAudioChunkRef } =
+  const { state, lastError, messages, audioStats, connect, disconnect, sendStart, sendText, sendFlush, sendStop, onAudioChunkRef } =
     useRealtimeSpeech(settings);
 
   const audioContextRef = useRef<AudioContext | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
   const nextPlayTimeRef = useRef<number>(0);
 
   const ensureAudioContext = useCallback(async () => {
     if (!audioContextRef.current) {
       audioContextRef.current = new AudioContext({ sampleRate: SAMPLE_RATE });
       nextPlayTimeRef.current = 0;
+      gainNodeRef.current = audioContextRef.current.createGain();
+      gainNodeRef.current.gain.value = volume;
+      gainNodeRef.current.connect(audioContextRef.current.destination);
     }
     if (audioContextRef.current.state !== 'running') {
       await audioContextRef.current.resume();
@@ -40,6 +45,7 @@ export function RealtimeGeneratePage() {
   const resetAudio = useCallback(async () => {
     const ctx = audioContextRef.current;
     audioContextRef.current = null;
+    gainNodeRef.current = null;
     nextPlayTimeRef.current = 0;
     if (ctx) {
       try {
@@ -54,6 +60,7 @@ export function RealtimeGeneratePage() {
     async (chunk: ArrayBuffer) => {
       await ensureAudioContext();
       const ctx = audioContextRef.current;
+      const gain = gainNodeRef.current;
       if (!ctx) return;
 
       const pcm = new Int16Array(chunk);
@@ -64,7 +71,7 @@ export function RealtimeGeneratePage() {
 
       const source = ctx.createBufferSource();
       source.buffer = buffer;
-      source.connect(ctx.destination);
+      source.connect(gain ?? ctx.destination);
 
       const now = ctx.currentTime;
       const startAt = Math.max(nextPlayTimeRef.current, now + 0.05);
@@ -73,6 +80,13 @@ export function RealtimeGeneratePage() {
     },
     [ensureAudioContext]
   );
+
+  // Keep gain in sync
+  useEffect(() => {
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = volume;
+    }
+  }, [volume]);
 
   // Wire audio callback from the WS hook
   useEffect(() => {
@@ -220,6 +234,52 @@ export function RealtimeGeneratePage() {
           <pre className="text-xs bg-gray-50 border rounded-md p-3 overflow-auto max-h-64">
 {statusLines.join('\n')}
           </pre>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="text-xs text-gray-600">
+              <div className="font-medium text-gray-900">Audio stats</div>
+              <div>Chunks: {audioStats.chunks}</div>
+              <div>Bytes: {audioStats.bytes}</div>
+              <div>Seconds (est): {(audioStats.bytes / 2 / SAMPLE_RATE).toFixed(2)}</div>
+            </div>
+            <div className="text-xs text-gray-600">
+              <div className="font-medium text-gray-900">Playback</div>
+              <div>
+                AudioContext:{' '}
+                {audioContextRef.current
+                  ? `${audioContextRef.current.state} @ ${audioContextRef.current.sampleRate}Hz`
+                  : 'not created'}
+              </div>
+              <div>
+                Queue lead:{' '}
+                {audioContextRef.current
+                  ? `${Math.max(0, nextPlayTimeRef.current - audioContextRef.current.currentTime).toFixed(2)}s`
+                  : '0s'}
+              </div>
+            </div>
+            <div className="text-xs text-gray-600">
+              <div className="font-medium text-gray-900">Volume</div>
+              <input
+                type="range"
+                min="0"
+                max="2"
+                step="0.01"
+                value={volume}
+                onChange={(e) => setVolume(parseFloat(e.target.value))}
+                className="w-full"
+              />
+              <div>{volume.toFixed(2)}x</div>
+              <div className="mt-2 flex gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    void resetAudio();
+                  }}
+                >
+                  Reset Audio
+                </Button>
+              </div>
+            </div>
+          </div>
           <div className="text-xs text-gray-500">
             Audio is streamed as raw PCM16LE mono @ 24000Hz and played via the Web Audio API.
           </div>

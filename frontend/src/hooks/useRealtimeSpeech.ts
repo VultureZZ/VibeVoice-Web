@@ -23,6 +23,10 @@ export function useRealtimeSpeech(settings: AppSettings) {
   const [state, setState] = useState<RealtimeClientState>('disconnected');
   const [lastError, setLastError] = useState<string | null>(null);
   const [messages, setMessages] = useState<StatusMessage[]>([]);
+  const [audioStats, setAudioStats] = useState<{ chunks: number; bytes: number }>({
+    chunks: 0,
+    bytes: 0,
+  });
 
   const wsRef = useRef<WebSocket | null>(null);
   const onAudioChunkRef = useRef<((chunk: ArrayBuffer) => void) | null>(null);
@@ -39,6 +43,7 @@ export function useRealtimeSpeech(settings: AppSettings) {
 
     setLastError(null);
     setMessages([]);
+    setAudioStats({ chunks: 0, bytes: 0 });
     setState('connecting');
 
     const ws = new WebSocket(wsUrl);
@@ -65,7 +70,7 @@ export function useRealtimeSpeech(settings: AppSettings) {
       setLastError('WebSocket error (see server logs for details)');
     };
 
-    ws.onmessage = (evt) => {
+    ws.onmessage = async (evt) => {
       if (typeof evt.data === 'string') {
         try {
           const parsed = JSON.parse(evt.data) as StatusMessage;
@@ -80,8 +85,11 @@ export function useRealtimeSpeech(settings: AppSettings) {
       }
 
       // Binary audio chunk (PCM16 bytes).
-      const chunk = evt.data as ArrayBuffer;
+      // Some browsers may deliver Blob even when binaryType is set.
+      const chunk =
+        evt.data instanceof Blob ? await evt.data.arrayBuffer() : (evt.data as ArrayBuffer);
       onAudioChunkRef.current?.(chunk);
+      setAudioStats((prev) => ({ chunks: prev.chunks + 1, bytes: prev.bytes + chunk.byteLength }));
       setMessages((prev) =>
         [...prev, { type: 'status', event: 'audio_chunk', data: { bytes: chunk.byteLength } }].slice(-200)
       );
@@ -139,6 +147,7 @@ export function useRealtimeSpeech(settings: AppSettings) {
     state,
     lastError,
     messages,
+    audioStats,
     connect,
     disconnect,
     sendStart,
