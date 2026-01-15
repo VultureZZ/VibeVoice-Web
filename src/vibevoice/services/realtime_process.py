@@ -62,6 +62,8 @@ class RealtimeProcessManager:
         self._last_start_time: Optional[float] = None
         self._stdout_thread: Optional[threading.Thread] = None
         self._stderr_thread: Optional[threading.Thread] = None
+        self._last_config_payload: Optional[dict] = None
+        self._last_config_at: Optional[float] = None
 
     def _current_cfg(self) -> RealtimeServerConfig:
         return RealtimeServerConfig(
@@ -247,6 +249,9 @@ class RealtimeProcessManager:
                         cfg_payload.get("default_voice"),
                         len(cfg_payload.get("voices", [])) if isinstance(cfg_payload.get("voices"), list) else "unknown",
                     )
+                    with self._lock:
+                        self._last_config_payload = cfg_payload
+                        self._last_config_at = time.time()
                 except Exception as e:
                     # This is the key diagnostic for the "handshake timed out" case:
                     # port is open but the expected upstream server isn't responding correctly.
@@ -277,6 +282,10 @@ class RealtimeProcessManager:
             f"Timed out waiting for realtime server on {cfg.host}:{cfg.port} "
             f"after {cfg.startup_timeout_seconds}s."
         )
+
+    def get_cached_upstream_config(self) -> Optional[dict]:
+        with self._lock:
+            return self._last_config_payload
 
     def stop(self) -> None:
         """Stop the realtime server subprocess (if started by this process)."""

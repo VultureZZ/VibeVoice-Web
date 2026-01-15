@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from '../components/Alert';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+import { Select } from '../components/Select';
 import { useRealtimeSpeech } from '../hooks/useRealtimeSpeech';
 import { useSettings } from '../hooks/useSettings';
 
@@ -18,6 +19,8 @@ export function RealtimeGeneratePage() {
 
   const [text, setText] = useState('Hello! This is VibeVoice-Realtime-0.5B streaming audio.');
   const [voice, setVoice] = useState<string>('');
+  const [upstreamVoices, setUpstreamVoices] = useState<string[]>([]);
+  const [upstreamDefaultVoice, setUpstreamDefaultVoice] = useState<string | null>(null);
   const [cfgScale, setCfgScale] = useState<number>(1.5);
   const [inferenceSteps, setInferenceSteps] = useState<number>(5);
   const [volume, setVolume] = useState<number>(1.0);
@@ -114,6 +117,22 @@ export function RealtimeGeneratePage() {
     return filtered.map((m) => JSON.stringify(m));
   }, [messages]);
 
+  // Extract upstream voice presets from status messages emitted by the backend.
+  useEffect(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i] as any;
+      if (m?.type === 'status' && m?.event === 'upstream_voice_presets' && m?.data) {
+        const voices = Array.isArray(m.data.voices) ? (m.data.voices as string[]) : [];
+        const def = typeof m.data.default_voice === 'string' ? (m.data.default_voice as string) : null;
+        setUpstreamVoices(voices);
+        setUpstreamDefaultVoice(def);
+        // If no voice selected yet, set to default to avoid silent fallback surprises.
+        if (!voice && def) setVoice(def);
+        break;
+      }
+    }
+  }, [messages, voice]);
+
   const handleConnect = async () => {
     connect();
     // Audio must be enabled by user gesture in most browsers, so also prepare it here.
@@ -167,12 +186,29 @@ export function RealtimeGeneratePage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Input
-            label="Voice preset (optional)"
-            value={voice}
-            onChange={(e) => setVoice(e.target.value)}
-            placeholder="e.g. en-WHTest_man"
-          />
+          {upstreamVoices.length > 0 ? (
+            <Select
+              label="Voice preset (realtime model presets)"
+              value={voice}
+              onChange={(e) => setVoice(e.target.value)}
+              options={[
+                ...(upstreamDefaultVoice
+                  ? [{ value: upstreamDefaultVoice, label: `${upstreamDefaultVoice} (default)` }]
+                  : []),
+                ...upstreamVoices
+                  .filter((v) => v !== upstreamDefaultVoice)
+                  .map((v) => ({ value: v, label: v })),
+              ]}
+            />
+          ) : (
+            <Input
+              label="Voice preset (optional)"
+              value={voice}
+              onChange={(e) => setVoice(e.target.value)}
+              placeholder="Will populate after first generation"
+              helpText="Realtime voices come from the upstream demo server (GET /config). Custom voices from this app are not available in realtime mode."
+            />
+          )}
           <Input
             label="CFG scale"
             value={cfgScale.toString()}

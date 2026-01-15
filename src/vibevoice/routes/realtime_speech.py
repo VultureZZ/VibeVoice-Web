@@ -167,13 +167,36 @@ async def realtime_speech(ws: WebSocket) -> None:
 
         logger.info("[%s] Starting generation. text_len=%s", conn_id, len(text_to_generate))
         srv = realtime_process_manager.ensure_running()
+        upstream_cfg = realtime_process_manager.get_cached_upstream_config() or {}
+        available_voices = upstream_cfg.get("voices", []) if isinstance(upstream_cfg, dict) else []
+        default_voice = upstream_cfg.get("default_voice") if isinstance(upstream_cfg, dict) else None
+
+        # Share upstream available presets with the client (for UI selection/debugging).
+        if isinstance(available_voices, list) and available_voices:
+            await send_status(
+                "upstream_voice_presets",
+                {"voices": available_voices, "default_voice": default_voice},
+            )
+
         params = [f"text={quote(text_to_generate)}"]
         if cfg_scale:
             params.append(f"cfg={quote(str(cfg_scale))}")
         if inference_steps is not None:
             params.append(f"steps={quote(str(inference_steps))}")
         if voice:
-            params.append(f"voice={quote(voice)}")
+            if isinstance(available_voices, list) and voice not in available_voices:
+                await send_status(
+                    "voice_not_found",
+                    {
+                        "requested_voice": voice,
+                        "default_voice": default_voice,
+                        "available_voice_count": len(available_voices),
+                        "note": "Requested voice isn't supported by the upstream realtime demo; it will fall back to default.",
+                    },
+                )
+            else:
+                params.append(f"voice={quote(voice)}")
+                await send_status("voice_selected", {"voice": voice})
 
         upstream_url = f"ws://{srv.host}:{srv.port}/stream?{'&'.join(params)}"
         await send_status("upstream_connecting", {"url": upstream_url, "host": srv.host, "port": srv.port})
