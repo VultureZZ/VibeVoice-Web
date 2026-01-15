@@ -69,6 +69,8 @@ class VoiceStorage:
         description: Optional[str] = None,
         audio_files: Optional[List[str]] = None,
         profile: Optional[Dict] = None,
+        language_code: Optional[str] = None,
+        gender: Optional[str] = None,
     ) -> None:
         """
         Add a new voice to storage.
@@ -89,6 +91,10 @@ class VoiceStorage:
             "created_at": now,
             "audio_files": audio_files or [],
         }
+        if language_code:
+            voice_data["language_code"] = language_code
+        if gender:
+            voice_data["gender"] = gender
         if profile:
             voice_data["profile"] = profile
         data["voices"][voice_id] = voice_data

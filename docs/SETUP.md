@@ -478,6 +478,13 @@ Notes:
 - The API defaults to `0.0.0.0:8000` (set `HOST` and `PORT` to change).
 - The UI defaults to `0.0.0.0:3001` (set `VIBEVOICE_WEB_HOST` and `VIBEVOICE_WEB_PORT` to change).
 
+### Common issue: EACCES when rebuilding the frontend
+
+If you previously installed with `sudo` and the installer built the UI as root, `frontend/dist/` may be owned by root, causing errors like:
+- `EACCES: permission denied, unlink ... frontend/dist/...`
+
+Fix by changing ownership of the frontend build output back to your user (or removing it), then rebuild.
+
 ## Additional Resources
 
 - [VibeVoice Community Repository](https://github.com/vibevoice-community/VibeVoice)

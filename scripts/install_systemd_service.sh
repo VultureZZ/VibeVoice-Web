@@ -75,6 +75,15 @@ if [[ ! -x "${VENV_PY}" ]]; then
   exit 1
 fi
 
+run_as_run_user() {
+  # Avoid creating root-owned node_modules/dist when this script is run with sudo.
+  if [[ "${RUN_USER}" == "root" ]]; then
+    bash -lc "$1"
+    return
+  fi
+  sudo -u "${RUN_USER}" -H bash -lc "$1"
+}
+
 ENV_DIR="/etc/vibevoice"
 ENV_FILE="${ENV_DIR}/vibevoice.env"
 
@@ -156,16 +165,14 @@ if [[ "${WITH_WEB}" -eq 1 ]]; then
     exit 1
   fi
 
-  pushd "${REPO_DIR}/frontend" >/dev/null
-  if [[ ! -d node_modules ]]; then
-    echo "Installing frontend dependencies (no package-lock)..."
-    npm install --no-package-lock
+  if [[ ! -d "${REPO_DIR}/frontend/node_modules" ]]; then
+    echo "Installing frontend dependencies..."
+    run_as_run_user "cd \"${REPO_DIR}/frontend\" && npm install"
   fi
   if [[ "${WEB_MODE}" == "preview" ]]; then
     echo "Building frontend for preview..."
-    npm run build
+    run_as_run_user "cd \"${REPO_DIR}/frontend\" && npm run build"
   fi
-  popd >/dev/null
 
   WEB_UNIT="/etc/systemd/system/vibevoice-web.service"
   if [[ "${WEB_MODE}" == "preview" ]]; then

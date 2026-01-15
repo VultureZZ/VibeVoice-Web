@@ -37,6 +37,14 @@ class VoiceResponse(BaseModel):
 
     id: str = Field(..., description="Voice identifier")
     name: str = Field(..., description="Voice name")
+    display_name: Optional[str] = Field(
+        None, description="Human-friendly display name (may differ from `name` for default voices)"
+    )
+    language_code: Optional[str] = Field(None, description="Optional voice language code (e.g., en, zh, in)")
+    language_label: Optional[str] = Field(None, description="Optional human-friendly language label (e.g., English)")
+    gender: Optional[str] = Field(
+        None, description="Optional voice gender: male, female, neutral, or unknown"
+    )
     description: Optional[str] = Field(None, description="Voice description")
     type: str = Field(..., description="Voice type: 'default' or 'custom'")
     created_at: Optional[datetime] = Field(None, description="Creation timestamp")

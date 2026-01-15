@@ -28,6 +28,83 @@ VOICE_NAME_MAPPING = {
 # Default voices list (both short and full names)
 DEFAULT_VOICES = list(VOICE_NAME_MAPPING.keys()) + list(VOICE_NAME_MAPPING.values())
 
+LANGUAGE_LABELS = {
+    "en": "English",
+    "zh": "Chinese",
+    "de": "German",
+    "ru": "Russian",
+    "es": "Spanish",
+    "fr": "French",
+    "it": "Italian",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "pt": "Portuguese",
+    "ar": "Arabic",
+    "hi": "Hindi",
+    "nl": "Dutch",
+    "pl": "Polish",
+    "tr": "Turkish",
+    "sv": "Swedish",
+    "da": "Danish",
+    "no": "Norwegian",
+    "fi": "Finnish",
+    "cs": "Czech",
+    "hu": "Hungarian",
+    "ro": "Romanian",
+    "el": "Greek",
+    "he": "Hebrew",
+    "th": "Thai",
+    "vi": "Vietnamese",
+    "id": "Indonesian",
+    "ms": "Malay",
+    # Non-standard code used by some bundled voices
+    "in": "Indian",
+}
+
+
+def _get_language_label(code: Optional[str]) -> Optional[str]:
+    if not code:
+        return None
+    normalized = code.strip().lower()
+    if not normalized:
+        return None
+    return LANGUAGE_LABELS.get(normalized, normalized.upper())
+
+
+def _parse_default_voice_stem(stem: str) -> dict:
+    """
+    Parse default voice filename stem like:
+      - en-Alice_woman_bgm
+      - in-Samuel_man
+      - zh-Anchen_man_bgm
+
+    Returns:
+      { display_name, language_code, language_label, gender }
+    """
+    display_name = stem
+    language_code: Optional[str] = None
+    gender: str = "unknown"
+
+    if "-" in stem:
+        language_code, remainder = stem.split("-", 1)
+        language_code = language_code.lower()
+        parts = remainder.split("_")
+        if parts:
+            display_name = parts[0]
+            tags = {p.lower() for p in parts[1:] if p}
+            if "woman" in tags or "female" in tags:
+                gender = "female"
+            elif "man" in tags or "male" in tags:
+                gender = "male"
+            elif "neutral" in tags or "nonbinary" in tags or "gender_neutral" in tags:
+                gender = "neutral"
+    return {
+        "display_name": display_name,
+        "language_code": language_code,
+        "language_label": _get_language_label(language_code),
+        "gender": gender,
+    }
+
 
 class VoiceManager:
     """Service for managing voices."""
@@ -49,7 +126,13 @@ class VoiceManager:
         Returns:
             True if default voice, False otherwise
         """
-        return voice_name in DEFAULT_VOICES or voice_name.startswith("en-")
+        if voice_name in DEFAULT_VOICES:
+            return True
+        # Also treat any on-disk default voice name as reserved.
+        try:
+            return (self.default_voices_dir / f"{voice_name}.wav").exists()
+        except Exception:
+            return False
 
     def get_voice_id_from_name(self, name: str) -> str:
         """
@@ -73,6 +156,8 @@ class VoiceManager:
         keywords: Optional[List[str]] = None,
         ollama_url: Optional[str] = None,
         ollama_model: Optional[str] = None,
+        language_code: Optional[str] = None,
+        gender: Optional[str] = None,
     ) -> dict:
         """
         Create a custom voice from uploaded audio files.
@@ -117,6 +202,17 @@ class VoiceManager:
         audio_segments = []
 
         try:
+            normalized_language_code = None
+            if language_code is not None:
+                normalized_language_code = language_code.strip().lower() or None
+
+            normalized_gender = None
+            if gender is not None:
+                normalized_gender = gender.strip().lower() or None
+            allowed_genders = {"male", "female", "neutral", "unknown"}
+            if normalized_gender is not None and normalized_gender not in allowed_genders:
+                raise ValueError("gender must be one of: male, female, neutral, unknown")
+
             for i, audio_file in enumerate(audio_files):
                 # Validate file exists
                 if not audio_file.exists():
@@ -187,6 +283,8 @@ class VoiceManager:
                 name=name,
                 description=description,
                 audio_files=saved_files,
+                language_code=normalized_language_code,
+                gender=normalized_gender,
             )
 
             # Automatically profile the voice (non-blocking - don't fail if profiling fails)
@@ -224,6 +322,15 @@ class VoiceManager:
 
             # Return voice metadata with validation feedback
             voice_data = voice_storage.get_voice(voice_id)
+            if voice_data:
+                # Ensure display fields exist for the frontend.
+                voice_data.setdefault("display_name", voice_data.get("name"))
+                lc = voice_data.get("language_code")
+                if lc:
+                    voice_data["language_label"] = _get_language_label(lc)
+                g = voice_data.get("gender")
+                if not g:
+                    voice_data["gender"] = "unknown"
             voice_data["validation_feedback"] = validation_feedback
             return voice_data
 
@@ -310,10 +417,15 @@ class VoiceManager:
 
                 if short_name:
                     if short_name not in seen_voices:
+                        parsed = _parse_default_voice_stem(full_name)
                         voices.append(
                             {
                                 "id": short_name,
                                 "name": short_name,
+                                "display_name": short_name,
+                                "language_code": parsed.get("language_code"),
+                                "language_label": parsed.get("language_label"),
+                                "gender": parsed.get("gender", "unknown"),
                                 "description": f"Default VibeVoice voice: {short_name} (maps to {full_name})",
                                 "type": "default",
                                 "created_at": None,
@@ -324,10 +436,15 @@ class VoiceManager:
                 else:
                     # No mapping: expose full voice id.
                     if full_name not in seen_voices:
+                        parsed = _parse_default_voice_stem(full_name)
                         voices.append(
                             {
                                 "id": full_name,
                                 "name": full_name,
+                                "display_name": parsed.get("display_name", full_name),
+                                "language_code": parsed.get("language_code"),
+                                "language_label": parsed.get("language_label"),
+                                "gender": parsed.get("gender", "unknown"),
                                 "description": f"Default VibeVoice voice: {full_name}",
                                 "type": "default",
                                 "created_at": None,
@@ -375,9 +492,16 @@ class VoiceManager:
         resolved = VOICE_NAME_MAPPING.get(voice_id, voice_id)
         voice_path = self.default_voices_dir / f"{resolved}.wav"
         if voice_path.exists():
+            parsed = _parse_default_voice_stem(resolved)
+            # If this voice_id is the short mapped name (e.g. Alice), keep display_name as the short name.
+            display_name = voice_id if voice_id in VOICE_NAME_MAPPING else parsed.get("display_name", voice_id)
             return {
                 "id": voice_id,
                 "name": voice_id,
+                "display_name": display_name,
+                "language_code": parsed.get("language_code"),
+                "language_label": parsed.get("language_label"),
+                "gender": parsed.get("gender", "unknown"),
                 "description": f"Default VibeVoice voice: {voice_id}",
                 "type": "default",
                 "created_at": None,
