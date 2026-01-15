@@ -2,7 +2,7 @@
  * Reusable input component
  */
 
-import { InputHTMLAttributes, TextareaHTMLAttributes, ReactNode } from 'react';
+import { InputHTMLAttributes, TextareaHTMLAttributes } from 'react';
 
 interface BaseInputProps {
   label?: string;
@@ -22,11 +22,16 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement>, Bas
 type InputProps = TextInputProps | TextareaProps;
 
 export function Input(props: InputProps) {
-  const { label, error, helpText, className = '', ...inputProps } = props;
+  const { label, error, helpText, className = '', ...restProps } = props;
   const isMultiline = 'multiline' in props && props.multiline;
 
   const baseInputClasses = 'w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
   const errorClasses = error ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300';
+
+  // Important: Do NOT forward the `multiline` prop to the DOM (React warns).
+  const { multiline: _multiline, ...inputProps } = restProps as Omit<InputProps, 'multiline'> & {
+    multiline?: boolean;
+  };
 
   const inputElement = isMultiline ? (
     <textarea

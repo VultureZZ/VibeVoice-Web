@@ -79,6 +79,18 @@ class Config:
         if not self.REALTIME_VIBEVOICE_REPO_DIR.is_absolute():
             self.REALTIME_VIBEVOICE_REPO_DIR = PROJECT_ROOT / self.REALTIME_VIBEVOICE_REPO_DIR
 
+        # If the user didn't explicitly set REALTIME_VIBEVOICE_REPO_DIR, try a sensible default:
+        # prefer a microsoft/VibeVoice checkout if present (it contains the realtime demo server).
+        realtime_repo_env = os.getenv("REALTIME_VIBEVOICE_REPO_DIR")
+        if not realtime_repo_env:
+            candidate = PROJECT_ROOT / "VibeVoice-Microsoft"
+            expected_demo = candidate / "demo" / "vibevoice_realtime_demo.py"
+            current_expected_demo = (
+                self.REALTIME_VIBEVOICE_REPO_DIR / "demo" / "vibevoice_realtime_demo.py"
+            )
+            if not current_expected_demo.exists() and expected_demo.exists():
+                self.REALTIME_VIBEVOICE_REPO_DIR = candidate
+
         # Ensure directories exist
         self.CUSTOM_VOICES_DIR.mkdir(parents=True, exist_ok=True)
         self.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
