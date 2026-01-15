@@ -65,7 +65,7 @@ export function useRealtimeSpeech(settings: AppSettings) {
       wsRef.current = null;
     };
 
-    ws.onerror = (evt) => {
+    ws.onerror = () => {
       // Browser doesn't give much detail here; keep it but also log close codes in onclose.
       setLastError('WebSocket error (see server logs for details)');
     };

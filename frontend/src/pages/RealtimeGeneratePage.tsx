@@ -70,7 +70,9 @@ export function RealtimeGeneratePage() {
       const float = pcm16ToFloat32(pcm);
 
       const buffer = ctx.createBuffer(1, float.length, SAMPLE_RATE);
-      buffer.copyToChannel(float, 0);
+      // TS lib defs can be stricter about the underlying ArrayBuffer type;
+      // copyToChannel only cares about the Float32Array view.
+      buffer.copyToChannel(new Float32Array(float), 0);
 
       const source = ctx.createBufferSource();
       source.buffer = buffer;

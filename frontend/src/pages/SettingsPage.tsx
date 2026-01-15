@@ -14,7 +14,7 @@ import { SUPPORTED_LANGUAGES } from '../utils/languages';
 
 export function SettingsPage() {
   const { settings, saveSettings, clearSettings } = useSettings();
-  const { healthCheck, loading, error } = useApi();
+  const { healthCheck, error } = useApi();
 
   const [apiEndpoint, setApiEndpoint] = useState(
     settings.apiEndpoint
