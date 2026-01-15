@@ -26,6 +26,8 @@ import threading
 import time
 from dataclasses import dataclass
 from typing import Optional
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 from ..config import config
 
@@ -80,6 +82,30 @@ class RealtimeProcessManager:
         except OSError:
             return False
 
+    @staticmethod
+    def _probe_upstream_http_config(host: str, port: int) -> dict:
+        """
+        Verify the upstream demo server is actually running by calling GET /config.
+
+        The upstream demo (microsoft/VibeVoice demo/web/app.py) exposes:
+          - GET /config  -> {"voices": [...], "default_voice": "..."}
+        """
+        url = f"http://{host}:{port}/config"
+        req = Request(url, method="GET", headers={"Accept": "application/json"})
+        try:
+            with urlopen(req, timeout=2) as resp:
+                body = resp.read(4096).decode("utf-8", "replace")
+                if resp.status != 200:
+                    raise RuntimeError(f"Unexpected status {resp.status} from {url}: {body[:200]}")
+                try:
+                    import json
+
+                    return json.loads(body)
+                except Exception as e:
+                    raise RuntimeError(f"Non-JSON response from {url}: {body[:200]}") from e
+        except URLError as e:
+            raise RuntimeError(f"Failed to GET {url}: {e}") from e
+
     def _build_default_command(self, cfg: RealtimeServerConfig) -> list[str]:
         script_path = (
             config.REALTIME_VIBEVOICE_REPO_DIR / "demo" / "vibevoice_realtime_demo.py"
@@ -104,8 +130,9 @@ class RealtimeProcessManager:
     def _start_locked(self, cfg: RealtimeServerConfig) -> None:
         # If something is already listening, assume it is the realtime server.
         if self._is_port_open(cfg.host, cfg.port):
-            logger.info(
-                "Realtime server already listening on %s:%s (not starting subprocess).",
+            logger.warning(
+                "Realtime port already open on %s:%s (not starting subprocess). "
+                "If realtime isn't working, another process may be occupying this port.",
                 cfg.host,
                 cfg.port,
             )
@@ -204,7 +231,23 @@ class RealtimeProcessManager:
         deadline = time.time() + cfg.startup_timeout_seconds
         while time.time() < deadline:
             if self._is_port_open(cfg.host, cfg.port):
-                logger.info("Realtime server is ready on %s:%s.", cfg.host, cfg.port)
+                logger.info("Realtime server port is open on %s:%s.", cfg.host, cfg.port)
+                try:
+                    cfg_payload = self._probe_upstream_http_config(cfg.host, cfg.port)
+                    logger.info(
+                        "Realtime server /config probe OK. default_voice=%s voices=%s",
+                        cfg_payload.get("default_voice"),
+                        len(cfg_payload.get("voices", [])) if isinstance(cfg_payload.get("voices"), list) else "unknown",
+                    )
+                except Exception as e:
+                    # This is the key diagnostic for the "handshake timed out" case:
+                    # port is open but the expected upstream server isn't responding correctly.
+                    logger.error(
+                        "Realtime server probe failed even though port is open: %s. "
+                        "This usually means REALTIME_PORT is occupied by a different service.",
+                        e,
+                    )
+                    raise
                 return cfg
 
             # If the process died, surface a useful error early.
