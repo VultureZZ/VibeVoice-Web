@@ -177,6 +177,8 @@ export interface VoiceProfileFromAudioResponse {
 export interface VoiceUpdateRequest {
   name?: string;
   description?: string;
+  language_code?: string;
+  gender?: string;
 }
 
 export interface VoiceUpdateResponse {

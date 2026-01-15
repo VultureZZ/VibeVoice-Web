@@ -128,6 +128,7 @@ class PodcastScriptResponse(BaseModel):
     success: bool = Field(..., description="Whether script generation was successful")
     message: str = Field(..., description="Status message")
     script: Optional[str] = Field(None, description="Generated podcast script with speaker labels")
+    warnings: List[str] = Field(default_factory=list, description="Optional warnings (e.g., background music risk)")
 
 
 class PodcastGenerateRequest(BaseModel):
@@ -152,6 +153,7 @@ class PodcastGenerateResponse(BaseModel):
     file_path: Optional[str] = Field(None, description="Path to generated audio file")
     script: Optional[str] = Field(None, description="Script used for generation")
     podcast_id: Optional[str] = Field(None, description="Podcast library identifier (if saved)")
+    warnings: List[str] = Field(default_factory=list, description="Optional warnings (e.g., background music risk)")
 
 
 class PodcastItem(BaseModel):
@@ -241,6 +243,8 @@ class VoiceUpdateRequest(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, description="New voice name")
     description: Optional[str] = Field(None, description="New voice description")
+    language_code: Optional[str] = Field(None, description="Optional voice language code (e.g., en, zh, in)")
+    gender: Optional[str] = Field(None, description="Optional voice gender: male, female, neutral, unknown")
 
 
 class VoiceUpdateResponse(BaseModel):

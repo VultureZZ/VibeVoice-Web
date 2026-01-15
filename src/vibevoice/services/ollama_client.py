@@ -257,8 +257,10 @@ Use exactly this format with no additional markup:
 - Use placeholders like [Host Name], [Co-host Name], [Name], etc. - write actual dialogue only
 - Use asterisks or other formatting
 - Add sound effect cues
+- Add or imply background music, theme music, intro/outro music, ambiance, jingles, or any non-speech audio
 - Include timestamps
 - Include any bracketed placeholders or notes
+- Start with greeting-style introductions (e.g., "Welcome to...", "Hello and welcome...", "Thanks for joining us...") or any "show intro" language
 
 Generate the complete podcast script now:"""
 

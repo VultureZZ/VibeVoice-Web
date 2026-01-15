@@ -651,6 +651,8 @@ async def update_voice(
             voice_id=voice_id,
             name=request.name,
             description=request.description,
+            language_code=request.language_code,
+            gender=request.gender,
         )
 
         # Parse created_at if it's a string
@@ -664,6 +666,10 @@ async def update_voice(
         voice_response = VoiceResponse(
             id=updated_voice["id"],
             name=updated_voice["name"],
+            display_name=updated_voice.get("display_name"),
+            language_code=updated_voice.get("language_code"),
+            language_label=updated_voice.get("language_label"),
+            gender=updated_voice.get("gender"),
             description=updated_voice.get("description"),
             type=updated_voice.get("type", "custom"),
             created_at=created_at,

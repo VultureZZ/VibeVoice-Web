@@ -19,6 +19,7 @@ from ..models.schemas import (
 from ..config import config
 from ..models.podcast_storage import podcast_storage
 from ..services.podcast_generator import podcast_generator
+from ..services.voice_manager import voice_manager
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,8 @@ async def generate_podcast_script(
     logger.info("")
 
     try:
+        warnings = voice_manager.get_bgm_risk_warnings(request.voices)
+
         # Generate script
         logger.info("Generating podcast script...")
         script = podcast_generator.generate_script(
@@ -84,6 +87,7 @@ async def generate_podcast_script(
             success=True,
             message="Podcast script generated successfully",
             script=script,
+            warnings=warnings,
         )
 
     except ValueError as e:
@@ -141,6 +145,8 @@ async def generate_podcast_audio(
     logger.info("")
 
     try:
+        warnings = voice_manager.get_bgm_risk_warnings(request.voices)
+
         # Generate audio
         logger.info("Generating podcast audio...")
         output_path = podcast_generator.generate_audio(
@@ -199,6 +205,7 @@ async def generate_podcast_audio(
             file_path=str(saved_path),
             script=request.script,
             podcast_id=podcast_id,
+            warnings=warnings,
         )
 
     except ValueError as e:

@@ -49,6 +49,8 @@ export function VoicesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editLanguageCode, setEditLanguageCode] = useState<string>('');
+  const [editGender, setEditGender] = useState<string>('unknown');
   const [profileModalVoiceId, setProfileModalVoiceId] = useState<string | null>(null);
   const [profileFromAudioOpen, setProfileFromAudioOpen] = useState(false);
   const [createFromClipsOpen, setCreateFromClipsOpen] = useState(false);
@@ -174,6 +176,8 @@ export function VoicesPage() {
       setEditingId(voiceId);
       setEditName(voice.name);
       setEditDescription(voice.description || '');
+      setEditLanguageCode(voice.language_code || '');
+      setEditGender((voice.gender as string) || 'unknown');
     }
   };
 
@@ -183,6 +187,8 @@ export function VoicesPage() {
     const response = await updateVoice(editingId, {
       name: editName.trim() || undefined,
       description: editDescription.trim() || undefined,
+      language_code: editLanguageCode,
+      gender: editGender,
     });
 
     if (response && response.success) {
@@ -190,6 +196,8 @@ export function VoicesPage() {
       setEditingId(null);
       setEditName('');
       setEditDescription('');
+      setEditLanguageCode('');
+      setEditGender('unknown');
       refresh();
     }
   };
@@ -198,6 +206,8 @@ export function VoicesPage() {
     setEditingId(null);
     setEditName('');
     setEditDescription('');
+    setEditLanguageCode('');
+    setEditGender('unknown');
   };
 
   // Load profile status for custom voices
@@ -446,6 +456,26 @@ export function VoicesPage() {
               placeholder="Describe this voice..."
               className="mt-4"
             />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <Select
+                label="Language (Optional)"
+                options={[{ value: '', label: 'Unknown' }, { value: 'in', label: 'Indian' }, ...SUPPORTED_LANGUAGES]}
+                value={editLanguageCode}
+                onChange={(e) => setEditLanguageCode(e.target.value)}
+              />
+              <Select
+                label="Gender (Optional)"
+                options={[
+                  { value: 'unknown', label: 'Unknown' },
+                  { value: 'female', label: 'Female' },
+                  { value: 'male', label: 'Male' },
+                  { value: 'neutral', label: 'Gender-neutral' },
+                ]}
+                value={editGender}
+                onChange={(e) => setEditGender(e.target.value)}
+              />
+            </div>
 
             <div className="flex gap-3 mt-6">
               <Button

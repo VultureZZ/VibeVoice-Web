@@ -184,6 +184,8 @@ class VoiceStorage:
         voice_id: str,
         name: Optional[str] = None,
         description: Optional[str] = None,
+        language_code: Optional[str] = None,
+        gender: Optional[str] = None,
     ) -> bool:
         """
         Update voice name and/or description.
@@ -204,6 +206,17 @@ class VoiceStorage:
             data["voices"][voice_id]["name"] = name
         if description is not None:
             data["voices"][voice_id]["description"] = description
+        if language_code is not None:
+            if language_code:
+                data["voices"][voice_id]["language_code"] = language_code
+            else:
+                # Allow clearing via empty string
+                data["voices"][voice_id].pop("language_code", None)
+        if gender is not None:
+            if gender:
+                data["voices"][voice_id]["gender"] = gender
+            else:
+                data["voices"][voice_id].pop("gender", None)
 
         self._save(data)
         return True

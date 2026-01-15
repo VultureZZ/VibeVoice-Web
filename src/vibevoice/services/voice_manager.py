@@ -571,6 +571,8 @@ class VoiceManager:
         voice_id: str,
         name: Optional[str] = None,
         description: Optional[str] = None,
+        language_code: Optional[str] = None,
+        gender: Optional[str] = None,
     ) -> dict:
         """
         Update voice metadata.
@@ -603,18 +605,40 @@ class VoiceManager:
             if voice_storage.name_exists(name, exclude_voice_id=voice_id):
                 raise ValueError(f"Voice with name '{name}' already exists")
 
+        normalized_language_code = None
+        if language_code is not None:
+            normalized_language_code = language_code.strip().lower()
+
+        normalized_gender = None
+        if gender is not None:
+            normalized_gender = gender.strip().lower()
+            allowed_genders = {"male", "female", "neutral", "unknown"}
+            if normalized_gender not in allowed_genders:
+                raise ValueError("gender must be one of: male, female, neutral, unknown")
+
         # Update via storage
         updated = voice_storage.update_voice(
             voice_id=voice_id,
             name=name,
             description=description,
+            language_code=normalized_language_code,
+            gender=normalized_gender,
         )
 
         if not updated:
             raise ValueError(f"Failed to update voice '{voice_id}'")
 
-        # Return updated voice data
-        return voice_storage.get_voice(voice_id)
+        # Return updated voice data with computed display fields
+        updated_voice = voice_storage.get_voice(voice_id)
+        if isinstance(updated_voice, dict):
+            updated_voice.setdefault("display_name", updated_voice.get("name"))
+            lc = updated_voice.get("language_code")
+            if lc and not updated_voice.get("language_label"):
+                updated_voice["language_label"] = _get_language_label(lc)
+            g = updated_voice.get("gender")
+            if not g:
+                updated_voice["gender"] = "unknown"
+        return updated_voice
 
     def get_voice_by_name(self, name: str) -> Optional[dict]:
         """
@@ -753,6 +777,57 @@ class VoiceManager:
                     return matches[0]
 
         return None
+
+    def get_bgm_risk_warnings(self, voice_names: List[str]) -> List[str]:
+        """
+        Return best-effort warnings about background music (BGM) risk for selected voices.
+
+        This is warn-only: it does not block generation.
+        """
+        warnings: List[str] = []
+        seen: set[str] = set()
+
+        def add(msg: str) -> None:
+            if msg not in seen:
+                warnings.append(msg)
+                seen.add(msg)
+
+        for voice_name in voice_names or []:
+            vn = (voice_name or "").strip()
+            if not vn:
+                continue
+
+            # Best practices: "Alice" has higher BGM probability.
+            if vn.lower() == "alice":
+                add(
+                    "Selected voice 'Alice' has a higher probability of spontaneous background music. "
+                    "If you hear music, try a different voice preset."
+                )
+
+            # Detect `_bgm` in the resolved on-disk voice name.
+            try:
+                resolved = self.resolve_voice_name(vn)
+            except Exception:
+                resolved = vn
+            if "_bgm" in (resolved or "").lower():
+                add(
+                    f"Selected voice '{vn}' maps to '{resolved}', which is a BGM-tagged preset. "
+                    "Choose a different voice to reduce background music risk."
+                )
+
+        # General best-practice warning (we can't reliably detect BGM in custom samples here).
+        add(
+            "If a custom voice sample contains background music, the model is more likely to generate BGM. "
+            "Use clean voice-only samples for best results."
+        )
+
+        # Another best-practice: greeting-style intros can trigger BGM.
+        add(
+            "Greeting-style intros (e.g., 'Welcome to…', 'Hello and welcome…') can increase the likelihood of background music. "
+            "If you hear music, try removing those phrases from the script."
+        )
+
+        return warnings
 
 
 # Global voice manager instance
