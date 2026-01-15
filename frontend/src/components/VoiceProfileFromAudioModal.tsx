@@ -10,6 +10,7 @@ import { Select } from './Select';
 import { Alert } from './Alert';
 import { LoadingSpinner } from './LoadingSpinner';
 import { isValidAudioFile } from '../utils/validation';
+import { formatVoiceLabel } from '../utils/format';
 
 interface VoiceProfileFromAudioModalProps {
   isOpen: boolean;
@@ -71,7 +72,7 @@ export function VoiceProfileFromAudioModal({
     () =>
       (voices || []).map((v) => ({
         value: v.id,
-        label: `${v.name} (${v.type})`,
+        label: `${formatVoiceLabel(v)} (${v.type})`,
       })),
     [voices]
   );

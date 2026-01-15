@@ -14,6 +14,7 @@ import { AudioPlayer } from '../components/AudioPlayer';
 import { Alert } from '../components/Alert';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SUPPORTED_LANGUAGES } from '../utils/languages';
+import { formatVoiceLabel } from '../utils/format';
 
 export function GeneratePage() {
   const { settings } = useSettings();
@@ -93,7 +94,7 @@ Speaker 2: Yes, speech generation is successful.`);
 
   const speakerOptions = voices.map((voice) => ({
     value: voice.name,
-    label: voice.name,
+    label: formatVoiceLabel(voice),
   }));
 
   const languageOptions = SUPPORTED_LANGUAGES;

@@ -468,6 +468,15 @@ class VoiceManager:
                     )
                 except (ValueError, AttributeError):
                     pass
+            # Ensure optional display fields exist for the frontend.
+            if isinstance(voice_data, dict):
+                voice_data.setdefault("display_name", voice_data.get("name"))
+                lc = voice_data.get("language_code")
+                if lc and not voice_data.get("language_label"):
+                    voice_data["language_label"] = _get_language_label(lc)
+                g = voice_data.get("gender")
+                if not g:
+                    voice_data["gender"] = "unknown"
             voices.append(voice_data)
 
         return voices

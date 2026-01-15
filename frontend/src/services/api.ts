@@ -122,7 +122,9 @@ class ApiClient {
     name: string,
     description: string | undefined,
     files: File[],
-    keywords?: string
+    keywords?: string,
+    languageCode?: string,
+    gender?: string
   ): Promise<VoiceCreateResponse> {
     const formData = new FormData();
     formData.append('name', name);
@@ -135,6 +137,12 @@ class ApiClient {
     files.forEach((file) => {
       formData.append('audio_files', file);
     });
+    if (languageCode) {
+      formData.append('language_code', languageCode);
+    }
+    if (gender) {
+      formData.append('gender', gender);
+    }
 
     const response = await this.client.post<VoiceCreateResponse>('/api/v1/voices', formData, {
       headers: {
@@ -152,7 +160,9 @@ class ApiClient {
     description: string | undefined,
     audioFile: File,
     clipRanges: AudioClipRange[],
-    keywords?: string
+    keywords?: string,
+    languageCode?: string,
+    gender?: string
   ): Promise<VoiceCreateResponse> {
     const formData = new FormData();
     formData.append('name', name);
@@ -164,6 +174,12 @@ class ApiClient {
     }
     formData.append('audio_file', audioFile);
     formData.append('clip_ranges', JSON.stringify(clipRanges));
+    if (languageCode) {
+      formData.append('language_code', languageCode);
+    }
+    if (gender) {
+      formData.append('gender', gender);
+    }
 
     const response = await this.client.post<VoiceCreateResponse>(
       '/api/v1/voices/from-audio-clips',

@@ -1,6 +1,8 @@
 /**
  * Formatting utility functions
  */
+import type { VoiceResponse } from '../types/api';
+import { getLanguageLabel } from './languages';
 
 /**
  * Format duration in seconds to mm:ss format
@@ -50,4 +52,37 @@ export function formatDate(dateString: string | undefined): string {
   } catch {
     return dateString;
   }
+}
+
+function getGenderIcon(gender: string | undefined): string {
+  switch ((gender || '').toLowerCase()) {
+    case 'female':
+      return '♀';
+    case 'male':
+      return '♂';
+    case 'neutral':
+      return '⚧';
+    default:
+      return '';
+  }
+}
+
+export function getVoiceDisplayName(voice: Pick<VoiceResponse, 'name' | 'display_name'>): string {
+  return voice.display_name || voice.name;
+}
+
+export function formatVoiceLabel(
+  voice: Pick<VoiceResponse, 'name' | 'display_name' | 'language_code' | 'language_label' | 'gender'>
+): string {
+  const displayName = getVoiceDisplayName(voice);
+  const genderIcon = getGenderIcon(voice.gender);
+  const languageLabel =
+    voice.language_label ||
+    (voice.language_code ? getLanguageLabel(voice.language_code) : '');
+
+  const suffixParts: string[] = [];
+  if (genderIcon) suffixParts.push(genderIcon);
+  if (languageLabel) suffixParts.push(`(${languageLabel})`);
+
+  return suffixParts.length ? `${displayName} ${suffixParts.join(' ')}` : displayName;
 }

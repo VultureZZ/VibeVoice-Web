@@ -45,6 +45,8 @@ async def create_voice(
     description: str = Form(None),
     audio_files: list[UploadFile] = File(...),
     keywords: str = Form(None),
+    language_code: str = Form(None),
+    gender: str = Form(None),
 ) -> VoiceCreateResponse:
     """
     Create a custom voice from uploaded audio files.
@@ -105,6 +107,8 @@ async def create_voice(
                 keywords=keywords_list,
                 ollama_url=ollama_url,
                 ollama_model=ollama_model,
+                language_code=language_code,
+                gender=gender,
             )
 
             # Parse created_at if it's a string
@@ -118,6 +122,10 @@ async def create_voice(
             voice_response = VoiceResponse(
                 id=voice_data["id"],
                 name=voice_data["name"],
+                display_name=voice_data.get("display_name"),
+                language_code=voice_data.get("language_code"),
+                language_label=voice_data.get("language_label"),
+                gender=voice_data.get("gender"),
                 description=voice_data.get("description"),
                 type=voice_data.get("type", "custom"),
                 created_at=created_at,
@@ -181,6 +189,8 @@ async def create_voice_from_audio_clips(
     audio_file: UploadFile = File(...),
     clip_ranges: str = Form(...),
     keywords: str = Form(None),
+    language_code: str = Form(None),
+    gender: str = Form(None),
 ) -> VoiceCreateResponse:
     """
     Create a custom voice from multiple time-ranged clips within a single uploaded audio file.
@@ -328,6 +338,8 @@ async def create_voice_from_audio_clips(
             keywords=keywords_list,
             ollama_url=None,
             ollama_model=None,
+            language_code=language_code,
+            gender=gender,
         )
 
         # Parse created_at if it's a string
@@ -341,6 +353,10 @@ async def create_voice_from_audio_clips(
         voice_response = VoiceResponse(
             id=voice_data["id"],
             name=voice_data["name"],
+            display_name=voice_data.get("display_name"),
+            language_code=voice_data.get("language_code"),
+            language_label=voice_data.get("language_label"),
+            gender=voice_data.get("gender"),
             description=voice_data.get("description"),
             type=voice_data.get("type", "custom"),
             created_at=created_at,
@@ -519,6 +535,10 @@ async def list_voices() -> VoiceListResponse:
                 VoiceResponse(
                     id=voice_data["id"],
                     name=voice_data["name"],
+                    display_name=voice_data.get("display_name"),
+                    language_code=voice_data.get("language_code"),
+                    language_label=voice_data.get("language_label"),
+                    gender=voice_data.get("gender"),
                     description=voice_data.get("description"),
                     type=voice_data.get("type", "default"),
                     created_at=created_at,

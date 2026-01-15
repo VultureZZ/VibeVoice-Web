@@ -3,7 +3,7 @@
  */
 
 import { VoiceResponse } from '../types/api';
-import { formatDate } from '../utils/format';
+import { formatDate, formatVoiceLabel, getVoiceDisplayName } from '../utils/format';
 import { Button } from './Button';
 
 interface VoiceCardProps {
@@ -24,13 +24,21 @@ export function VoiceCard({
   hasProfile,
 }: VoiceCardProps) {
   const isCustom = voice.type === 'custom';
+  const displayName = getVoiceDisplayName(voice);
+  const formattedLabel = formatVoiceLabel(voice);
+  const suffix = formattedLabel.startsWith(displayName) ? formattedLabel.slice(displayName.length).trim() : '';
 
   return (
     <div className="border rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
-            <h3 className="text-lg font-semibold text-gray-900">{voice.name}</h3>
+            <h3 className="text-lg font-semibold text-gray-900">
+              {displayName}
+              {suffix ? (
+                <span className="ml-2 text-sm font-normal text-gray-600">{suffix}</span>
+              ) : null}
+            </h3>
             <span
               className={`px-2 py-1 text-xs font-medium rounded ${
                 isCustom

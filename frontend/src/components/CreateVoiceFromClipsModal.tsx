@@ -7,6 +7,8 @@ import { validateVoiceName, isValidAudioFile } from '../utils/validation';
 import { Alert } from './Alert';
 import { Button } from './Button';
 import { Input } from './Input';
+import { Select } from './Select';
+import { SUPPORTED_LANGUAGES } from '../utils/languages';
 
 interface CreateVoiceFromClipsModalProps {
   isOpen: boolean;
@@ -16,7 +18,9 @@ interface CreateVoiceFromClipsModalProps {
     description: string | undefined,
     audioFile: File,
     clipRanges: AudioClipRange[],
-    keywords?: string
+    keywords?: string,
+    languageCode?: string,
+    gender?: string
   ) => Promise<VoiceCreateResponse | null>;
 }
 
@@ -28,6 +32,8 @@ export function CreateVoiceFromClipsModal({ isOpen, onClose, onCreate }: CreateV
   const [voiceName, setVoiceName] = useState('');
   const [voiceDescription, setVoiceDescription] = useState('');
   const [voiceKeywords, setVoiceKeywords] = useState('');
+  const [voiceLanguageCode, setVoiceLanguageCode] = useState<string>('');
+  const [voiceGender, setVoiceGender] = useState<string>('unknown');
 
   const [markStart, setMarkStart] = useState<number | null>(null);
   const [markEnd, setMarkEnd] = useState<number | null>(null);
@@ -52,6 +58,8 @@ export function CreateVoiceFromClipsModal({ isOpen, onClose, onCreate }: CreateV
     setVoiceName('');
     setVoiceDescription('');
     setVoiceKeywords('');
+    setVoiceLanguageCode('');
+    setVoiceGender('unknown');
     setMarkStart(null);
     setMarkEnd(null);
     setClips([]);
@@ -130,7 +138,9 @@ export function CreateVoiceFromClipsModal({ isOpen, onClose, onCreate }: CreateV
       voiceDescription.trim() || undefined,
       audioFile,
       clips,
-      voiceKeywords.trim() || undefined
+      voiceKeywords.trim() || undefined,
+      voiceLanguageCode || undefined,
+      voiceGender || undefined
     );
 
     setCreating(false);
@@ -185,6 +195,26 @@ export function CreateVoiceFromClipsModal({ isOpen, onClose, onCreate }: CreateV
               placeholder="e.g., calm, technical, upbeat (comma-separated)"
               helpText="Used as light context for profiling; the audio drives the voice creation"
             />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Select
+                label="Language (Optional)"
+                options={[{ value: '', label: 'Unknown' }, { value: 'in', label: 'Indian' }, ...SUPPORTED_LANGUAGES]}
+                value={voiceLanguageCode}
+                onChange={(e) => setVoiceLanguageCode(e.target.value)}
+              />
+              <Select
+                label="Gender (Optional)"
+                options={[
+                  { value: 'unknown', label: 'Unknown' },
+                  { value: 'female', label: 'Female' },
+                  { value: 'male', label: 'Male' },
+                  { value: 'neutral', label: 'Gender-neutral' },
+                ]}
+                value={voiceGender}
+                onChange={(e) => setVoiceGender(e.target.value)}
+              />
+            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Audio file</label>

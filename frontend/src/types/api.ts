@@ -24,6 +24,10 @@ export interface SpeechGenerateResponse {
 export interface VoiceResponse {
   id: string;
   name: string;
+  display_name?: string;
+  language_code?: string;
+  language_label?: string;
+  gender?: 'male' | 'female' | 'neutral' | 'unknown' | string;
   description?: string;
   type: string;
   created_at?: string;

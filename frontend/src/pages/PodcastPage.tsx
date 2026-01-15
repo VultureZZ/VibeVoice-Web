@@ -12,6 +12,7 @@ import { Select, MultiSelect } from '../components/Select';
 import { AudioPlayer } from '../components/AudioPlayer';
 import { Alert } from '../components/Alert';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { formatVoiceLabel } from '../utils/format';
 
 const GENRES = [
   { value: 'Comedy', label: 'Comedy' },
@@ -58,7 +59,7 @@ export function PodcastPage() {
 
   const speakerOptions = voices.map((voice) => ({
     value: voice.name,
-    label: voice.name,
+    label: formatVoiceLabel(voice),
   }));
 
   const handleGenerateScript = async () => {

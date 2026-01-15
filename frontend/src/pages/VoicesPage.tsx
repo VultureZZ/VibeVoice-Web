@@ -16,6 +16,8 @@ import { VoiceProfileFromAudioModal } from '../components/VoiceProfileFromAudioM
 import { CreateVoiceFromClipsModal } from '../components/CreateVoiceFromClipsModal';
 import { Alert } from '../components/Alert';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { Select } from '../components/Select';
+import { SUPPORTED_LANGUAGES } from '../utils/languages';
 
 export function VoicesPage() {
   const { voices, loading: voicesLoading, refresh } = useVoices();
@@ -39,6 +41,8 @@ export function VoicesPage() {
   const [voiceName, setVoiceName] = useState('');
   const [voiceDescription, setVoiceDescription] = useState('');
   const [voiceKeywords, setVoiceKeywords] = useState('');
+  const [voiceLanguageCode, setVoiceLanguageCode] = useState<string>('');
+  const [voiceGender, setVoiceGender] = useState<string>('unknown');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -70,7 +74,9 @@ export function VoicesPage() {
       voiceName.trim(),
       voiceDescription.trim() || undefined,
       selectedFiles,
-      voiceKeywords.trim() || undefined
+      voiceKeywords.trim() || undefined,
+      voiceLanguageCode || undefined,
+      voiceGender || undefined
     );
 
     setCreating(false);
@@ -81,6 +87,8 @@ export function VoicesPage() {
         setVoiceName('');
         setVoiceDescription('');
         setVoiceKeywords('');
+        setVoiceLanguageCode('');
+        setVoiceGender('unknown');
         setSelectedFiles([]);
         setShowCreateForm(false);
         refresh();
@@ -107,13 +115,23 @@ export function VoicesPage() {
     description: string | undefined,
     audioFile: File,
     clipRanges: import('../types/api').AudioClipRange[],
-    keywords?: string
+    keywords?: string,
+    languageCode?: string,
+    gender?: string
   ) => {
     setErrorMessage(null);
     setSuccessMessage(null);
     setValidationFeedback(null);
 
-    const response = await createVoiceFromClips(name, description, audioFile, clipRanges, keywords);
+    const response = await createVoiceFromClips(
+      name,
+      description,
+      audioFile,
+      clipRanges,
+      keywords,
+      languageCode,
+      gender
+    );
     if (response) {
       if (response.success) {
         setSuccessMessage(response.message);
@@ -320,6 +338,26 @@ export function VoicesPage() {
             placeholder="e.g., Donald Trump, President (comma-separated)"
             helpText="Enter keywords to help identify unique speech patterns (e.g., person's name)"
           />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Select
+              label="Language (Optional)"
+              options={[{ value: '', label: 'Unknown' }, { value: 'in', label: 'Indian' }, ...SUPPORTED_LANGUAGES]}
+              value={voiceLanguageCode}
+              onChange={(e) => setVoiceLanguageCode(e.target.value)}
+            />
+            <Select
+              label="Gender (Optional)"
+              options={[
+                { value: 'unknown', label: 'Unknown' },
+                { value: 'female', label: 'Female' },
+                { value: 'male', label: 'Male' },
+                { value: 'neutral', label: 'Gender-neutral' },
+              ]}
+              value={voiceGender}
+              onChange={(e) => setVoiceGender(e.target.value)}
+            />
+          </div>
 
           <FileUpload
             onFilesChange={setSelectedFiles}

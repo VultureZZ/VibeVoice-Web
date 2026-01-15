@@ -69,8 +69,15 @@ export function useApi() {
   }, [execute]);
 
   const createVoice = useCallback(
-    async (name: string, description: string | undefined, files: File[], keywords?: string): Promise<VoiceCreateResponse | null> => {
-      return execute(() => apiClient.createVoice(name, description, files, keywords));
+    async (
+      name: string,
+      description: string | undefined,
+      files: File[],
+      keywords?: string,
+      languageCode?: string,
+      gender?: string
+    ): Promise<VoiceCreateResponse | null> => {
+      return execute(() => apiClient.createVoice(name, description, files, keywords, languageCode, gender));
     },
     [execute]
   );
@@ -81,9 +88,13 @@ export function useApi() {
       description: string | undefined,
       audioFile: File,
       clipRanges: AudioClipRange[],
-      keywords?: string
+      keywords?: string,
+      languageCode?: string,
+      gender?: string
     ): Promise<VoiceCreateResponse | null> => {
-      return execute(() => apiClient.createVoiceFromClips(name, description, audioFile, clipRanges, keywords));
+      return execute(() =>
+        apiClient.createVoiceFromClips(name, description, audioFile, clipRanges, keywords, languageCode, gender)
+      );
     },
     [execute]
   );
