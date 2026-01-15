@@ -181,12 +181,46 @@ Once running, access:
 
 ## API Endpoints
 
+- Full API reference: `docs/API.md`
+
+### Speech
+
 - `POST /api/v1/speech/generate` - Generate speech from text
 - `GET /api/v1/speech/download/{filename}` - Download generated audio
-- `POST /api/v1/voices` - Create custom voice
-- `POST /api/v1/voices/from-audio-clips` - Create custom voice from selected clips within a single uploaded audio file
-- `GET /api/v1/voices` - List all voices
+
+### Voices
+
+- `GET /api/v1/voices` - List all voices (default + custom)
+- `POST /api/v1/voices` - Create custom voice (multipart: `audio_files`[])
+- `POST /api/v1/voices/from-audio-clips` - Create custom voice from multiple clips within a single uploaded file
+- `PUT /api/v1/voices/{voice_id}` - Update a voice (name/description)
 - `DELETE /api/v1/voices/{voice_id}` - Delete custom voice
+
+### Voice profiles
+
+- `POST /api/v1/voices/profile/analyze-audio` - Analyze an audio file and derive a style profile (Ollama-assisted)
+- `GET /api/v1/voices/{voice_id}/profile` - Get voice profile
+- `POST /api/v1/voices/{voice_id}/profile` - Create/update voice profile
+- `PUT /api/v1/voices/{voice_id}/profile` - Apply a full voice profile payload to a voice
+- `PUT /api/v1/voices/{voice_id}/profile/keywords` - Update profile keywords and re-profile
+- `POST /api/v1/voices/{voice_id}/profile/generate` - Force profile generation
+
+### Podcast generation + library
+
+- `POST /api/v1/podcast/generate-script` - Generate a script from an article URL (Ollama-assisted)
+- `POST /api/v1/podcast/generate` - Generate podcast audio from a script
+- `GET /api/v1/podcast/download/{filename}` - Download generated podcast audio (filename-based)
+- `GET /api/v1/podcasts` - List/search saved podcasts
+- `GET /api/v1/podcasts/{podcast_id}` - Get podcast metadata (and script, if available)
+- `GET /api/v1/podcasts/{podcast_id}/download` - Download saved podcast audio (id-based)
+- `DELETE /api/v1/podcasts/{podcast_id}` - Delete saved podcast
+
+### Auth and rate limiting
+
+Authentication and rate limiting are configured via environment variables:
+
+- `API_KEY`: if set, clients must send `X-API-Key: <key>` (docs/openapi/health are exempt).
+- `RATE_LIMIT_PER_MINUTE`: per-key limit (default `100`), returned via `X-RateLimit-*` headers.
 
 See the interactive API documentation at `/docs` for detailed request/response schemas.
 

@@ -206,6 +206,11 @@ import vibevoice
 print("VibeVoice imported successfully")
 ```
 
+## API Reference
+
+- **Interactive API docs**: `http://localhost:8000/docs`
+- **Full endpoint reference**: [`docs/API.md`](API.md)
+
 ## Features: Podcast Library + Voice Profile from Audio
 
 ### Podcast Library

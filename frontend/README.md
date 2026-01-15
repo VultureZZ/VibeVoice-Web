@@ -5,7 +5,11 @@ A modern React + TypeScript web interface for the VibeVoice text-to-speech API.
 ## Features
 
 - **Speech Generation**: Convert text to speech with customizable speakers and settings
-- **Voice Management**: Create, list, and delete custom voices from audio files
+- **Voice Management**: Create, list, update, and delete custom voices from audio files
+- **Create Voice from Clips**: Upload one audio file and select multiple clip ranges to train a voice
+- **Voice Profiles**: Analyze an audio file to derive a style profile and apply it to any voice (Ollama-assisted)
+- **Article Podcaster**: Generate a multi-voice podcast script from an article URL, then generate audio (Ollama-assisted)
+- **Podcast Library**: Save/search/download/delete generated podcasts from the on-disk library
 - **Settings**: Configure API endpoint, API key, and default preferences
 
 ## Prerequisites
@@ -34,9 +38,9 @@ Start the development server:
 npm run dev
 ```
 
-The app will be available at `http://server-ai.mrhelpmann.com:3001`.
+The app will be available at the host/port printed by Vite (defaults are configured in `vite.config.ts`).
 
-The dev server includes a proxy to the API server, so API requests will be forwarded to `http://localhost:8000` automatically.
+The UI calls the API at `VITE_API_URL` (or defaults to `http://localhost:8000`). A Vite `/api` proxy exists in `vite.config.ts`, but the current API client uses an absolute base URL, so the proxy is optional (the backend enables CORS for development).
 
 ## Build
 
