@@ -267,13 +267,25 @@ Set environment variables (e.g. in your `.env`):
 - `REALTIME_VIBEVOICE_REPO_DIR=VibeVoice-Microsoft`
 - `REALTIME_MODEL_ID=microsoft/VibeVoice-Realtime-0.5B`
 - `REALTIME_DEVICE=cuda` (or `cpu`, `mps`)
-- `REALTIME_PORT=3000` (default)
+- `REALTIME_PORT=6767` (recommended; choose any free port)
 
 Then start the backend and open the frontend **Realtime** page.
+
+Important:
+- If you set env vars in the shell, they must be **exported** to affect `run_api.py`.
+  - Good: `export REALTIME_PORT=6767` then `./run_api.py`
+  - Also good (one command): `REALTIME_PORT=6767 ./run_api.py`
+  - Not enough by itself: `REALTIME_PORT=6767` (won’t propagate to child processes)
 
 Notes:
 - The upstream demo server streams **PCM16LE mono @ 24kHz**.
 - The upstream demo currently expects the full text at connection time; this repo’s WebSocket API buffers text until you send `flush`.
+
+### Changing the realtime port later
+
+You can change the port at any time by setting `REALTIME_PORT` to a different unused port and restarting the backend.
+
+If you ever run the upstream demo server manually, its port must match `REALTIME_PORT` as well (the backend connects to `http://REALTIME_HOST:REALTIME_PORT` and `ws://REALTIME_HOST:REALTIME_PORT/stream`).
 
 ## Troubleshooting
 

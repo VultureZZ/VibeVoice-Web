@@ -45,7 +45,8 @@ class Config:
     )
     REALTIME_DEVICE: str = os.getenv("REALTIME_DEVICE", "cuda")
     REALTIME_HOST: str = os.getenv("REALTIME_HOST", "127.0.0.1")
-    REALTIME_PORT: int = int(os.getenv("REALTIME_PORT", "3000"))
+    # Default chosen to avoid common dev servers on 3000.
+    REALTIME_PORT: int = int(os.getenv("REALTIME_PORT", "6767"))
     REALTIME_STARTUP_TIMEOUT_SECONDS: float = float(
         os.getenv("REALTIME_STARTUP_TIMEOUT_SECONDS", "60")
     )
