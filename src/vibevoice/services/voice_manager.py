@@ -158,8 +158,26 @@ class VoiceManager:
         if voice_name in DEFAULT_VOICES:
             return True
         # Also treat any on-disk default voice name as reserved.
+        #
+        # IMPORTANT: Custom voices may be symlinked into the default voices directory
+        # so the underlying inference code can find them. Those symlinks must NOT be
+        # treated as default/reserved voices, otherwise custom voices become impossible
+        # to update (e.g., language/gender) after they've been used for inference.
         try:
-            return (self.default_voices_dir / f"{voice_name}.wav").exists()
+            candidate = self.default_voices_dir / f"{voice_name}.wav"
+            if not candidate.exists():
+                return False
+
+            if candidate.is_symlink():
+                try:
+                    target_path = candidate.resolve()
+                    if self.custom_voices_dir in target_path.parents:
+                        return False
+                except (OSError, RuntimeError):
+                    # Broken symlink: not a real default voice.
+                    return False
+
+            return True
         except Exception:
             return False
 
