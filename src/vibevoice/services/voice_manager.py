@@ -728,7 +728,7 @@ class VoiceManager:
         For custom voices, creates a symlink in the default voices directory.
 
         Args:
-            voice_name: Voice name
+            voice_name: Voice name (canonical or mapped format)
 
         Returns:
             Resolved voice name (for default voices) or voice name (for custom voices)
@@ -736,20 +736,23 @@ class VoiceManager:
         Raises:
             ValueError: If voice is not found
         """
-        # Check if it's a default voice that needs mapping
-        if voice_name in VOICE_NAME_MAPPING:
-            return VOICE_NAME_MAPPING[voice_name]
+        # Normalize to canonical form first to handle mapped names
+        canonical_name = self.normalize_voice_name(voice_name)
+
+        # Check if it's a default voice that needs mapping (canonical -> mapped)
+        if canonical_name in VOICE_NAME_MAPPING:
+            return VOICE_NAME_MAPPING[canonical_name]
 
         # Check if it's a default voice
-        if self.is_default_voice(voice_name):
-            return voice_name
+        if self.is_default_voice(canonical_name):
+            return canonical_name
 
-        # Check if it's a custom voice
-        voice_data = self.get_voice_by_name(voice_name)
+        # Check if it's a custom voice (use canonical name for lookup)
+        voice_data = self.get_voice_by_name(canonical_name)
         if voice_data and voice_data.get("type") == "custom":
             voice_id = voice_data.get("id")
             if not voice_id:
-                raise ValueError(f"Custom voice '{voice_name}' has no ID")
+                raise ValueError(f"Custom voice '{canonical_name}' has no ID")
 
             # Ensure default voices directory exists
             self.default_voices_dir.mkdir(parents=True, exist_ok=True)
@@ -759,10 +762,10 @@ class VoiceManager:
             source_path = voice_dir / "combined.wav"
 
             if not source_path.exists():
-                raise ValueError(f"Voice file not found for '{voice_name}' at {source_path}")
+                raise ValueError(f"Voice file not found for '{canonical_name}' at {source_path}")
 
-            # Create symlink in default voices directory
-            target_path = self.default_voices_dir / f"{voice_name}.wav"
+            # Create symlink in default voices directory (use canonical name)
+            target_path = self.default_voices_dir / f"{canonical_name}.wav"
 
             # Remove existing symlink/file if it exists
             if target_path.exists() or target_path.is_symlink():
@@ -775,10 +778,10 @@ class VoiceManager:
                 # If symlink fails (e.g., on Windows), copy the file
                 shutil.copy2(source_path, target_path)
 
-            return voice_name
+            return canonical_name
 
-        # Return as-is if not found (will cause error in inference)
-        return voice_name
+        # Return canonical name if not found (will cause error in inference)
+        return canonical_name
 
     def normalize_voice_name(self, voice_name: str) -> str:
         """
