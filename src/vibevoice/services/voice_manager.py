@@ -276,7 +276,9 @@ class VoiceManager:
         # Get list of custom voice IDs to exclude symlinks
         custom_voice_ids = {v["id"] for v in voice_storage.list_voices()}
 
-        # Add default voices from actual files in the directory
+        # Add default voices from actual files in the directory.
+        # If a voice has a short-name mapping (e.g. en-Alice_woman -> Alice),
+        # expose only the short name to avoid duplicate entries in the UI.
         if self.default_voices_dir.exists():
             for voice_file in self.default_voices_dir.glob("*.wav"):
                 full_name = voice_file.stem
@@ -299,30 +301,40 @@ class VoiceManager:
                 if is_custom_symlink or full_name in custom_voice_ids:
                     continue
 
-                # Add the full name
-                if full_name not in seen_voices:
-                    voices.append({
-                        "id": full_name,
-                        "name": full_name,
-                        "description": f"Default VibeVoice voice: {full_name}",
-                        "type": "default",
-                        "created_at": None,
-                        "audio_files": None,
-                    })
-                    seen_voices.add(full_name)
+                # Prefer the short name for mapped voices.
+                short_name = None
+                for candidate_short, mapped_name in VOICE_NAME_MAPPING.items():
+                    if mapped_name == full_name:
+                        short_name = candidate_short
+                        break
 
-                # Also add short name if it exists in mapping
-                for short_name, mapped_name in VOICE_NAME_MAPPING.items():
-                    if mapped_name == full_name and short_name not in seen_voices:
-                        voices.append({
-                            "id": short_name,
-                            "name": short_name,
-                            "description": f"Default VibeVoice voice: {short_name} (maps to {full_name})",
-                            "type": "default",
-                            "created_at": None,
-                            "audio_files": None,
-                        })
+                if short_name:
+                    if short_name not in seen_voices:
+                        voices.append(
+                            {
+                                "id": short_name,
+                                "name": short_name,
+                                "description": f"Default VibeVoice voice: {short_name} (maps to {full_name})",
+                                "type": "default",
+                                "created_at": None,
+                                "audio_files": None,
+                            }
+                        )
                         seen_voices.add(short_name)
+                else:
+                    # No mapping: expose full voice id.
+                    if full_name not in seen_voices:
+                        voices.append(
+                            {
+                                "id": full_name,
+                                "name": full_name,
+                                "description": f"Default VibeVoice voice: {full_name}",
+                                "type": "default",
+                                "created_at": None,
+                                "audio_files": None,
+                            }
+                        )
+                        seen_voices.add(full_name)
 
         # IMPORTANT:
         # Do not add hardcoded "default" voices that aren't present on disk.
