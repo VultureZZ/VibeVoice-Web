@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
   // Vite's host check can block requests unless the host is explicitly allowed.
   //
   // Set e.g.:
-  //   VITE_ALLOWED_HOSTS=server-ai.mrhelpmann.com
+  //   VITE_ALLOWED_HOSTS=your-hostname.example.com
   // or (less strict):
   //   VITE_ALLOWED_HOSTS=all
   const allowedHostsRaw = (get('VITE_ALLOWED_HOSTS') || '').trim();

@@ -211,6 +211,17 @@ print("VibeVoice imported successfully")
 - **Interactive API docs**: `http://localhost:8000/docs`
 - **Full endpoint reference**: [`docs/API.md`](API.md)
 
+## Frontend (Web UI)
+
+The React + TypeScript web UI lives in `frontend/`.
+
+- Quick start:
+  - `cd frontend`
+  - `npm install`
+  - `cp .env.example .env` and set `VITE_API_URL` (default `http://localhost:8000`)
+  - `npm run dev`
+- See [`frontend/README.md`](../frontend/README.md) for more details.
+
 ## Features: Podcast Library + Voice Profile from Audio
 
 ### Podcast Library

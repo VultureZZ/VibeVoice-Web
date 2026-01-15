@@ -126,7 +126,7 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 #
 # Vite host allow-list (recommended when accessing the UI via a real hostname)
 # Example:
-#   VITE_ALLOWED_HOSTS=server-ai.mrhelpmann.com
+#   VITE_ALLOWED_HOSTS=your-hostname.example.com
 # Or, to disable host checks entirely (less secure):
 #   VITE_ALLOWED_HOSTS=all
 EOF

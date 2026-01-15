@@ -1,6 +1,6 @@
 # VibeVoice Web
 
-A structured project for testing and developing with Microsoft's VibeVoice text-to-speech model. This project provides a foundation for building an API and web interface for voice generation.
+A FastAPI + React project for generating speech with VibeVoice, managing voices, and producing multi-voice podcasts.
 
 ## Overview
 
@@ -13,6 +13,8 @@ VibeVoice is an open-source text-to-speech framework designed for generating exp
 - Natural conversational turn-taking
 - Support for English and Chinese
 - GPU acceleration (CUDA) for faster generation
+- FastAPI backend with a web UI (React + TypeScript)
+- Optional realtime streaming TTS over WebSocket (requires the upstream Microsoft demo repo checkout)
 
 ## Prerequisites
 
@@ -86,7 +88,8 @@ VibeVoice-Web/
 ├── requirements.txt          # Python dependencies
 ├── .gitignore               # Git ignore patterns
 ├── src/
-│   └── vibevoice/           # Future API code
+│   └── vibevoice/           # FastAPI backend (routes, services, middleware)
+├── frontend/                # React + TypeScript web UI
 ├── tests/
 │   ├── test_voice_generation.py  # Test script
 │   └── sample_transcript.txt     # Sample transcript
@@ -179,6 +182,10 @@ Once running, access:
 - Health Check: http://localhost:8000/health
 - API Root: http://localhost:8000/
 
+## Running the Web UI
+
+The frontend lives in `frontend/`. See `frontend/README.md` for setup, development, and build instructions.
+
 ## API Endpoints
 
 - Full API reference: `docs/API.md`
@@ -241,7 +248,9 @@ This project structure is designed to support:
 
 ## License
 
-This project uses the VibeVoice model, which is licensed under MIT. See the VibeVoice repository for details.
+This repository is licensed under the MIT License. See `LICENSE`.
+
+This project integrates with third-party software and models (for example the upstream VibeVoice repositories and models downloaded from Hugging Face) which are governed by their own licenses and terms. Review the upstream projects for details.
 
 ## Disclaimer
 
