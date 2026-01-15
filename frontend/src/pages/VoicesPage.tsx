@@ -13,6 +13,7 @@ import { FileUpload } from '../components/FileUpload';
 import { VoiceCard } from '../components/VoiceCard';
 import { VoiceProfileModal } from '../components/VoiceProfileModal';
 import { VoiceProfileFromAudioModal } from '../components/VoiceProfileFromAudioModal';
+import { CreateVoiceFromClipsModal } from '../components/CreateVoiceFromClipsModal';
 import { Alert } from '../components/Alert';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 
@@ -21,6 +22,7 @@ export function VoicesPage() {
   const { settings } = useSettings();
   const {
     createVoice,
+    createVoiceFromClips,
     deleteVoice,
     updateVoice,
     getVoiceProfile,
@@ -45,6 +47,7 @@ export function VoicesPage() {
   const [editDescription, setEditDescription] = useState('');
   const [profileModalVoiceId, setProfileModalVoiceId] = useState<string | null>(null);
   const [profileFromAudioOpen, setProfileFromAudioOpen] = useState(false);
+  const [createFromClipsOpen, setCreateFromClipsOpen] = useState(false);
   const [voiceProfiles, setVoiceProfiles] = useState<Record<string, boolean>>({});
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -97,6 +100,39 @@ export function VoicesPage() {
         setErrorMessage(response.message || 'Failed to create voice');
       }
     }
+  };
+
+  const handleCreateVoiceFromClips = async (
+    name: string,
+    description: string | undefined,
+    audioFile: File,
+    clipRanges: import('../types/api').AudioClipRange[],
+    keywords?: string
+  ) => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setValidationFeedback(null);
+
+    const response = await createVoiceFromClips(name, description, audioFile, clipRanges, keywords);
+    if (response) {
+      if (response.success) {
+        setSuccessMessage(response.message);
+        refresh();
+
+        if (response.validation_feedback) {
+          const feedback = response.validation_feedback;
+          const warnings = feedback.warnings.length > 0 ? `\nWarnings: ${feedback.warnings.join(', ')}` : '';
+          const recommendations =
+            feedback.recommendations.length > 0 ? `\nRecommendations: ${feedback.recommendations.join(', ')}` : '';
+          setValidationFeedback(
+            `Total duration: ${feedback.total_duration_seconds.toFixed(2)}s${warnings}${recommendations}`
+          );
+        }
+      } else {
+        setErrorMessage(response.message || 'Failed to create voice');
+      }
+    }
+    return response;
   };
 
   const handleDeleteVoice = async (voiceId: string) => {
@@ -228,6 +264,9 @@ export function VoicesPage() {
         <div className="flex gap-3">
           <Button variant="secondary" onClick={() => setProfileFromAudioOpen(true)}>
             Analyze Audio → Profile
+          </Button>
+          <Button variant="secondary" onClick={() => setCreateFromClipsOpen(true)}>
+            Create from Clips
           </Button>
           <Button variant="primary" onClick={() => setShowCreateForm(!showCreateForm)}>
             {showCreateForm ? 'Cancel' : 'Create Voice'}
@@ -413,6 +452,14 @@ export function VoicesPage() {
           defaultOllamaModel={settings.ollamaModel}
           onAnalyze={analyzeVoiceProfileFromAudio}
           onApply={handleApplyProfileFromAudio}
+        />
+      )}
+
+      {createFromClipsOpen && (
+        <CreateVoiceFromClipsModal
+          isOpen={createFromClipsOpen}
+          onClose={() => setCreateFromClipsOpen(false)}
+          onCreate={handleCreateVoiceFromClips}
         />
       )}
     </div>

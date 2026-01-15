@@ -21,6 +21,7 @@ import {
   VoiceProfileFromAudioResponse,
   VoiceUpdateRequest,
   VoiceUpdateResponse,
+  AudioClipRange,
 } from '../types/api';
 
 export function useApi() {
@@ -70,6 +71,19 @@ export function useApi() {
   const createVoice = useCallback(
     async (name: string, description: string | undefined, files: File[], keywords?: string): Promise<VoiceCreateResponse | null> => {
       return execute(() => apiClient.createVoice(name, description, files, keywords));
+    },
+    [execute]
+  );
+
+  const createVoiceFromClips = useCallback(
+    async (
+      name: string,
+      description: string | undefined,
+      audioFile: File,
+      clipRanges: AudioClipRange[],
+      keywords?: string
+    ): Promise<VoiceCreateResponse | null> => {
+      return execute(() => apiClient.createVoiceFromClips(name, description, audioFile, clipRanges, keywords));
     },
     [execute]
   );
@@ -187,6 +201,7 @@ export function useApi() {
     downloadAudio,
     listVoices,
     createVoice,
+    createVoiceFromClips,
     deleteVoice,
     updateVoice,
     getVoiceProfile,

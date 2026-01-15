@@ -61,6 +61,11 @@ export interface VoiceCreateResponse {
   validation_feedback?: AudioValidationFeedback;
 }
 
+export interface AudioClipRange {
+  start_seconds: number;
+  end_seconds: number;
+}
+
 export interface ErrorResponse {
   error: string;
   detail?: string;

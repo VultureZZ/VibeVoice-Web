@@ -21,6 +21,7 @@ import {
   VoiceProfileFromAudioResponse,
   VoiceUpdateRequest,
   VoiceUpdateResponse,
+  AudioClipRange,
 } from '../types/api';
 import { AppSettings } from '../types/settings';
 
@@ -140,6 +141,35 @@ class ApiClient {
         'Content-Type': 'multipart/form-data',
       },
     });
+    return response.data;
+  }
+
+  /**
+   * Create a custom voice from selected clips within a single audio file
+   */
+  async createVoiceFromClips(
+    name: string,
+    description: string | undefined,
+    audioFile: File,
+    clipRanges: AudioClipRange[],
+    keywords?: string
+  ): Promise<VoiceCreateResponse> {
+    const formData = new FormData();
+    formData.append('name', name);
+    if (description) {
+      formData.append('description', description);
+    }
+    if (keywords) {
+      formData.append('keywords', keywords);
+    }
+    formData.append('audio_file', audioFile);
+    formData.append('clip_ranges', JSON.stringify(clipRanges));
+
+    const response = await this.client.post<VoiceCreateResponse>(
+      '/api/v1/voices/from-audio-clips',
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
     return response.data;
   }
 

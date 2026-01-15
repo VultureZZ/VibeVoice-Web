@@ -184,6 +184,7 @@ Once running, access:
 - `POST /api/v1/speech/generate` - Generate speech from text
 - `GET /api/v1/speech/download/{filename}` - Download generated audio
 - `POST /api/v1/voices` - Create custom voice
+- `POST /api/v1/voices/from-audio-clips` - Create custom voice from selected clips within a single uploaded audio file
 - `GET /api/v1/voices` - List all voices
 - `DELETE /api/v1/voices/{voice_id}` - Delete custom voice
 

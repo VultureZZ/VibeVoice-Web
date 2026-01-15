@@ -1,6 +1,8 @@
 """
 Voice management endpoints.
 """
+import json
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -161,6 +163,233 @@ async def create_voice(
         for temp_file in temp_files:
             if temp_file.exists():
                 temp_file.unlink()
+
+
+@router.post(
+    "/from-audio-clips",
+    response_model=VoiceCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+async def create_voice_from_audio_clips(
+    name: str = Form(...),
+    description: str = Form(None),
+    audio_file: UploadFile = File(...),
+    clip_ranges: str = Form(...),
+    keywords: str = Form(None),
+) -> VoiceCreateResponse:
+    """
+    Create a custom voice from multiple time-ranged clips within a single uploaded audio file.
+
+    The server slices the provided audio into short WAV clips, then reuses the existing
+    multi-file custom voice creation pipeline.
+    """
+    if not audio_file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Audio file must have a filename")
+
+    # Parse and validate clip ranges JSON
+    try:
+        clip_ranges_raw = json.loads(clip_ranges)
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"clip_ranges must be valid JSON: {str(e)}",
+        ) from e
+
+    if not isinstance(clip_ranges_raw, list) or len(clip_ranges_raw) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="clip_ranges must be a non-empty JSON array",
+        )
+
+    # Guardrails to limit abuse
+    max_clips = 50
+    max_total_selected_seconds = 600.0  # 10 minutes
+    min_clip_seconds = 0.5
+
+    if len(clip_ranges_raw) > max_clips:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many clips requested (max {max_clips})",
+        )
+
+    # Save uploaded audio file temporarily
+    temp_input_path: Path | None = None
+    temp_clip_paths: list[Path] = []
+
+    try:
+        suffix = Path(audio_file.filename).suffix
+        temp_input = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        temp_input_path = Path(temp_input.name)
+
+        content = await audio_file.read()
+        if not content:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Audio file is empty")
+        temp_input.write(content)
+        temp_input.close()
+
+        # Load audio to determine duration and slice clips
+        from pydub import AudioSegment
+
+        try:
+            audio = AudioSegment.from_file(str(temp_input_path))
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to load audio file for clipping: {str(e)}",
+            ) from e
+
+        duration_seconds = len(audio) / 1000.0
+        if duration_seconds <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Audio file has zero duration")
+
+        parsed_ranges: list[tuple[float, float]] = []
+        total_selected_seconds = 0.0
+        for idx, item in enumerate(clip_ranges_raw):
+            if not isinstance(item, dict):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"clip_ranges[{idx}] must be an object with start_seconds and end_seconds",
+                )
+
+            try:
+                start_seconds = float(item.get("start_seconds"))
+                end_seconds = float(item.get("end_seconds"))
+            except (TypeError, ValueError) as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"clip_ranges[{idx}] start_seconds/end_seconds must be numbers",
+                ) from e
+
+            if start_seconds < 0 or end_seconds <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"clip_ranges[{idx}] must be >= 0 and end_seconds > 0",
+                )
+            if start_seconds >= end_seconds:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"clip_ranges[{idx}] must satisfy start_seconds < end_seconds",
+                )
+            if end_seconds > duration_seconds:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"clip_ranges[{idx}] end_seconds exceeds audio duration ({duration_seconds:.2f}s)",
+                )
+
+            clip_duration = end_seconds - start_seconds
+            if clip_duration < min_clip_seconds:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"clip_ranges[{idx}] is too short (min {min_clip_seconds:.1f}s)",
+                )
+
+            total_selected_seconds += clip_duration
+            if total_selected_seconds > max_total_selected_seconds:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Total selected clip duration exceeds {max_total_selected_seconds:.0f}s",
+                )
+
+            parsed_ranges.append((start_seconds, end_seconds))
+
+        # Slice clips and export to temp WAV files
+        for idx, (start_seconds, end_seconds) in enumerate(parsed_ranges):
+            start_ms = int(start_seconds * 1000)
+            end_ms = int(end_seconds * 1000)
+            segment = audio[start_ms:end_ms]
+
+            # Normalize to standard settings early to avoid surprises
+            if segment.frame_rate != 24000:
+                segment = segment.set_frame_rate(24000)
+            if segment.channels > 1:
+                segment = segment.set_channels(1)
+
+            clip_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+            clip_path = Path(clip_temp.name)
+            clip_temp.close()
+            segment.export(str(clip_path), format="wav", parameters=["-ar", "24000"])
+            temp_clip_paths.append(clip_path)
+
+        # Parse keywords if provided
+        keywords_list = None
+        if keywords:
+            keywords_list = [k.strip() for k in keywords.split(",") if k.strip()]
+
+        # Create voice using existing pipeline
+        voice_data = voice_manager.create_custom_voice(
+            name=name,
+            description=description,
+            audio_files=temp_clip_paths,
+            keywords=keywords_list,
+            ollama_url=None,
+            ollama_model=None,
+        )
+
+        # Parse created_at if it's a string
+        created_at = voice_data.get("created_at")
+        if isinstance(created_at, str):
+            try:
+                created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                created_at = None
+
+        voice_response = VoiceResponse(
+            id=voice_data["id"],
+            name=voice_data["name"],
+            description=voice_data.get("description"),
+            type=voice_data.get("type", "custom"),
+            created_at=created_at,
+            audio_files=voice_data.get("audio_files"),
+        )
+
+        # Parse validation feedback if present
+        validation_feedback = None
+        if "validation_feedback" in voice_data:
+            feedback_data = voice_data["validation_feedback"]
+            individual_files = [
+                IndividualFileAnalysis(**file_data) for file_data in feedback_data.get("individual_files", [])
+            ]
+            validation_feedback = AudioValidationFeedback(
+                total_duration_seconds=feedback_data.get("total_duration_seconds", 0.0),
+                individual_files=individual_files,
+                warnings=feedback_data.get("warnings", []),
+                recommendations=feedback_data.get("recommendations", []),
+                quality_metrics=feedback_data.get("quality_metrics", {}),
+            )
+
+        message = f"Voice '{name}' created successfully"
+        if validation_feedback and validation_feedback.warnings:
+            warning_count = len(validation_feedback.warnings)
+            message += f" ({warning_count} warning{'s' if warning_count > 1 else ''} about audio quality/duration)"
+
+        return VoiceCreateResponse(
+            success=True,
+            message=message,
+            voice=voice_response,
+            validation_feedback=validation_feedback,
+        )
+    except ValueError as e:
+        # Used for validation errors from voice manager
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    finally:
+        # Clean up temporary files
+        for p in temp_clip_paths:
+            try:
+                if p.exists():
+                    p.unlink()
+            except Exception:
+                pass
+        if temp_input_path is not None:
+            try:
+                if temp_input_path.exists():
+                    temp_input_path.unlink()
+            except Exception:
+                pass
 
 
 @router.post(

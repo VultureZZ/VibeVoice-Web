@@ -220,6 +220,21 @@ print("VibeVoice imported successfully")
   - generate a style-oriented profile (cadence/tone/vocabulary) via Ollama
   - allow you to apply/copy the profile onto any voice
 
+### Create Voice from Clips (single file → multiple ranges)
+- In the UI, go to **Voices → Create from Clips**.
+- Upload one audio file, then select multiple time ranges (clips).
+- Recommended clip selection:
+  - multiple clips of **3–10 seconds** each
+  - keep the total selected duration under a few minutes for best results
+- API endpoint used by the UI:
+  - `POST /api/v1/voices/from-audio-clips` (multipart form)
+  - fields:
+    - `name` (required)
+    - `description` (optional)
+    - `keywords` (optional, comma-separated)
+    - `audio_file` (required)
+    - `clip_ranges` (required JSON array like `[{"start_seconds": 0.0, "end_seconds": 4.2}, ...]`)
+
 ## Troubleshooting
 
 ### Issue: FlashAttention2 Warning

@@ -5,7 +5,12 @@ Test script for VibeVoice API.
 Tests the API endpoints to verify functionality.
 """
 import json
+import math
+import struct
 import sys
+import tempfile
+import time
+import wave
 from pathlib import Path
 
 try:
@@ -207,6 +212,122 @@ def test_rate_limiting():
     return True
 
 
+def _write_test_wav(path: Path, duration_seconds: float = 2.0, sample_rate: int = 24000) -> None:
+    """Create a small mono WAV file suitable for API upload tests."""
+    frequency_hz = 440.0
+    amplitude = 0.2
+    num_samples = int(duration_seconds * sample_rate)
+
+    with wave.open(str(path), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)  # 16-bit
+        wf.setframerate(sample_rate)
+
+        for i in range(num_samples):
+            t = i / sample_rate
+            sample = int(amplitude * 32767.0 * math.sin(2.0 * math.pi * frequency_hz * t))
+            wf.writeframes(struct.pack("<h", sample))
+
+
+def test_create_voice_from_clips():
+    """Test creating a voice from multiple clip ranges in a single audio file."""
+    print("\n" + "=" * 60)
+    print("Testing Create Voice from Audio Clips Endpoint")
+    print("=" * 60)
+
+    headers = {}
+    if API_KEY:
+        headers["X-API-Key"] = API_KEY
+
+    temp_path = None
+    created_voice_id = None
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tf:
+            temp_path = Path(tf.name)
+
+        _write_test_wav(temp_path, duration_seconds=2.0, sample_rate=24000)
+
+        name = f"TestClips_{int(time.time())}"
+        clip_ranges = [
+            {"start_seconds": 0.0, "end_seconds": 1.0},
+            {"start_seconds": 1.0, "end_seconds": 2.0},
+        ]
+
+        data = {
+            "name": name,
+            "clip_ranges": json.dumps(clip_ranges),
+        }
+
+        with temp_path.open("rb") as f:
+            files = {"audio_file": (temp_path.name, f, "audio/wav")}
+            response = requests.post(
+                f"{API_BASE_URL}/api/v1/voices/from-audio-clips",
+                headers=headers,
+                data=data,
+                files=files,
+                timeout=300,
+            )
+
+        if response.status_code != 201:
+            print_error(f"Create voice from clips failed: {response.status_code}")
+            print_error(f"Response: {response.text}")
+            return False
+
+        payload = response.json()
+        if not payload.get("success"):
+            print_error(f"Create voice from clips returned success=false: {payload}")
+            return False
+
+        voice = payload.get("voice") or {}
+        created_voice_id = voice.get("id")
+        if not created_voice_id:
+            print_error(f"No voice.id returned: {payload}")
+            return False
+
+        print_success(f"Created voice from clips: {voice.get('name')} (id={created_voice_id})")
+
+        # Negative test: out-of-bounds range should return 400
+        bad_ranges = [{"start_seconds": 0.0, "end_seconds": 9999.0}]
+        data_bad = {"name": f"{name}_bad", "clip_ranges": json.dumps(bad_ranges)}
+        with temp_path.open("rb") as f:
+            files = {"audio_file": (temp_path.name, f, "audio/wav")}
+            bad_resp = requests.post(
+                f"{API_BASE_URL}/api/v1/voices/from-audio-clips",
+                headers=headers,
+                data=data_bad,
+                files=files,
+                timeout=300,
+            )
+
+        if bad_resp.status_code != 400:
+            print_error(f"Expected 400 for out-of-bounds range, got {bad_resp.status_code}")
+            print_error(f"Response: {bad_resp.text}")
+            return False
+
+        print_success("Out-of-bounds clip range rejected (400) as expected")
+        return True
+    except requests.exceptions.ConnectionError:
+        print_error("Could not connect to API. Is it running?")
+        return False
+    except Exception as e:
+        print_error(f"Create voice from clips error: {e}")
+        return False
+    finally:
+        # Clean up the created voice to avoid polluting local state
+        try:
+            if created_voice_id:
+                requests.delete(f"{API_BASE_URL}/api/v1/voices/{created_voice_id}", headers=headers, timeout=60)
+        except Exception:
+            pass
+
+        if temp_path and temp_path.exists():
+            try:
+                temp_path.unlink()
+            except Exception:
+                pass
+
+
 def main():
     """Run all tests."""
     print("=" * 60)
@@ -242,6 +363,9 @@ def main():
 
     # Test 4: Rate limiting
     results["rate_limiting"] = test_rate_limiting()
+
+    # Test 5: Create voice from clips
+    results["create_voice_from_clips"] = test_create_voice_from_clips()
 
     # Summary
     print("\n" + "=" * 60)

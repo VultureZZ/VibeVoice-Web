@@ -57,6 +57,13 @@ class VoiceCreateRequest(BaseModel):
     description: Optional[str] = Field(None, description="Voice description")
 
 
+class AudioClipRange(BaseModel):
+    """Time range (in seconds) for selecting audio clips from a larger file."""
+
+    start_seconds: float = Field(..., ge=0.0, description="Clip start time in seconds (inclusive)")
+    end_seconds: float = Field(..., gt=0.0, description="Clip end time in seconds (exclusive)")
+
+
 class IndividualFileAnalysis(BaseModel):
     """Analysis result for a single audio file."""
 
