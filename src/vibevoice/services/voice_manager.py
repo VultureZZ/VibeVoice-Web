@@ -324,18 +324,9 @@ class VoiceManager:
                         })
                         seen_voices.add(short_name)
 
-        # Add any hardcoded default voices that weren't found in directory
-        for voice_name in DEFAULT_VOICES:
-            if voice_name not in seen_voices:
-                voices.append({
-                    "id": voice_name,
-                    "name": voice_name,
-                    "description": f"Default VibeVoice voice: {voice_name}",
-                    "type": "default",
-                    "created_at": None,
-                    "audio_files": None,
-                })
-                seen_voices.add(voice_name)
+        # IMPORTANT:
+        # Do not add hardcoded "default" voices that aren't present on disk.
+        # This prevents the API/UX from listing voices that cannot be used on this host.
 
         # Add custom voices
         custom_voices = voice_storage.list_voices()
@@ -367,8 +358,11 @@ class VoiceManager:
         if voice_data:
             return voice_data
 
-        # Check default voices
-        if self.is_default_voice(voice_id) or voice_id in DEFAULT_VOICES:
+        # Check default voices based on files present in the demo voices directory.
+        # This must align with list_all_voices(), which enumerates the directory contents.
+        resolved = VOICE_NAME_MAPPING.get(voice_id, voice_id)
+        voice_path = self.default_voices_dir / f"{resolved}.wav"
+        if voice_path.exists():
             return {
                 "id": voice_id,
                 "name": voice_id,
