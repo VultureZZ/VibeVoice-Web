@@ -174,6 +174,9 @@ class RealtimeProcessManager:
 
         env = os.environ.copy()
         env.setdefault("PYTHONUNBUFFERED", "1")
+        # Prefer importing the upstream `vibevoice` package from the repo itself to avoid
+        # conflicts with other installed `vibevoice` packages.
+        env["PYTHONPATH"] = cfg.repo_dir + os.pathsep + env.get("PYTHONPATH", "")
 
         capture = env.get("REALTIME_CAPTURE_SUBPROCESS_LOGS", "").strip() == "1"
         stdout = subprocess.PIPE if capture else None

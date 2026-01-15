@@ -260,6 +260,8 @@ git clone --depth 1 https://github.com/microsoft/VibeVoice.git VibeVoice-Microso
 pip install -e VibeVoice-Microsoft/
 ```
 
+Note: Both the community repo and the Microsoft repo install a Python package named `vibevoice`. If you install both into the same `.venv`, whichever is installed last can “win” imports for subprocess demos. This project now forces subprocesses to import from the intended repo via `PYTHONPATH`, so both features can coexist in one `.venv`.
+
 ### Step C: Configure the backend to find/run it
 
 Set environment variables (e.g. in your `.env`):

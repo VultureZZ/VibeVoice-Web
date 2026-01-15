@@ -4,6 +4,7 @@ Voice generation service.
 Wraps VibeVoice inference logic to generate speech from text.
 """
 import logging
+import os
 import subprocess
 import sys
 import tempfile
@@ -186,9 +187,18 @@ class VoiceGenerator:
 
             # Run inference
             try:
+                # IMPORTANT: Ensure the subprocess imports VibeVoice code from the checked-out
+                # repo (config.VIBEVOICE_REPO_DIR). This avoids conflicts when another repo
+                # (e.g. microsoft/VibeVoice for realtime) is installed in the same venv under
+                # the same `vibevoice` package name.
+                env = os.environ.copy()
+                repo_pythonpath = str(self.vibevoice_repo_dir)
+                env["PYTHONPATH"] = repo_pythonpath + os.pathsep + env.get("PYTHONPATH", "")
+
                 result = subprocess.run(
                     cmd,
                     cwd=str(config.PROJECT_ROOT),
+                    env=env,
                     check=True,
                     capture_output=True,
                     text=True,
