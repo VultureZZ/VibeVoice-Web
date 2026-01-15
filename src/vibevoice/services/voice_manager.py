@@ -780,6 +780,33 @@ class VoiceManager:
         # Return as-is if not found (will cause error in inference)
         return voice_name
 
+    def normalize_voice_name(self, voice_name: str) -> str:
+        """
+        Normalize a voice name to its canonical form.
+
+        Accepts both canonical names (e.g., "Alice") and mapped aliases
+        (e.g., "en-Alice_woman") and returns the canonical name.
+
+        Args:
+            voice_name: Voice name in any format
+
+        Returns:
+            Canonical voice name
+
+        Examples:
+            - "en-Alice_woman" -> "Alice"
+            - "Alice" -> "Alice"
+            - "en-Carter_man" -> "Carter"
+            - "zh-Anchen_man_bgm" -> "zh-Anchen_man_bgm" (no mapping, returns as-is)
+        """
+        # Check if it's a mapped name (reverse lookup)
+        for canonical, mapped in VOICE_NAME_MAPPING.items():
+            if voice_name == mapped:
+                return canonical
+
+        # If it's already canonical or not in mapping, return as-is
+        return voice_name
+
     def resolve_voice_name(self, voice_name: str) -> str:
         """
         Resolve a voice name to its actual file name.
