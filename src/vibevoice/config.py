@@ -7,10 +7,14 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
 
-# Load environment variables from .env file if it exists
-load_dotenv()
+    # Load environment variables from .env file if it exists
+    load_dotenv()
+except Exception:
+    # Keep imports optional for minimal environments; production should install python-dotenv.
+    pass
 
 # Project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent

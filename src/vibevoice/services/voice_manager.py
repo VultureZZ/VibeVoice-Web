@@ -8,12 +8,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from pydub import AudioSegment
-
 from ..config import config
 from ..models.voice_storage import voice_storage
 from .audio_validator import AudioValidator
-from .voice_profiler import voice_profiler
 
 # Default voices that cannot be deleted
 # Mapping of short names to full voice file names
@@ -104,6 +101,38 @@ def _parse_default_voice_stem(stem: str) -> dict:
         "language_label": _get_language_label(language_code),
         "gender": gender,
     }
+
+
+def _normalize_gender(value: Optional[str]) -> Optional[str]:
+    """
+    Normalize gender inputs to one of: male, female, neutral, unknown.
+
+    Accepts common variants from UIs/integrations (e.g. "gender_neutral", "nonbinary").
+    Returns None when the input is empty/whitespace so callers can treat it as "unset".
+    """
+    if value is None:
+        return None
+    v = value.strip().lower()
+    if not v:
+        return None
+
+    mapping = {
+        # canonical
+        "male": "male",
+        "female": "female",
+        "neutral": "neutral",
+        "unknown": "unknown",
+        # common variants
+        "man": "male",
+        "woman": "female",
+        "nonbinary": "neutral",
+        "non-binary": "neutral",
+        "nb": "neutral",
+        "gender_neutral": "neutral",
+        "gender-neutral": "neutral",
+        "gender neutral": "neutral",
+    }
+    return mapping.get(v, v)
 
 
 class VoiceManager:
@@ -208,7 +237,7 @@ class VoiceManager:
 
             normalized_gender = None
             if gender is not None:
-                normalized_gender = gender.strip().lower() or None
+                normalized_gender = _normalize_gender(gender)
             allowed_genders = {"male", "female", "neutral", "unknown"}
             if normalized_gender is not None and normalized_gender not in allowed_genders:
                 raise ValueError("gender must be one of: male, female, neutral, unknown")
@@ -231,6 +260,8 @@ class VoiceManager:
 
                 # Load audio segment
                 try:
+                    from pydub import AudioSegment
+
                     if ext == ".wav":
                         segment = AudioSegment.from_wav(str(saved_path))
                     elif ext == ".mp3":
@@ -291,6 +322,8 @@ class VoiceManager:
             import logging
             logger = logging.getLogger(__name__)
             try:
+                from .voice_profiler import voice_profiler
+
                 logger.info(f"Starting automatic profiling for voice: {name} (ID: {voice_id})")
                 if keywords:
                     logger.info(f"Using keywords for profiling: {keywords}")
@@ -548,6 +581,8 @@ class VoiceManager:
 
         # Enhance profile with keywords
         try:
+            from .voice_profiler import voice_profiler
+
             enhanced_profile = voice_profiler.enhance_profile_with_keywords(
                 voice_name=voice_data.get("name", voice_id),
                 existing_profile=existing_profile,
@@ -611,9 +646,9 @@ class VoiceManager:
 
         normalized_gender = None
         if gender is not None:
-            normalized_gender = gender.strip().lower()
+            normalized_gender = _normalize_gender(gender)
             allowed_genders = {"male", "female", "neutral", "unknown"}
-            if normalized_gender not in allowed_genders:
+            if normalized_gender is not None and normalized_gender not in allowed_genders:
                 raise ValueError("gender must be one of: male, female, neutral, unknown")
 
         # Update via storage

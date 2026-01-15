@@ -55,6 +55,7 @@ export function PodcastPage() {
   const [audioFilename, setAudioFilename] = useState<string | null>(null);
   const [podcastId, setPodcastId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [downloading, setDownloading] = useState(false);
 
   const speakerOptions = voices.map((voice) => ({
@@ -83,6 +84,7 @@ export function PodcastPage() {
     setAudioFilename(null);
     setPodcastId(null);
     setSuccessMessage(null);
+    setWarnings([]);
     setIsEditingScript(false);
 
     const response = await generatePodcastScript({
@@ -97,6 +99,7 @@ export function PodcastPage() {
     if (response && response.script) {
       setScript(response.script);
       setSuccessMessage('Script generated successfully! You can review and edit it before generating audio.');
+      setWarnings(response.warnings || []);
     }
   };
 
@@ -119,6 +122,7 @@ export function PodcastPage() {
     setAudioFilename(null);
     setPodcastId(null);
     setSuccessMessage(null);
+    setWarnings([]);
 
     const response = await generatePodcastAudio({
       script: script.trim(),
@@ -145,6 +149,7 @@ export function PodcastPage() {
           ? 'Podcast audio generated and saved to the library!'
           : 'Podcast audio generated successfully!'
       );
+      setWarnings(response.warnings || []);
     }
   };
 
@@ -182,6 +187,13 @@ export function PodcastPage() {
 
       {error && <Alert type="error" message={error} />}
       {successMessage && <Alert type="success" message={successMessage} />}
+      {warnings.length > 0 && (
+        <Alert
+          type="warning"
+          message={`Warnings: ${warnings.join(' • ')}`}
+          onClose={() => setWarnings([])}
+        />
+      )}
 
       <div className="bg-white rounded-lg shadow p-6 space-y-6">
         <div>

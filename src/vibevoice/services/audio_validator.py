@@ -6,8 +6,6 @@ Analyzes audio files and provides feedback on duration, quality, and recommendat
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from pydub import AudioSegment
-
 
 # Audio duration recommendations (in seconds)
 MIN_DURATION_SECONDS = 30.0  # Minimum recommended duration
@@ -38,6 +36,8 @@ class AudioValidator:
             Dict with analysis results including duration, sample_rate, channels, file_size, warnings
         """
         try:
+            from pydub import AudioSegment
+
             # Load audio file
             audio = AudioSegment.from_file(str(audio_path))
 

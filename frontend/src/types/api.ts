@@ -94,6 +94,7 @@ export interface PodcastScriptResponse {
   success: boolean;
   message: string;
   script?: string;
+  warnings?: string[];
 }
 
 export interface PodcastGenerateRequest {
@@ -114,6 +115,7 @@ export interface PodcastGenerateResponse {
   file_path?: string;
   script?: string;
   podcast_id?: string;
+  warnings?: string[];
 }
 
 export interface PodcastItem {
