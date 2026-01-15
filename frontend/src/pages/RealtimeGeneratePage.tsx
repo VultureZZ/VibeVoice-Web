@@ -148,6 +148,9 @@ export function RealtimeGeneratePage() {
   };
 
   const handleSendAndFlush = () => {
+    // Ensure the backend has the latest session parameters (voice/cfg/steps)
+    // before starting generation.
+    handleStart();
     sendText(text);
     sendFlush();
   };
