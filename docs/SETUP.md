@@ -424,6 +424,60 @@ After successful setup:
    - Design your web interface
    - Write additional tests
 
+## Running as a Linux service (systemd)
+
+This repo includes an installer script that can set up `systemd` services to run the API (and optionally the Web UI) in the background and on boot.
+
+### 1) Install the API service
+
+From the repo root:
+
+```bash
+sudo ./scripts/install_systemd_service.sh
+```
+
+This creates:
+- `vibevoice-api.service` (enabled + started)
+- `/etc/vibevoice/vibevoice.env` (created if missing)
+
+Useful commands:
+
+```bash
+systemctl status vibevoice-api
+journalctl -u vibevoice-api -f
+```
+
+### 2) Optional: install the Web UI service
+
+To run the UI as a service too (Vite preview after a build):
+
+```bash
+sudo ./scripts/install_systemd_service.sh --with-web --web-mode preview
+```
+
+Or, to run the Vite dev server (HMR; better for development than 24/7 use):
+
+```bash
+sudo ./scripts/install_systemd_service.sh --with-web --web-mode dev
+```
+
+The UI service will listen on:
+- `http://<your-linux-pc-ip>:3001`
+
+### 3) Configure ports and settings
+
+Edit `/etc/vibevoice/vibevoice.env` and restart services:
+
+```bash
+sudo nano /etc/vibevoice/vibevoice.env
+sudo systemctl restart vibevoice-api
+sudo systemctl restart vibevoice-web
+```
+
+Notes:
+- The API defaults to `0.0.0.0:8000` (set `HOST` and `PORT` to change).
+- The UI defaults to `0.0.0.0:3001` (set `VIBEVOICE_WEB_HOST` and `VIBEVOICE_WEB_PORT` to change).
+
 ## Additional Resources
 
 - [VibeVoice Community Repository](https://github.com/vibevoice-community/VibeVoice)
