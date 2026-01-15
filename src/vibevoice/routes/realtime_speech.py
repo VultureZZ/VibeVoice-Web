@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -36,6 +37,7 @@ from ..services.realtime_process import realtime_process_manager
 
 
 router = APIRouter(prefix="/api/v1/speech", tags=["speech"])
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -77,8 +79,10 @@ def _extract_api_key(ws: WebSocket) -> Optional[str]:
 
 @router.websocket("/realtime")
 async def realtime_speech(ws: WebSocket) -> None:
+    conn_id = f"ws-{id(ws)}"
     api_key = _extract_api_key(ws)
     if not config.validate_api_key(api_key):
+        logger.info("[%s] Rejecting websocket: invalid/missing API key", conn_id)
         await ws.close(code=1008, reason="Invalid or missing API key")
         return
 
@@ -86,6 +90,7 @@ async def realtime_speech(ws: WebSocket) -> None:
     rate_key = api_key or "anonymous"
     allowed, limit, remaining = await _connection_limiter.allow(rate_key)
     if not allowed:
+        logger.info("[%s] Rejecting websocket: rate limit exceeded (key=%s)", conn_id, rate_key)
         await ws.accept()
         await ws.send_text(
             json.dumps(
@@ -100,6 +105,13 @@ async def realtime_speech(ws: WebSocket) -> None:
         return
 
     await ws.accept()
+    logger.info(
+        "[%s] WebSocket accepted. client=%s rate_key=%s remaining_connections=%s",
+        conn_id,
+        getattr(ws.client, "host", None),
+        rate_key,
+        remaining,
+    )
 
     # Session state
     buffered_text = ""
@@ -111,6 +123,7 @@ async def realtime_speech(ws: WebSocket) -> None:
     upstream_task: Optional[asyncio.Task[None]] = None
 
     async def send_status(event: str, data: Optional[dict[str, Any]] = None) -> None:
+        logger.info("[%s] status=%s data=%s", conn_id, event, data)
         await ws.send_text(
             json.dumps(
                 {
@@ -122,6 +135,7 @@ async def realtime_speech(ws: WebSocket) -> None:
         )
 
     async def send_error(message: str) -> None:
+        logger.warning("[%s] error=%s", conn_id, message)
         await ws.send_text(json.dumps({"type": "error", "message": message}))
 
     async def close_upstream() -> None:
@@ -150,6 +164,7 @@ async def realtime_speech(ws: WebSocket) -> None:
             await send_error("Generation already in progress.")
             return
 
+        logger.info("[%s] Starting generation. text_len=%s", conn_id, len(text_to_generate))
         srv = realtime_process_manager.ensure_running()
         params = [f"text={quote(text_to_generate)}"]
         if cfg_scale:
@@ -160,14 +175,20 @@ async def realtime_speech(ws: WebSocket) -> None:
             params.append(f"voice={quote(voice)}")
 
         upstream_url = f"ws://{srv.host}:{srv.port}/stream?{'&'.join(params)}"
-        await send_status("upstream_connecting", {"url": upstream_url})
+        await send_status("upstream_connecting", {"url": upstream_url, "host": srv.host, "port": srv.port})
 
-        upstream_ws = await websockets.connect(
-            upstream_url,
-            max_size=None,
-            ping_interval=20,
-            ping_timeout=20,
-        )
+        try:
+            upstream_ws = await websockets.connect(
+                upstream_url,
+                max_size=None,
+                ping_interval=20,
+                ping_timeout=20,
+                open_timeout=10,
+                close_timeout=5,
+            )
+        except Exception as e:
+            logger.exception("[%s] Upstream websocket connect failed", conn_id)
+            raise RuntimeError(f"Upstream websocket connect failed: {e}") from e
 
         async def _forward() -> None:
             try:
@@ -226,6 +247,7 @@ async def realtime_speech(ws: WebSocket) -> None:
                 return
 
             raw = await ws.receive_text()
+            logger.info("[%s] received_text=%s", conn_id, raw[:500])
             try:
                 msg = json.loads(raw)
             except Exception:
@@ -262,8 +284,10 @@ async def realtime_speech(ws: WebSocket) -> None:
                 await send_error(f"Unknown message type: {msg_type!r}")
 
     except WebSocketDisconnect:
+        logger.info("[%s] WebSocketDisconnect", conn_id)
         await close_upstream()
     except Exception as e:
+        logger.exception("[%s] WebSocket handler error", conn_id)
         try:
             await send_error(str(e))
         except Exception:
@@ -273,4 +297,6 @@ async def realtime_speech(ws: WebSocket) -> None:
             await ws.close(code=1011, reason="Server error")
         except Exception:
             pass
+    finally:
+        logger.info("[%s] WebSocket handler exit", conn_id)
 

@@ -48,13 +48,21 @@ export function useRealtimeSpeech(settings: AppSettings) {
       setState('connected');
     };
 
-    ws.onclose = () => {
+    ws.onclose = (evt) => {
+      const reason = evt.reason ? ` (${evt.reason})` : '';
+      // If we never reached OPEN, treat as handshake-ish failure.
+      if (state === 'connecting') {
+        setLastError(`WebSocket closed during connect: code=${evt.code}${reason}`);
+      } else if (evt.code !== 1000) {
+        setLastError(`WebSocket closed: code=${evt.code}${reason}`);
+      }
       setState('disconnected');
       wsRef.current = null;
     };
 
-    ws.onerror = () => {
-      setLastError('WebSocket error');
+    ws.onerror = (evt) => {
+      // Browser doesn't give much detail here; keep it but also log close codes in onclose.
+      setLastError('WebSocket error (see server logs for details)');
     };
 
     ws.onmessage = (evt) => {

@@ -16,6 +16,7 @@ The upstream demo server exposes:
 
 from __future__ import annotations
 
+import logging
 import os
 import shlex
 import socket
@@ -27,6 +28,9 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ..config import config
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -54,6 +58,8 @@ class RealtimeProcessManager:
         self._lock = threading.Lock()
         self._process: Optional[subprocess.Popen] = None
         self._last_start_time: Optional[float] = None
+        self._stdout_thread: Optional[threading.Thread] = None
+        self._stderr_thread: Optional[threading.Thread] = None
 
     def _current_cfg(self) -> RealtimeServerConfig:
         return RealtimeServerConfig(
@@ -98,11 +104,19 @@ class RealtimeProcessManager:
     def _start_locked(self, cfg: RealtimeServerConfig) -> None:
         # If something is already listening, assume it is the realtime server.
         if self._is_port_open(cfg.host, cfg.port):
+            logger.info(
+                "Realtime server already listening on %s:%s (not starting subprocess).",
+                cfg.host,
+                cfg.port,
+            )
             return
 
         if self._process and self._process.poll() is None:
             # Process is alive but port isn't ready yet; fall through to wait.
-            pass
+            logger.info(
+                "Realtime server process running (pid=%s) but port not ready yet.",
+                self._process.pid,
+            )
         else:
             self._process = None
 
@@ -111,17 +125,63 @@ class RealtimeProcessManager:
         else:
             cmd = self._build_default_command(cfg)
 
+        logger.info(
+            "Starting realtime server subprocess. cwd=%s host=%s port=%s model=%s device=%s cmd=%s",
+            cfg.repo_dir,
+            cfg.host,
+            cfg.port,
+            cfg.model_id,
+            cfg.device,
+            cmd,
+        )
+
         env = os.environ.copy()
         env.setdefault("PYTHONUNBUFFERED", "1")
+
+        capture = env.get("REALTIME_CAPTURE_SUBPROCESS_LOGS", "").strip() == "1"
+        stdout = subprocess.PIPE if capture else None
+        stderr = subprocess.PIPE if capture else None
 
         self._process = subprocess.Popen(
             cmd,
             cwd=cfg.repo_dir,
             env=env,
-            stdout=None,
-            stderr=None,
+            stdout=stdout,
+            stderr=stderr,
         )
         self._last_start_time = time.time()
+
+        if capture:
+            self._start_log_threads_locked()
+
+        logger.info("Realtime server subprocess started (pid=%s).", self._process.pid)
+
+    def _start_log_threads_locked(self) -> None:
+        proc = self._process
+        if not proc:
+            return
+
+        def _pump(stream, level: int, name: str) -> None:
+            try:
+                if not stream:
+                    return
+                for raw in iter(stream.readline, b""):
+                    line = raw.decode("utf-8", "replace").rstrip()
+                    if line:
+                        logger.log(level, "[realtime_subprocess:%s pid=%s] %s", name, proc.pid, line)
+            except Exception:
+                logger.exception("Failed reading realtime subprocess %s", name)
+
+        if proc.stdout and not self._stdout_thread:
+            self._stdout_thread = threading.Thread(
+                target=_pump, args=(proc.stdout, logging.INFO, "stdout"), daemon=True
+            )
+            self._stdout_thread.start()
+        if proc.stderr and not self._stderr_thread:
+            self._stderr_thread = threading.Thread(
+                target=_pump, args=(proc.stderr, logging.WARNING, "stderr"), daemon=True
+            )
+            self._stderr_thread.start()
 
     def ensure_running(self) -> RealtimeServerConfig:
         """
@@ -135,15 +195,25 @@ class RealtimeProcessManager:
             self._start_locked(cfg)
 
         # Wait for readiness (port open) outside lock.
+        logger.info(
+            "Waiting for realtime server readiness on %s:%s (timeout=%ss).",
+            cfg.host,
+            cfg.port,
+            cfg.startup_timeout_seconds,
+        )
         deadline = time.time() + cfg.startup_timeout_seconds
         while time.time() < deadline:
             if self._is_port_open(cfg.host, cfg.port):
+                logger.info("Realtime server is ready on %s:%s.", cfg.host, cfg.port)
                 return cfg
 
             # If the process died, surface a useful error early.
             with self._lock:
                 if self._process and self._process.poll() is not None:
                     code = self._process.returncode
+                    logger.error(
+                        "Realtime server process exited early (code=%s).", code
+                    )
                     self._process = None
                     raise RuntimeError(
                         f"Realtime server process exited early with code {code}. "
@@ -166,12 +236,14 @@ class RealtimeProcessManager:
         if not proc or proc.poll() is not None:
             return
 
+        logger.info("Stopping realtime server subprocess (pid=%s).", proc.pid)
         proc.terminate()
         try:
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait(timeout=5)
+        logger.info("Realtime server subprocess stopped.")
 
 
 # Global singleton
