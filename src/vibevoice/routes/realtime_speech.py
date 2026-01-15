@@ -31,6 +31,7 @@ from urllib.parse import quote
 import websockets
 from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketDisconnect
+from websockets.exceptions import ConnectionClosed
 
 from ..config import config
 from ..services.realtime_process import realtime_process_manager
@@ -191,15 +192,31 @@ async def realtime_speech(ws: WebSocket) -> None:
             raise RuntimeError(f"Upstream websocket connect failed: {e}") from e
 
         async def _forward() -> None:
+            bytes_sent = 0
+            binary_frames = 0
+            text_frames = 0
+            first_binary_at: Optional[float] = None
+            started_at = time.time()
             try:
                 await send_status("upstream_connected")
                 async for message in upstream_ws:
                     # Upstream interleaves JSON logs (text) and audio bytes.
                     if isinstance(message, (bytes, bytearray)):
-                        await ws.send_bytes(bytes(message))
+                        payload = bytes(message)
+                        if first_binary_at is None:
+                            first_binary_at = time.time()
+                            logger.info(
+                                "[%s] First audio bytes from upstream after %.3fs",
+                                conn_id,
+                                first_binary_at - started_at,
+                            )
+                        binary_frames += 1
+                        bytes_sent += len(payload)
+                        await ws.send_bytes(payload)
                         continue
 
                     # Forward upstream log frames as status for UI visibility.
+                    text_frames += 1
                     try:
                         payload = json.loads(message)
                         await ws.send_text(
@@ -222,6 +239,17 @@ async def realtime_speech(ws: WebSocket) -> None:
                             )
                         )
             finally:
+                close_code = getattr(upstream_ws, "close_code", None)
+                close_reason = getattr(upstream_ws, "close_reason", None)
+                logger.info(
+                    "[%s] Upstream stream ended. binary_frames=%s bytes=%s text_frames=%s close_code=%s close_reason=%s",
+                    conn_id,
+                    binary_frames,
+                    bytes_sent,
+                    text_frames,
+                    close_code,
+                    close_reason,
+                )
                 await send_status("generation_complete")
                 await ws.send_text(json.dumps({"type": "end"}))
                 await close_upstream()

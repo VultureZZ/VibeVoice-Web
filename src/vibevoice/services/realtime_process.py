@@ -130,12 +130,20 @@ class RealtimeProcessManager:
     def _start_locked(self, cfg: RealtimeServerConfig) -> None:
         # If something is already listening, assume it is the realtime server.
         if self._is_port_open(cfg.host, cfg.port):
-            logger.warning(
-                "Realtime port already open on %s:%s (not starting subprocess). "
-                "If realtime isn't working, another process may be occupying this port.",
-                cfg.host,
-                cfg.port,
-            )
+            if self._process and self._process.poll() is None:
+                logger.info(
+                    "Realtime server already running (pid=%s) on %s:%s (not starting another).",
+                    self._process.pid,
+                    cfg.host,
+                    cfg.port,
+                )
+            else:
+                logger.warning(
+                    "Realtime port already open on %s:%s (not starting subprocess). "
+                    "If realtime isn't working, another process may be occupying this port.",
+                    cfg.host,
+                    cfg.port,
+                )
             return
 
         if self._process and self._process.poll() is None:
