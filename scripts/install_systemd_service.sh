@@ -114,6 +114,12 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 # Web UI service (only used if vibevoice-web.service is enabled)
 # VIBEVOICE_WEB_HOST=0.0.0.0
 # VIBEVOICE_WEB_PORT=3001
+#
+# Vite host allow-list (recommended when accessing the UI via a real hostname)
+# Example:
+#   VITE_ALLOWED_HOSTS=server-ai.mrhelpmann.com
+# Or, to disable host checks entirely (less secure):
+#   VITE_ALLOWED_HOSTS=all
 EOF
   chmod 0644 "${ENV_FILE}"
   echo "Created ${ENV_FILE}"
