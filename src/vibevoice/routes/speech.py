@@ -71,9 +71,11 @@ async def generate_speech(
 
         # Generate speech
         logger.info("Starting speech generation...")
+        language = request.settings.language if request.settings else "en"
         output_path = voice_generator.generate_speech(
             transcript=formatted_transcript,
             speakers=request.speakers,
+            language=language,
         )
 
         logger.info("")

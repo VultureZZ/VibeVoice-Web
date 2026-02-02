@@ -32,10 +32,25 @@ class Config:
     RATE_LIMIT_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "100"))
 
     # Paths
-    MODEL_PATH: Path = Path(os.getenv("MODEL_PATH", "models/VibeVoice-1.5B"))
     CUSTOM_VOICES_DIR: Path = Path(os.getenv("CUSTOM_VOICES_DIR", "custom_voices"))
     OUTPUT_DIR: Path = Path(os.getenv("OUTPUT_DIR", "outputs"))
     PODCASTS_DIR: Path = Path(os.getenv("PODCASTS_DIR", "podcasts"))
+
+    # TTS backend: "qwen3" (Qwen3-TTS), "vibevoice" (legacy subprocess), or "xtts"/"bark" when implemented
+    TTS_BACKEND: str = os.getenv("TTS_BACKEND", "qwen3")
+
+    # Qwen3-TTS (when TTS_BACKEND=qwen3)
+    QWEN_TTS_CUSTOM_VOICE_MODEL: str = os.getenv(
+        "QWEN_TTS_CUSTOM_VOICE_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+    )
+    QWEN_TTS_BASE_MODEL: str = os.getenv(
+        "QWEN_TTS_BASE_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+    )
+    QWEN_TTS_DEVICE: str = os.getenv("QWEN_TTS_DEVICE", "cuda:0")
+    QWEN_TTS_DTYPE: str = os.getenv("QWEN_TTS_DTYPE", "bfloat16")
+
+    # Legacy VibeVoice (when TTS_BACKEND=vibevoice)
+    MODEL_PATH: Path = Path(os.getenv("MODEL_PATH", "models/VibeVoice-1.5B"))
     VIBEVOICE_REPO_DIR: Path = Path(os.getenv("VIBEVOICE_REPO_DIR", "VibeVoice"))
 
     # Realtime TTS (VibeVoice-Realtime-0.5B demo server)
@@ -72,14 +87,14 @@ class Config:
         # Convert relative paths to absolute paths relative to project root
         if not self.MODEL_PATH.is_absolute():
             self.MODEL_PATH = PROJECT_ROOT / self.MODEL_PATH
+        if not self.VIBEVOICE_REPO_DIR.is_absolute():
+            self.VIBEVOICE_REPO_DIR = PROJECT_ROOT / self.VIBEVOICE_REPO_DIR
         if not self.CUSTOM_VOICES_DIR.is_absolute():
             self.CUSTOM_VOICES_DIR = PROJECT_ROOT / self.CUSTOM_VOICES_DIR
         if not self.OUTPUT_DIR.is_absolute():
             self.OUTPUT_DIR = PROJECT_ROOT / self.OUTPUT_DIR
         if not self.PODCASTS_DIR.is_absolute():
             self.PODCASTS_DIR = PROJECT_ROOT / self.PODCASTS_DIR
-        if not self.VIBEVOICE_REPO_DIR.is_absolute():
-            self.VIBEVOICE_REPO_DIR = PROJECT_ROOT / self.VIBEVOICE_REPO_DIR
         if not self.REALTIME_VIBEVOICE_REPO_DIR.is_absolute():
             self.REALTIME_VIBEVOICE_REPO_DIR = PROJECT_ROOT / self.REALTIME_VIBEVOICE_REPO_DIR
 

@@ -1,12 +1,14 @@
 # Detailed Setup Guide
 
-This guide provides step-by-step instructions for setting up the VibeVoice project from scratch.
+This guide provides step-by-step instructions for setting up the project from scratch.
+
+The default TTS backend is **Qwen3-TTS** (set `TTS_BACKEND=qwen3`). You can use legacy **VibeVoice** by setting `TTS_BACKEND=vibevoice` and running the VibeVoice setup.
 
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [Initial Setup](#initial-setup)
-3. [Manual Setup (Alternative)](#manual-setup-alternative)
+2. [Initial Setup (Qwen3-TTS)](#initial-setup-qwen3-tts)
+3. [Legacy VibeVoice Setup](#legacy-vibevoice-setup)
 4. [Verification](#verification)
 5. [Troubleshooting](#troubleshooting)
 
@@ -15,9 +17,9 @@ This guide provides step-by-step instructions for setting up the VibeVoice proje
 ### System Requirements
 
 - **Operating System**: Linux, macOS, or Windows
-- **Python**: 3.8 or higher
+- **Python**: 3.8 or higher (3.12 recommended for Qwen3-TTS)
 - **RAM**: Minimum 8GB (16GB recommended)
-- **Disk Space**: ~6GB for the model
+- **Disk Space**: ~6GB for Qwen3-TTS models (or VibeVoice model if using legacy)
 - **GPU**: CUDA-capable GPU recommended (NVIDIA with CUDA 11.8+)
 
 ### Software Requirements
@@ -56,7 +58,9 @@ This guide provides step-by-step instructions for setting up the VibeVoice proje
    - Install and run Ollama, then ensure it’s reachable at the configured URL (default `http://localhost:11434`).
    - Pull a model (default `llama3.2`): `ollama pull llama3.2`
 
-## Initial Setup
+## Initial Setup (Qwen3-TTS)
+
+Default backend is Qwen3-TTS. No separate repo clone is required.
 
 ### Step 1: Clone the Repository
 
@@ -90,18 +94,23 @@ Notes:
 - On Python 3.13+, `audioop` is removed from stdlib. This project installs `audioop-lts` automatically for `pydub` compatibility.
 - Audio transcription for “Voice Profile from Audio” requires `faster-whisper`, which is installed automatically on Python < 3.13. On newer Python versions, transcription is disabled and the API will return a minimal profile.
 
-### Step 4: Run Automated Setup
+### Step 4: Environment (optional)
 
-The setup script will handle:
-- Cloning the VibeVoice community repository
-- Installing the VibeVoice package
-- Downloading the VibeVoice-1.5B model from Hugging Face
+- `TTS_BACKEND=qwen3` (default) or `vibevoice` for legacy
+- `QWEN_TTS_DEVICE=cuda:0` or `cpu`
+- `QWEN_TTS_CUSTOM_VOICE_MODEL=Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice`
+- `QWEN_TTS_BASE_MODEL=Qwen/Qwen3-TTS-12Hz-1.7B-Base`
 
+Optional FlashAttention 2 for lower GPU memory:
+```bash
+pip install flash-attn --no-build-isolation
+```
+
+**Legacy VibeVoice:** To use VibeVoice instead, set `TTS_BACKEND=vibevoice` and run:
 ```bash
 python scripts/setup_vibevoice.py
 ```
-
-**Expected output:**
+**Expected output (legacy only):**
 ```
 ============================================================
 VibeVoice Setup Script

@@ -37,7 +37,7 @@ Rate limiting is **per API key** (or `"anonymous"` if no key is provided) and is
 - `POST /api/v1/speech/generate`
   - Body (JSON): `{ transcript: string, speakers: string[], settings?: { language, output_format, sample_rate } }`
   - Notes:
-    - The backend currently **does not apply `settings` to VibeVoice inference**; generation uses VibeVoice defaults.
+    - When `TTS_BACKEND=qwen3` (default), `settings.language` is applied (e.g. `en`, `zh`). When `TTS_BACKEND=vibevoice`, generation uses VibeVoice defaults.
   - Returns: `{ success, message, audio_url, file_path }`
 
 - `WS /api/v1/speech/realtime`
@@ -139,7 +139,7 @@ Voice profiles are style metadata (cadence/tone/etc.) used by Ollama-assisted fe
 - `POST /api/v1/podcast/generate`
   - Body (JSON): `{ script, voices: string[], settings?, title?, source_url?, genre?, duration?, save_to_library? }`
   - Notes:
-    - The backend currently **does not apply `settings` to VibeVoice inference**; generation uses VibeVoice defaults.
+    - When `TTS_BACKEND=qwen3`, `settings.language` is applied; when `vibevoice`, VibeVoice defaults are used.
     - If `save_to_library` is true (default), response `audio_url` will be a library download URL.
   - Returns: `{ success, message, audio_url?, file_path?, script?, podcast_id? }`
 

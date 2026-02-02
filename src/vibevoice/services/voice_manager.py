@@ -450,7 +450,27 @@ class VoiceManager:
         # Get list of custom voice IDs to exclude symlinks
         custom_voice_ids = {v["id"] for v in voice_storage.list_voices()}
 
-        # Add default voices from actual files in the directory.
+        # Always expose built-in default voice names (Alice, Frank, Mary, Carter, Maya).
+        # They are used by Qwen3-TTS CustomVoice; no on-disk files required.
+        for short_name in VOICE_NAME_MAPPING:
+            if short_name not in seen_voices and short_name not in custom_voice_ids:
+                voices.append(
+                    {
+                        "id": short_name,
+                        "name": short_name,
+                        "display_name": short_name,
+                        "language_code": "en",
+                        "language_label": "English",
+                        "gender": "unknown",
+                        "description": f"Default voice: {short_name}",
+                        "type": "default",
+                        "created_at": None,
+                        "audio_files": None,
+                    }
+                )
+                seen_voices.add(short_name)
+
+        # Add default voices from actual files in the directory (e.g. VibeVoice demo/voices).
         # If a voice has a short-name mapping (e.g. en-Alice_woman -> Alice),
         # expose only the short name to avoid duplicate entries in the UI.
         if self.default_voices_dir.exists():

@@ -1,28 +1,28 @@
 # VibeVoice Web
 
-A FastAPI + React project for generating speech with VibeVoice, managing voices, and producing multi-voice podcasts.
+A FastAPI + React project for generating speech, managing voices, and producing multi-voice podcasts. Default TTS backend is **Qwen3-TTS**; legacy **VibeVoice** is supported via `TTS_BACKEND=vibevoice`.
 
 ## Overview
 
-VibeVoice is an open-source text-to-speech framework designed for generating expressive, long-form, multi-speaker conversational audio. This project uses the community-maintained version and the VibeVoice-1.5B model.
+- **Qwen3-TTS** (default): [QwenLM/Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) for voice cloning and built-in speakers. No separate repo clone; install `pip install qwen-tts` and use.
+- **VibeVoice** (legacy): Community VibeVoice-1.5B with cloned repo and model when `TTS_BACKEND=vibevoice`.
 
 ## Features
 
-- Multi-speaker voice generation
-- Long-form speech synthesis (up to 90 minutes)
-- Natural conversational turn-taking
-- Support for English and Chinese
-- GPU acceleration (CUDA) for faster generation
+- Multi-speaker voice generation (Qwen3-TTS or VibeVoice)
+- Built-in default voices (Alice, Frank, Mary, Carter, Maya) and custom voice cloning
+- Support for English and other languages (Qwen3-TTS: Chinese, Japanese, Korean, etc.)
+- GPU acceleration (CUDA) recommended
 - FastAPI backend with a web UI (React + TypeScript)
-- Optional realtime streaming TTS over WebSocket (requires the upstream Microsoft demo repo checkout)
+- Optional realtime streaming TTS over WebSocket (VibeVoice-Realtime demo)
 
 ## Prerequisites
 
-- Python 3.8 or higher
+- Python 3.8 or higher (3.12 recommended for Qwen3-TTS)
 - Git
-- CUDA-capable GPU (recommended, but CPU will work)
+- CUDA-capable GPU (recommended)
 - At least 8GB RAM
-- ~6GB disk space for the model
+- ~6GB disk space for models
 
 ## Quick Start
 
@@ -46,39 +46,29 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 4. Run setup script
+With default `TTS_BACKEND=qwen3`, this installs `qwen-tts` and `soundfile`. Model weights download on first use.
 
-This will clone the VibeVoice repository, download the model, and install the package:
+### 4. (Optional) Legacy VibeVoice
+
+To use legacy VibeVoice instead, set `TTS_BACKEND=vibevoice` and run:
 
 ```bash
 python scripts/setup_vibevoice.py
 ```
 
-**Note:** The model download is ~5.4 GB and may take some time depending on your internet connection.
-
 ### 5. Run the test script
-
-Generate voice from the sample transcript:
 
 ```bash
 python tests/test_voice_generation.py
 ```
 
-Or specify custom speakers:
+Or with speakers:
 
 ```bash
 python tests/test_voice_generation.py Alice Frank
 ```
 
-Available speaker names include:
-- `Alice` (en-Alice_woman)
-- `Frank` (en-Frank_man)
-- `Mary` (en-Mary_woman_bgm)
-- `Carter` (en-Carter_man)
-- `Maya` (en-Maya_woman)
-- And more (check the script output for available voices)
-
-The generated audio will be saved in the `outputs/` directory.
+Default voices (Qwen3 CustomVoice): Alice, Frank, Mary, Carter, Maya. Custom voices can be created from audio in the web UI. Generated audio is in `outputs/`.
 
 ## Project Structure
 
