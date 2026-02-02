@@ -203,10 +203,10 @@ class Qwen3Backend(TTSBackend):
             wav, sr = self._generate_segment(seg.text, ref, language)
             if wav is not None and len(wav) > 0:
                 if not all_wavs:
-                sample_rate = sr
-            elif sr != sample_rate:
-                logger.warning("Segment sample rate %s != %s; using first segment sr", sr, sample_rate)
-            all_wavs.append(wav.astype(np.float32))
+                    sample_rate = sr
+                elif sr != sample_rate:
+                    logger.warning("Segment sample rate %s != %s; using first segment sr", sr, sample_rate)
+                all_wavs.append(wav.astype(np.float32))
 
         if not all_wavs:
             raise RuntimeError("No audio generated from segments")
