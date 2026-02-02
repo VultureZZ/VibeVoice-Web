@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ..config import config
+from ...config import config
 from .base import SpeakerRef, TTSBackend
 from .segments import TranscriptSegment
 
