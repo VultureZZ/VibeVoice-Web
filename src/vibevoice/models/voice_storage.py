@@ -71,6 +71,7 @@ class VoiceStorage:
         profile: Optional[Dict] = None,
         language_code: Optional[str] = None,
         gender: Optional[str] = None,
+        image_filename: Optional[str] = None,
     ) -> None:
         """
         Add a new voice to storage.
@@ -81,6 +82,7 @@ class VoiceStorage:
             description: Voice description
             audio_files: List of audio file names
             profile: Optional voice profile data
+            image_filename: Optional image filename (e.g. image.jpg) for voice avatar
         """
         data = self._load()
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -97,6 +99,8 @@ class VoiceStorage:
             voice_data["gender"] = gender
         if profile:
             voice_data["profile"] = profile
+        if image_filename:
+            voice_data["image_filename"] = image_filename
         data["voices"][voice_id] = voice_data
         self._save(data)
 
@@ -186,14 +190,16 @@ class VoiceStorage:
         description: Optional[str] = None,
         language_code: Optional[str] = None,
         gender: Optional[str] = None,
+        image_filename: Optional[str] = None,
     ) -> bool:
         """
-        Update voice name and/or description.
+        Update voice name, description, and/or image.
 
         Args:
             voice_id: Voice identifier
             name: New voice name (optional)
             description: New voice description (optional)
+            image_filename: New image filename, or empty string to clear (optional)
 
         Returns:
             True if updated, False if not found
@@ -210,13 +216,17 @@ class VoiceStorage:
             if language_code:
                 data["voices"][voice_id]["language_code"] = language_code
             else:
-                # Allow clearing via empty string
                 data["voices"][voice_id].pop("language_code", None)
         if gender is not None:
             if gender:
                 data["voices"][voice_id]["gender"] = gender
             else:
                 data["voices"][voice_id].pop("gender", None)
+        if image_filename is not None:
+            if image_filename:
+                data["voices"][voice_id]["image_filename"] = image_filename
+            else:
+                data["voices"][voice_id].pop("image_filename", None)
 
         self._save(data)
         return True

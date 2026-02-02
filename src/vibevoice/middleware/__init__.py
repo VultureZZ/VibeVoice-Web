@@ -1,1 +1,1 @@
-"""Middleware for VibeVoice API."""
+"""Middleware for AudioMesh API."""

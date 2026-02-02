@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Verify and report on the VibeVoice API structure.
+Verify and report on the AudioMesh API structure.
 
 This script checks if all required files and directories exist.
 """
@@ -29,7 +29,7 @@ REQUIRED_FILES = [
 
 project_root = Path(__file__).parent
 
-print("Checking VibeVoice API structure...")
+print("Checking AudioMesh API structure...")
 print(f"Project root: {project_root}")
 print()
 

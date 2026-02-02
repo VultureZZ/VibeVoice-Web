@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from ..models.schemas import (
     AudioValidationFeedback,
@@ -29,6 +29,9 @@ from ..services.voice_profile_from_audio import voice_profile_from_audio
 
 router = APIRouter(prefix="/api/v1/voices", tags=["voices"])
 
+ALLOWED_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024  # 5MB
+
 
 @router.post(
     "",
@@ -44,6 +47,7 @@ async def create_voice(
     name: str = Form(...),
     description: str = Form(None),
     audio_files: list[UploadFile] = File(...),
+    image: UploadFile = File(None),
     keywords: str = Form(None),
     language_code: str = Form(None),
     gender: str = Form(None),
@@ -65,6 +69,32 @@ async def create_voice(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="At least one audio file is required",
         )
+
+    # Optional avatar image validation
+    temp_image_path = None
+    if image and image.filename:
+        content_type = (image.content_type or "").lower()
+        if content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Image must be JPEG, PNG, or WebP. Got: {content_type}",
+            )
+        image_content = await image.read()
+        if len(image_content) > MAX_IMAGE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Image must be at most {MAX_IMAGE_SIZE_BYTES // (1024*1024)}MB",
+            )
+        ext = Path(image.filename).suffix.lower()
+        if ext not in (".jpg", ".jpeg", ".png", ".webp"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Image must have extension .jpg, .png, or .webp",
+            )
+        temp_image = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+        temp_image.write(image_content)
+        temp_image.close()
+        temp_image_path = Path(temp_image.name)
 
     # Save uploaded files temporarily
     temp_files = []
@@ -109,6 +139,7 @@ async def create_voice(
                 ollama_model=ollama_model,
                 language_code=language_code,
                 gender=gender,
+                image_path=temp_image_path,
             )
 
             # Parse created_at if it's a string
@@ -119,6 +150,9 @@ async def create_voice(
                 except (ValueError, AttributeError):
                     created_at = None
 
+            image_url = None
+            if voice_data.get("image_filename"):
+                image_url = f"/api/v1/voices/{voice_data['id']}/image"
             voice_response = VoiceResponse(
                 id=voice_data["id"],
                 name=voice_data["name"],
@@ -130,6 +164,7 @@ async def create_voice(
                 type=voice_data.get("type", "custom"),
                 created_at=created_at,
                 audio_files=voice_data.get("audio_files"),
+                image_url=image_url,
             )
 
             # Parse validation feedback if present
@@ -171,6 +206,8 @@ async def create_voice(
         for temp_file in temp_files:
             if temp_file.exists():
                 temp_file.unlink()
+        if temp_image_path and temp_image_path.exists():
+            temp_image_path.unlink()
 
 
 @router.post(
@@ -531,6 +568,9 @@ async def list_voices() -> VoiceListResponse:
                 except (ValueError, AttributeError):
                     created_at = None
 
+            image_url = None
+            if voice_data.get("image_filename"):
+                image_url = f"/api/v1/voices/{voice_data['id']}/image"
             voices.append(
                 VoiceResponse(
                     id=voice_data["id"],
@@ -543,6 +583,7 @@ async def list_voices() -> VoiceListResponse:
                     type=voice_data.get("type", "default"),
                     created_at=created_at,
                     audio_files=voice_data.get("audio_files"),
+                    image_url=image_url,
                 )
             )
 
@@ -553,6 +594,128 @@ async def list_voices() -> VoiceListResponse:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list voices: {str(e)}",
         ) from e
+
+
+def _media_type_for_image(path: Path) -> str:
+    ext = path.suffix.lower()
+    if ext in (".jpg", ".jpeg"):
+        return "image/jpeg"
+    if ext == ".png":
+        return "image/png"
+    if ext == ".webp":
+        return "image/webp"
+    return "application/octet-stream"
+
+
+@router.get(
+    "/{voice_id}/image",
+    responses={
+        404: {"model": ErrorResponse},
+    },
+)
+async def get_voice_image(voice_id: str):
+    """
+    Return the avatar image for a custom voice.
+
+    Returns 404 if the voice has no image or is not a custom voice.
+    """
+    image_path = voice_manager.get_voice_image_path(voice_id)
+    if not image_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No image for voice '{voice_id}'",
+        )
+    return FileResponse(
+        path=str(image_path),
+        media_type=_media_type_for_image(image_path),
+    )
+
+
+@router.put(
+    "/{voice_id}/image",
+    response_model=VoiceUpdateResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+async def update_voice_image(
+    voice_id: str,
+    image: UploadFile = File(...),
+) -> VoiceUpdateResponse:
+    """
+    Set or replace the avatar image for a custom voice.
+    """
+    if not image.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Image file is required",
+        )
+    content_type = (image.content_type or "").lower()
+    if content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Image must be JPEG, PNG, or WebP. Got: {content_type}",
+        )
+    image_content = await image.read()
+    if len(image_content) > MAX_IMAGE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Image must be at most {MAX_IMAGE_SIZE_BYTES // (1024*1024)}MB",
+        )
+    ext = Path(image.filename).suffix.lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".webp"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Image must have extension .jpg, .png, or .webp",
+        )
+    temp_image = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+    temp_image.write(image_content)
+    temp_image.close()
+    temp_image_path = Path(temp_image.name)
+    try:
+        updated_voice = voice_manager.update_voice_image(voice_id, temp_image_path)
+    except ValueError as e:
+        msg = str(e)
+        if "not found" in msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=msg,
+            ) from e
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=msg,
+        ) from e
+    finally:
+        if temp_image_path.exists():
+            temp_image_path.unlink()
+
+    created_at = updated_voice.get("created_at")
+    if isinstance(created_at, str):
+        try:
+            created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            created_at = None
+    image_url = f"/api/v1/voices/{voice_id}/image" if updated_voice.get("image_filename") else None
+    voice_response = VoiceResponse(
+        id=updated_voice["id"],
+        name=updated_voice["name"],
+        display_name=updated_voice.get("display_name"),
+        language_code=updated_voice.get("language_code"),
+        language_label=updated_voice.get("language_label"),
+        gender=updated_voice.get("gender"),
+        description=updated_voice.get("description"),
+        type=updated_voice.get("type", "custom"),
+        created_at=created_at,
+        audio_files=updated_voice.get("audio_files"),
+        image_url=image_url,
+    )
+    return VoiceUpdateResponse(
+        success=True,
+        message=f"Voice image updated for '{voice_id}'",
+        voice=voice_response,
+    )
 
 
 @router.delete(
@@ -663,6 +826,9 @@ async def update_voice(
             except (ValueError, AttributeError):
                 created_at = None
 
+        image_url = None
+        if updated_voice.get("image_filename"):
+            image_url = f"/api/v1/voices/{updated_voice['id']}/image"
         voice_response = VoiceResponse(
             id=updated_voice["id"],
             name=updated_voice["name"],
@@ -674,6 +840,7 @@ async def update_voice(
             type=updated_voice.get("type", "custom"),
             created_at=created_at,
             audio_files=updated_voice.get("audio_files"),
+            image_url=image_url,
         )
 
         return VoiceUpdateResponse(

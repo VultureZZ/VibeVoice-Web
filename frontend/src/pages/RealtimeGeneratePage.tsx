@@ -17,7 +17,7 @@ function pcm16ToFloat32(pcm: Int16Array): Float32Array {
 export function RealtimeGeneratePage() {
   const { settings } = useSettings();
 
-  const [text, setText] = useState('Hello! This is VibeVoice-Realtime-0.5B streaming audio.');
+  const [text, setText] = useState('Hello! This is AudioMesh realtime streaming audio.');
   const [voice, setVoice] = useState<string>('');
   const [upstreamVoices, setUpstreamVoices] = useState<string[]>([]);
   const [upstreamDefaultVoice, setUpstreamDefaultVoice] = useState<string | null>(null);

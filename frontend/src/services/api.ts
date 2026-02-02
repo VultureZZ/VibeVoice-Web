@@ -124,7 +124,8 @@ class ApiClient {
     files: File[],
     keywords?: string,
     languageCode?: string,
-    gender?: string
+    gender?: string,
+    image?: File
   ): Promise<VoiceCreateResponse> {
     const formData = new FormData();
     formData.append('name', name);
@@ -143,12 +144,29 @@ class ApiClient {
     if (gender) {
       formData.append('gender', gender);
     }
+    if (image) {
+      formData.append('image', image);
+    }
 
     const response = await this.client.post<VoiceCreateResponse>('/api/v1/voices', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
+    return response.data;
+  }
+
+  /**
+   * Upload or replace avatar image for a custom voice
+   */
+  async uploadVoiceImage(voiceId: string, file: File): Promise<VoiceUpdateResponse> {
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await this.client.put<VoiceUpdateResponse>(
+      `/api/v1/voices/${voiceId}/image`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
     return response.data;
   }
 

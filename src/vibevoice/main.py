@@ -1,5 +1,5 @@
 """
-FastAPI application entry point for VibeVoice API.
+FastAPI application entry point for AudioMesh API.
 """
 import logging
 import sys
@@ -40,13 +40,13 @@ logger = logging.getLogger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
-    title="VibeVoice API",
-    description="REST API for VibeVoice text-to-speech generation",
+    title="AudioMesh API",
+    description="REST API for AudioMesh text-to-speech generation",
     version="1.0.0",
 )
 
 logger.info("=" * 80)
-logger.info("VibeVoice API Starting")
+logger.info("AudioMesh API Starting")
 logger.info("=" * 80)
 logger.info("Configuration:")
 logger.info("  TTS backend: %s", config.TTS_BACKEND)
@@ -105,7 +105,7 @@ async def health_check():
     """
     return {
         "status": "healthy",
-        "service": "VibeVoice API",
+        "service": "AudioMesh API",
         "version": "1.0.0",
     }
 
@@ -119,7 +119,7 @@ async def root():
         API information
     """
     return {
-        "message": "VibeVoice API",
+        "message": "AudioMesh API",
         "version": "1.0.0",
         "docs": "/docs",
         "health": "/health",

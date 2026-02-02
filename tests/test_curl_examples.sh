@@ -1,9 +1,9 @@
 #!/bin/bash
-# Example curl commands for testing the VibeVoice API
+# Example curl commands for testing the AudioMesh API
 
 API_URL="http://localhost:8000"
 
-echo "=== VibeVoice API Test Commands ==="
+echo "=== AudioMesh API Test Commands ==="
 echo ""
 
 # Health check

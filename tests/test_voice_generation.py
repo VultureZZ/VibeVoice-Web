@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script for voice generation.
+Test script for AudioMesh voice generation.
 
 Uses the application voice_generator with the configured TTS backend
 (TTS_BACKEND=qwen3 for Qwen3-TTS, or TTS_BACKEND=vibevoice for legacy VibeVoice).

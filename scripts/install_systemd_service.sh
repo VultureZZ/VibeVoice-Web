@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Install VibeVoice as a systemd service (Linux).
+Install AudioMesh as a systemd service (Linux).
 
 This writes system services under /etc/systemd/system and (optionally) an env file under /etc/vibevoice/.
 Run this script from the repo (it will use the current repo path as WorkingDirectory).
@@ -90,7 +90,7 @@ ENV_FILE="${ENV_DIR}/vibevoice.env"
 mkdir -p "${ENV_DIR}"
 if [[ ! -f "${ENV_FILE}" ]]; then
   cat >"${ENV_FILE}" <<'EOF'
-# VibeVoice service environment
+# AudioMesh service environment
 #
 # Server
 # HOST=0.0.0.0
@@ -137,7 +137,7 @@ fi
 API_UNIT="/etc/systemd/system/vibevoice-api.service"
 cat >"${API_UNIT}" <<EOF
 [Unit]
-Description=VibeVoice API (FastAPI)
+Description=AudioMesh API (FastAPI)
 After=network.target
 
 [Service]
@@ -183,7 +183,7 @@ if [[ "${WITH_WEB}" -eq 1 ]]; then
 
   cat >"${WEB_UNIT}" <<EOF
 [Unit]
-Description=VibeVoice Web UI (Vite ${WEB_MODE})
+Description=AudioMesh Web UI (Vite ${WEB_MODE})
 After=network.target vibevoice-api.service
 Wants=vibevoice-api.service
 

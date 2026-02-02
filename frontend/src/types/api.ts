@@ -32,6 +32,7 @@ export interface VoiceResponse {
   type: string;
   created_at?: string;
   audio_files?: string[];
+  image_url?: string;
 }
 
 export interface VoiceListResponse {

@@ -124,7 +124,7 @@ async def generate_podcast_audio(
     request: PodcastGenerateRequest, http_request: Request
 ) -> PodcastGenerateResponse:
     """
-    Generate podcast audio from script using VibeVoice.
+    Generate podcast audio from script using AudioMesh.
 
     Args:
         request: Podcast audio generation request with script and voices

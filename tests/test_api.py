@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script for VibeVoice API.
+Test script for AudioMesh API.
 
 Tests the API endpoints to verify functionality.
 """
@@ -111,7 +111,7 @@ def test_generate_speech():
         headers["X-API-Key"] = API_KEY
 
     # Test transcript
-    test_transcript = """Speaker 1: Hello, this is a test of the VibeVoice API.
+    test_transcript = """Speaker 1: Hello, this is a test of the AudioMesh API.
 Speaker 2: The API is working correctly.
 Speaker 1: This is great news!
 Speaker 2: Yes, speech generation is successful."""
@@ -331,7 +331,7 @@ def test_create_voice_from_clips():
 def main():
     """Run all tests."""
     print("=" * 60)
-    print("VibeVoice API Test Suite")
+    print("AudioMesh API Test Suite")
     print("=" * 60)
     print(f"API Base URL: {API_BASE_URL}")
     if API_KEY:

@@ -75,9 +75,12 @@ export function useApi() {
       files: File[],
       keywords?: string,
       languageCode?: string,
-      gender?: string
+      gender?: string,
+      image?: File
     ): Promise<VoiceCreateResponse | null> => {
-      return execute(() => apiClient.createVoice(name, description, files, keywords, languageCode, gender));
+      return execute(() =>
+        apiClient.createVoice(name, description, files, keywords, languageCode, gender, image)
+      );
     },
     [execute]
   );
@@ -176,6 +179,13 @@ export function useApi() {
     [execute]
   );
 
+  const uploadVoiceImage = useCallback(
+    async (voiceId: string, file: File): Promise<VoiceUpdateResponse | null> => {
+      return execute(() => apiClient.uploadVoiceImage(voiceId, file));
+    },
+    [execute]
+  );
+
   const getVoiceProfile = useCallback(
     async (voiceId: string): Promise<VoiceProfileResponse | null> => {
       return execute(() => apiClient.getVoiceProfile(voiceId));
@@ -215,6 +225,7 @@ export function useApi() {
     createVoiceFromClips,
     deleteVoice,
     updateVoice,
+    uploadVoiceImage,
     getVoiceProfile,
     createOrUpdateVoiceProfile,
     updateVoiceProfileKeywords,

@@ -1,5 +1,5 @@
 /**
- * Supported languages for VibeVoice speech generation
+ * Supported languages for AudioMesh speech generation
  */
 
 export interface LanguageOption {

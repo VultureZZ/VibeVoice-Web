@@ -1,4 +1,4 @@
-# VibeVoice Web
+# AudioMesh
 
 A FastAPI + React project for generating speech, managing voices, and producing multi-voice podcasts. Default TTS backend is **Qwen3-TTS**; legacy **VibeVoice** is supported via `TTS_BACKEND=vibevoice`.
 
@@ -73,7 +73,7 @@ Default voices (Qwen3 CustomVoice): Alice, Frank, Mary, Carter, Maya. Custom voi
 ## Project Structure
 
 ```
-VibeVoice-Web/
+AudioMesh/
 ├── README.md                 # This file
 ├── requirements.txt          # Python dependencies
 ├── .gitignore               # Git ignore patterns
@@ -232,7 +232,7 @@ This project structure is designed to support:
 
 ## Resources
 
-- [VibeVoice GitHub](https://github.com/vibevoice-community/VibeVoice)
+- [VibeVoice GitHub](https://github.com/vibevoice-community/VibeVoice) (legacy backend)
 - [VibeVoice Model on Hugging Face](https://huggingface.co/microsoft/VibeVoice-1.5B)
 - [Beginner's Guide](https://www.kdnuggets.com/beginners-guide-to-vibevoice)
 
@@ -240,7 +240,7 @@ This project structure is designed to support:
 
 This repository is licensed under the MIT License. See `LICENSE`.
 
-This project integrates with third-party software and models (for example the upstream VibeVoice repositories and models downloaded from Hugging Face) which are governed by their own licenses and terms. Review the upstream projects for details.
+AudioMesh integrates with third-party software and models (for example the upstream VibeVoice repositories and models downloaded from Hugging Face) which are governed by their own licenses and terms. Review the upstream projects for details.
 
 ## Disclaimer
 

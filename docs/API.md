@@ -1,6 +1,6 @@
-# VibeVoice API Reference
+# AudioMesh API Reference
 
-This document describes the REST API exposed by the FastAPI backend.
+This document describes the REST API exposed by the AudioMesh FastAPI backend.
 
 - **Base URL**: `http://localhost:8000`
 - **API version prefix**: `/api/v1`

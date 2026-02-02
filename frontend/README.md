@@ -1,6 +1,6 @@
-# VibeVoice Web UI
+# AudioMesh Web UI
 
-A modern React + TypeScript web interface for the VibeVoice text-to-speech API.
+A modern React + TypeScript web interface for the AudioMesh text-to-speech API.
 
 ## Features
 
@@ -15,7 +15,7 @@ A modern React + TypeScript web interface for the VibeVoice text-to-speech API.
 ## Prerequisites
 
 - Node.js 18+ and npm
-- VibeVoice API server running (see main project README)
+- AudioMesh API server running (see main project README)
 
 ## Setup
 
@@ -83,7 +83,7 @@ Make sure to configure the `VITE_API_URL` environment variable in your deploymen
 
 Settings are stored in browser localStorage and can be configured through the Settings page in the UI:
 
-- **API Endpoint**: URL of the VibeVoice API server
+- **API Endpoint**: URL of the AudioMesh API server
 - **API Key**: Optional API key for authentication
 - **Default Settings**: Default language, output format, and sample rate
 

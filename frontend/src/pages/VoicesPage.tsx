@@ -27,6 +27,7 @@ export function VoicesPage() {
     createVoiceFromClips,
     deleteVoice,
     updateVoice,
+    uploadVoiceImage,
     getVoiceProfile,
     createOrUpdateVoiceProfile,
     updateVoiceProfileKeywords,
@@ -44,6 +45,7 @@ export function VoicesPage() {
   const [voiceLanguageCode, setVoiceLanguageCode] = useState<string>('');
   const [voiceGender, setVoiceGender] = useState<string>('unknown');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -51,6 +53,7 @@ export function VoicesPage() {
   const [editDescription, setEditDescription] = useState('');
   const [editLanguageCode, setEditLanguageCode] = useState<string>('');
   const [editGender, setEditGender] = useState<string>('unknown');
+  const [editImage, setEditImage] = useState<File | null>(null);
   const [profileModalVoiceId, setProfileModalVoiceId] = useState<string | null>(null);
   const [profileFromAudioOpen, setProfileFromAudioOpen] = useState(false);
   const [createFromClipsOpen, setCreateFromClipsOpen] = useState(false);
@@ -78,7 +81,8 @@ export function VoicesPage() {
       selectedFiles,
       voiceKeywords.trim() || undefined,
       voiceLanguageCode || undefined,
-      voiceGender || undefined
+      voiceGender || undefined,
+      selectedImage || undefined
     );
 
     setCreating(false);
@@ -92,6 +96,7 @@ export function VoicesPage() {
         setVoiceLanguageCode('');
         setVoiceGender('unknown');
         setSelectedFiles([]);
+        setSelectedImage(null);
         setShowCreateForm(false);
         refresh();
 
@@ -178,6 +183,7 @@ export function VoicesPage() {
       setEditDescription(voice.description || '');
       setEditLanguageCode(voice.language_code || '');
       setEditGender((voice.gender as string) || 'unknown');
+      setEditImage(null);
     }
   };
 
@@ -192,12 +198,22 @@ export function VoicesPage() {
     });
 
     if (response && response.success) {
-      setSuccessMessage('Voice updated successfully');
+      if (editImage) {
+        const imageResponse = await uploadVoiceImage(editingId, editImage);
+        if (imageResponse && imageResponse.success) {
+          setSuccessMessage('Voice and image updated successfully');
+        } else {
+          setSuccessMessage('Voice updated; image upload failed');
+        }
+      } else {
+        setSuccessMessage('Voice updated successfully');
+      }
       setEditingId(null);
       setEditName('');
       setEditDescription('');
       setEditLanguageCode('');
       setEditGender('unknown');
+      setEditImage(null);
       refresh();
     }
   };
@@ -208,6 +224,7 @@ export function VoicesPage() {
     setEditDescription('');
     setEditLanguageCode('');
     setEditGender('unknown');
+    setEditImage(null);
   };
 
   // Load profile status for custom voices
@@ -286,8 +303,10 @@ export function VoicesPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Voice Management</h1>
-          <p className="mt-2 text-gray-600">Manage custom voices and view default voices</p>
+          <h1 className="text-3xl font-bold text-gray-900">Voices</h1>
+          <p className="mt-2 text-gray-600">
+            Create and manage custom voices from audio, or use built-in default voices. Add an optional avatar image to represent each voice.
+          </p>
         </div>
         <div className="flex gap-3">
           <Button variant="secondary" onClick={() => setProfileFromAudioOpen(true)}>
@@ -323,31 +342,31 @@ export function VoicesPage() {
         <div className="bg-white rounded-lg shadow p-6 space-y-6">
           <h2 className="text-xl font-semibold text-gray-900">Create Custom Voice</h2>
 
-          <Input
-            label="Voice Name"
-            value={voiceName}
-            onChange={(e) => setVoiceName(e.target.value)}
-            error={voiceName && !nameValidation.valid ? nameValidation.error : undefined}
-            required
-            placeholder="e.g., My Custom Voice"
-          />
-
-          <Input
-            label="Description (Optional)"
-            multiline
-            rows={3}
-            value={voiceDescription}
-            onChange={(e) => setVoiceDescription(e.target.value)}
-            placeholder="Describe this voice..."
-          />
-
-          <Input
-            label="Keywords (Optional)"
-            value={voiceKeywords}
-            onChange={(e) => setVoiceKeywords(e.target.value)}
-            placeholder="e.g., Donald Trump, President (comma-separated)"
-            helpText="Enter keywords to help identify unique speech patterns (e.g., person's name)"
-          />
+          <div className="space-y-4">
+            <Input
+              label="Voice Name"
+              value={voiceName}
+              onChange={(e) => setVoiceName(e.target.value)}
+              error={voiceName && !nameValidation.valid ? nameValidation.error : undefined}
+              required
+              placeholder="e.g., My Custom Voice"
+            />
+            <Input
+              label="Description (Optional)"
+              multiline
+              rows={3}
+              value={voiceDescription}
+              onChange={(e) => setVoiceDescription(e.target.value)}
+              placeholder="Describe this voice..."
+            />
+            <Input
+              label="Keywords (Optional)"
+              value={voiceKeywords}
+              onChange={(e) => setVoiceKeywords(e.target.value)}
+              placeholder="e.g., Donald Trump, President (comma-separated)"
+              helpText="Enter keywords to help identify unique speech patterns (e.g., person's name)"
+            />
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Select
@@ -369,10 +388,24 @@ export function VoicesPage() {
             />
           </div>
 
-          <FileUpload
-            onFilesChange={setSelectedFiles}
-            error={selectedFiles.length === 0 ? 'At least one audio file is required' : undefined}
-          />
+          <div className="space-y-4">
+            <FileUpload
+              onFilesChange={setSelectedFiles}
+              error={selectedFiles.length === 0 ? 'At least one audio file is required' : undefined}
+            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Avatar image (optional)
+              </label>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                onChange={(e) => setSelectedImage(e.target.files?.[0] ?? null)}
+              />
+              <p className="mt-1 text-xs text-gray-500">JPEG, PNG or WebP. Max 5MB. Shown as the voice avatar.</p>
+            </div>
+          </div>
 
           <Button
             variant="primary"
@@ -401,6 +434,7 @@ export function VoicesPage() {
                     <VoiceCard
                       key={voice.id}
                       voice={voice}
+                      apiBaseUrl={settings.apiEndpoint}
                       onDelete={handleDeleteVoice}
                       onEdit={handleEditVoice}
                       onViewProfile={handleViewProfile}
@@ -419,15 +453,18 @@ export function VoicesPage() {
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {defaultVoices.map((voice) => (
-                    <VoiceCard key={voice.id} voice={voice} />
+                    <VoiceCard key={voice.id} voice={voice} apiBaseUrl={settings.apiEndpoint} />
                   ))}
                 </div>
               </div>
             )}
 
             {voices.length === 0 && (
-              <div className="text-center py-12 text-gray-500">
-                <p>No voices available</p>
+              <div className="text-center py-16 px-4 border border-dashed border-gray-300 rounded-lg bg-gray-50">
+                <p className="text-gray-600 font-medium">No voices available</p>
+                <p className="mt-1 text-sm text-gray-500">
+                  Create a custom voice from audio files, or ensure default voices are configured.
+                </p>
               </div>
             )}
           </>
@@ -435,49 +472,58 @@ export function VoicesPage() {
       </div>
 
       {editingId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Edit Voice</h2>
-
-            <Input
-              label="Voice Name"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              required
-              placeholder="e.g., My Custom Voice"
-            />
-
-            <Input
-              label="Description (Optional)"
-              multiline
-              rows={3}
-              value={editDescription}
-              onChange={(e) => setEditDescription(e.target.value)}
-              placeholder="Describe this voice..."
-              className="mt-4"
-            />
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <Select
-                label="Language (Optional)"
-                options={[{ value: '', label: 'Unknown' }, { value: 'in', label: 'Indian' }, ...SUPPORTED_LANGUAGES]}
-                value={editLanguageCode}
-                onChange={(e) => setEditLanguageCode(e.target.value)}
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+            <h2 className="text-xl font-semibold text-gray-900 p-6 pb-0">Edit Voice</h2>
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              <Input
+                label="Voice Name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                required
+                placeholder="e.g., My Custom Voice"
               />
-              <Select
-                label="Gender (Optional)"
-                options={[
-                  { value: 'unknown', label: 'Unknown' },
-                  { value: 'female', label: 'Female' },
-                  { value: 'male', label: 'Male' },
-                  { value: 'neutral', label: 'Gender-neutral' },
-                ]}
-                value={editGender}
-                onChange={(e) => setEditGender(e.target.value)}
+              <Input
+                label="Description (Optional)"
+                multiline
+                rows={3}
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                placeholder="Describe this voice..."
               />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Select
+                  label="Language (Optional)"
+                  options={[{ value: '', label: 'Unknown' }, { value: 'in', label: 'Indian' }, ...SUPPORTED_LANGUAGES]}
+                  value={editLanguageCode}
+                  onChange={(e) => setEditLanguageCode(e.target.value)}
+                />
+                <Select
+                  label="Gender (Optional)"
+                  options={[
+                    { value: 'unknown', label: 'Unknown' },
+                    { value: 'female', label: 'Female' },
+                    { value: 'male', label: 'Male' },
+                    { value: 'neutral', label: 'Gender-neutral' },
+                  ]}
+                  value={editGender}
+                  onChange={(e) => setEditGender(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Avatar image (optional)
+                </label>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                  onChange={(e) => setEditImage(e.target.files?.[0] ?? null)}
+                />
+                <p className="mt-1 text-xs text-gray-500">JPEG, PNG or WebP. Max 5MB. Replaces current avatar.</p>
+              </div>
             </div>
-
-            <div className="flex gap-3 mt-6">
+            <div className="flex gap-3 p-6 pt-4 border-t border-gray-200">
               <Button
                 variant="primary"
                 onClick={handleSaveEdit}

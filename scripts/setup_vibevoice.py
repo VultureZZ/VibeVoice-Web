@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Setup script for VibeVoice project.
+Setup script for legacy VibeVoice backend (AudioMesh).
 
 This script:
 1. Clones the community VibeVoice repository

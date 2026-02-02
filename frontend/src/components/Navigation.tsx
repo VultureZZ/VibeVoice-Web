@@ -24,7 +24,7 @@ export function Navigation() {
         <div className="flex justify-between h-16">
           <div className="flex">
             <Link to="/" className="flex items-center">
-              <span className="text-xl font-bold text-primary-600">VibeVoice</span>
+              <span className="text-xl font-bold text-primary-600">AudioMesh</span>
             </Link>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
               {navLinks.map((link) => (

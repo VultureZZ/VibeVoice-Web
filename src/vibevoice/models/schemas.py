@@ -49,6 +49,9 @@ class VoiceResponse(BaseModel):
     type: str = Field(..., description="Voice type: 'default' or 'custom'")
     created_at: Optional[datetime] = Field(None, description="Creation timestamp")
     audio_files: Optional[List[str]] = Field(None, description="List of audio file names")
+    image_url: Optional[str] = Field(
+        None, description="Relative URL to voice avatar image (e.g. /api/v1/voices/{id}/image) when present"
+    )
 
 
 class VoiceListResponse(BaseModel):

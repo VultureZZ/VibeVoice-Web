@@ -37,7 +37,7 @@ export function GeneratePage() {
   // Initialize with example transcript
   useEffect(() => {
     if (!transcript) {
-      setTranscript(`Speaker 1: Hello, this is a test of the VibeVoice API.
+      setTranscript(`Speaker 1: Hello, this is a test of the AudioMesh API.
 Speaker 2: The API is working correctly.
 Speaker 1: This is great news!
 Speaker 2: Yes, speech generation is successful.`);
@@ -113,7 +113,7 @@ Speaker 2: Yes, speech generation is successful.`);
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Generate Speech</h1>
-        <p className="mt-2 text-gray-600">Convert text to speech using VibeVoice</p>
+        <p className="mt-2 text-gray-600">Convert text to speech using AudioMesh</p>
       </div>
 
       {error && <Alert type="error" message={error} />}

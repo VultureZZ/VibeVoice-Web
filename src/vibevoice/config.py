@@ -1,5 +1,5 @@
 """
-Configuration management for VibeVoice API.
+Configuration management for AudioMesh API.
 
 Loads configuration from environment variables or .env file.
 """

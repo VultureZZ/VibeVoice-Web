@@ -1,1 +1,1 @@
-"""Data models for VibeVoice API."""
+"""Data models for AudioMesh API."""

@@ -1,6 +1,6 @@
 # Detailed Setup Guide
 
-This guide provides step-by-step instructions for setting up the project from scratch.
+This guide provides step-by-step instructions for setting up AudioMesh from scratch.
 
 The default TTS backend is **Qwen3-TTS** (set `TTS_BACKEND=qwen3`). You can use legacy **VibeVoice** by setting `TTS_BACKEND=vibevoice` and running the VibeVoice setup.
 

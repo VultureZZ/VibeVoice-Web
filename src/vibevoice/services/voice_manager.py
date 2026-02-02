@@ -195,6 +195,8 @@ class VoiceManager:
         voice_id = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name)
         return voice_id.lower()
 
+    ALLOWED_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
+
     def create_custom_voice(
         self,
         name: str,
@@ -205,6 +207,7 @@ class VoiceManager:
         ollama_model: Optional[str] = None,
         language_code: Optional[str] = None,
         gender: Optional[str] = None,
+        image_path: Optional[Path] = None,
     ) -> dict:
         """
         Create a custom voice from uploaded audio files.
@@ -213,6 +216,7 @@ class VoiceManager:
             name: Voice name
             description: Voice description
             audio_files: List of paths to uploaded audio files
+            image_path: Optional path to avatar image (jpg, png, webp)
 
         Returns:
             Dict with voice metadata
@@ -326,6 +330,16 @@ class VoiceManager:
             # Export combined audio as WAV
             combined_audio.export(str(combined_path), format="wav", parameters=["-ar", "24000"])
 
+            # Save optional avatar image
+            image_filename = None
+            if image_path and image_path.exists():
+                ext = image_path.suffix.lower()
+                if ext in self.ALLOWED_IMAGE_EXTENSIONS:
+                    stored_name = "image" + ext
+                    dest = voice_dir / stored_name
+                    shutil.copy2(image_path, dest)
+                    image_filename = stored_name
+
             # Save metadata
             voice_storage.add_voice(
                 voice_id=voice_id,
@@ -334,6 +348,7 @@ class VoiceManager:
                 audio_files=saved_files,
                 language_code=normalized_language_code,
                 gender=normalized_gender,
+                image_filename=image_filename,
             )
 
             # Automatically profile the voice (non-blocking - don't fail if profiling fails)
@@ -728,6 +743,73 @@ class VoiceManager:
             if not g:
                 updated_voice["gender"] = "unknown"
         return updated_voice
+
+    def update_voice_image(self, voice_id: str, image_path: Path) -> dict:
+        """
+        Set or replace the avatar image for a custom voice.
+
+        Args:
+            voice_id: Voice identifier
+            image_path: Path to image file (jpg, png, webp)
+
+        Returns:
+            Updated voice data
+
+        Raises:
+            ValueError: If voice not found, not custom, or image invalid
+        """
+        voice_data = voice_storage.get_voice(voice_id)
+        if not voice_data:
+            raise ValueError(f"Voice '{voice_id}' not found")
+        if voice_data.get("type") != "custom":
+            raise ValueError("Cannot set image for default voices")
+
+        ext = image_path.suffix.lower()
+        if ext not in self.ALLOWED_IMAGE_EXTENSIONS:
+            raise ValueError(
+                f"Unsupported image format: {ext}. Use one of {self.ALLOWED_IMAGE_EXTENSIONS}"
+            )
+        if not image_path.exists():
+            raise ValueError(f"Image file not found: {image_path}")
+
+        voice_dir = self.custom_voices_dir / voice_id
+        voice_dir.mkdir(parents=True, exist_ok=True)
+        stored_name = "image" + ext
+        dest = voice_dir / stored_name
+        shutil.copy2(image_path, dest)
+
+        voice_storage.update_voice(voice_id=voice_id, image_filename=stored_name)
+
+        updated = voice_storage.get_voice(voice_id)
+        if isinstance(updated, dict):
+            updated.setdefault("display_name", updated.get("name"))
+            lc = updated.get("language_code")
+            if lc and not updated.get("language_label"):
+                updated["language_label"] = _get_language_label(lc)
+            g = updated.get("gender")
+            if not g:
+                updated["gender"] = "unknown"
+        return updated
+
+    def get_voice_image_path(self, voice_id: str) -> Optional[Path]:
+        """
+        Return the path to a custom voice's avatar image, or None if no image.
+
+        Args:
+            voice_id: Voice identifier
+
+        Returns:
+            Path to image file, or None
+        """
+        voice_data = voice_storage.get_voice(voice_id)
+        if not voice_data or voice_data.get("type") != "custom":
+            return None
+        image_filename = voice_data.get("image_filename")
+        if not image_filename:
+            return None
+        voice_dir = self.custom_voices_dir / voice_id
+        path = voice_dir / image_filename
+        return path if path.exists() else None
 
     def get_voice_by_name(self, name: str) -> Optional[dict]:
         """

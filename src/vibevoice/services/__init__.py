@@ -1,1 +1,1 @@
-"""Services for VibeVoice API."""
+"""Services for AudioMesh API."""

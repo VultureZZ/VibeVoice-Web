@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Run script for VibeVoice API.
+Run script for AudioMesh API.
 
 This script sets up the Python path and runs the FastAPI application.
 """
