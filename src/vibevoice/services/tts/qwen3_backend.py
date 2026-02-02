@@ -73,43 +73,38 @@ class Qwen3Backend(TTSBackend):
         self._base_model_instance: Any = None
         self._clone_prompt_cache: Dict[str, Any] = {}
 
+    def _model_kwargs(self):
+        """Build common kwargs for from_pretrained (device, dtype, attn). Only use flash_attention_2 if installed."""
+        import torch
+        dtype = getattr(torch, self._dtype_str, torch.bfloat16)
+        kwargs = {"device_map": self._device_map, "dtype": dtype}
+        if self._dtype_str in ("float16", "bfloat16"):
+            try:
+                import flash_attn  # noqa: F401
+                kwargs["attn_implementation"] = "flash_attention_2"
+            except ImportError:
+                logger.debug("flash_attn not installed; using default attention")
+        return kwargs
+
     def _get_custom_voice_model(self):
         if self._custom_voice_model_instance is None:
-            import torch
             from qwen_tts import Qwen3TTSModel
 
-            dtype = getattr(torch, self._dtype_str, torch.bfloat16)
-            attn = "flash_attention_2" if self._dtype_str in ("float16", "bfloat16") else None
-            kwargs = {"device_map": self._device_map, "dtype": dtype}
-            if attn:
-                try:
-                    kwargs["attn_implementation"] = attn
-                except Exception:
-                    pass
             logger.info("Loading Qwen3-TTS CustomVoice model: %s", self._custom_voice_model)
             self._custom_voice_model_instance = Qwen3TTSModel.from_pretrained(
                 self._custom_voice_model,
-                **kwargs,
+                **self._model_kwargs(),
             )
         return self._custom_voice_model_instance
 
     def _get_base_model(self):
         if self._base_model_instance is None:
-            import torch
             from qwen_tts import Qwen3TTSModel
 
-            dtype = getattr(torch, self._dtype_str, torch.bfloat16)
-            attn = "flash_attention_2" if self._dtype_str in ("float16", "bfloat16") else None
-            kwargs = {"device_map": self._device_map, "dtype": dtype}
-            if attn:
-                try:
-                    kwargs["attn_implementation"] = attn
-                except Exception:
-                    pass
             logger.info("Loading Qwen3-TTS Base model: %s", self._base_model)
             self._base_model_instance = Qwen3TTSModel.from_pretrained(
                 self._base_model,
-                **kwargs,
+                **self._model_kwargs(),
             )
         return self._base_model_instance
 
