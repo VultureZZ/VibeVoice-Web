@@ -3,10 +3,13 @@ Audio quality analysis service for voice training.
 
 Analyzes audio for background music, background noise, recording quality,
 and overall voice clone quality from clips.
+Supports Qwen3-TTS (5-15s optimal) and legacy duration scoring.
 """
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from ..config import config
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +34,17 @@ NOISE_FLATNESS_THRESHOLD = 0.5
 RMS_LOW_THRESHOLD = 0.02
 # RMS above this suggests clipping/loud
 RMS_HIGH_THRESHOLD = 0.95
-# Duration thresholds for quality scoring (seconds)
+# Duration thresholds for quality scoring (seconds) - legacy
 DURATION_OPTIMAL_MIN = 60.0
 DURATION_OPTIMAL_MAX = 180.0
 DURATION_MIN = 30.0
+
+# Qwen3-TTS duration scoring
+QWEN3_DURATION_MIN = 3.0
+QWEN3_DURATION_OPTIMAL_MIN = 5.0
+QWEN3_DURATION_OPTIMAL_MAX = 15.0
+QWEN3_DURATION_RECOMMENDED_MAX = 20.0
+QWEN3_DURATION_HARD_MAX = 60.0
 
 
 class AudioQualityAnalyzer:
@@ -218,7 +228,32 @@ class AudioQualityAnalyzer:
         }
 
     def _duration_quality_score(self, duration_seconds: float) -> float:
-        """Score 0-1 based on duration for voice cloning."""
+        """Score 0-1 based on duration for voice cloning. Backend-aware (Qwen3 vs legacy)."""
+        backend = (getattr(config, "TTS_BACKEND", "qwen3") or "qwen3").strip().lower()
+        if backend == "qwen3":
+            return self._duration_quality_score_qwen3(duration_seconds)
+        return self._duration_quality_score_legacy(duration_seconds)
+
+    def _duration_quality_score_qwen3(self, duration_seconds: float) -> float:
+        """Qwen3: optimal 5-15s (1.0), min 3s, decay above 20s, cap at 60s."""
+        if duration_seconds < QWEN3_DURATION_MIN:
+            return max(0.0, duration_seconds / QWEN3_DURATION_MIN) * 0.5
+        if duration_seconds < QWEN3_DURATION_OPTIMAL_MIN:
+            return 0.5 + 0.5 * (duration_seconds - QWEN3_DURATION_MIN) / (
+                QWEN3_DURATION_OPTIMAL_MIN - QWEN3_DURATION_MIN
+            )
+        if QWEN3_DURATION_OPTIMAL_MIN <= duration_seconds <= QWEN3_DURATION_OPTIMAL_MAX:
+            return 1.0
+        if duration_seconds <= QWEN3_DURATION_RECOMMENDED_MAX:
+            return 0.9
+        if duration_seconds <= QWEN3_DURATION_HARD_MAX:
+            return max(0.5, 1.0 - (duration_seconds - QWEN3_DURATION_RECOMMENDED_MAX) / (
+                QWEN3_DURATION_HARD_MAX - QWEN3_DURATION_RECOMMENDED_MAX
+            ) * 0.4)
+        return 0.5
+
+    def _duration_quality_score_legacy(self, duration_seconds: float) -> float:
+        """Legacy (e.g. VibeVoice): optimal 60-180s."""
         if duration_seconds < DURATION_MIN:
             return max(0, duration_seconds / DURATION_MIN) * 0.5
         if DURATION_OPTIMAL_MIN <= duration_seconds <= DURATION_OPTIMAL_MAX:

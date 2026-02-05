@@ -407,6 +407,16 @@ export function VoicesPage() {
             </div>
           </div>
 
+          <details className="rounded border border-gray-200 bg-gray-50 p-3">
+            <summary className="cursor-pointer text-sm font-medium text-gray-700">Tips for best quality</summary>
+            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-gray-600">
+              <li>5–15 seconds of clear speech (or one clean clip in that range) works best.</li>
+              <li>Use a quiet environment; no background music or other voices.</li>
+              <li>Normal speech with varied intonation; include a transcript in the voice profile if possible.</li>
+              <li>Mono, 24 kHz+ is handled by the server; keep file under 10 MB when possible.</li>
+            </ul>
+          </details>
+
           <Button
             variant="primary"
             onClick={handleCreateVoice}

@@ -87,9 +87,11 @@ Rate limiting is **per API key** (or `"anonymous"` if no key is provided) and is
   - Guardrails:
     - max clips: `50`
     - min clip duration: `0.5s`
-    - max total selected duration: `600s`
+    - max total selected duration: `60s` when `TTS_BACKEND=qwen3`, else `600s`
   - Notes:
     - Clips are normalized to **mono, 24kHz** WAV before training.
+
+- **Voice cloning (Qwen3-TTS):** When `TTS_BACKEND=qwen3`, reference length should be 3–60s (5–15s optimal). Combined audio over 60s is truncated. Provide a transcript in the voice profile when possible. See [SETUP.md](SETUP.md) for full best practices.
 
 - `PUT /api/v1/voices/{voice_id}`
   - Body (JSON): `{ name?: string, description?: string }`

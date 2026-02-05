@@ -106,6 +106,16 @@ Optional FlashAttention 2 for lower GPU memory:
 pip install flash-attn --no-build-isolation
 ```
 
+### Voice cloning best practices (Qwen3-TTS)
+
+When creating custom voices with `TTS_BACKEND=qwen3`, use these guidelines for best clone quality:
+
+- **Reference length:** 3–60 seconds total (combined from one or more files). Optimal is 5–15 seconds of clear speech. Audio over 60 seconds is truncated automatically.
+- **Transcript:** Providing a transcript of the reference audio (e.g. in the voice profile) improves cloning accuracy.
+- **Content:** Use clear speech only: no background music, no other voices, no singing. Normal speech with varied intonation works best.
+- **Technical:** Mono, 24 kHz or higher (the server normalizes). Keep reference files under 10 MB when possible.
+- **Environment:** Record in a quiet space; avoid long pauses (over 2 seconds) and very short phrases.
+
 **Legacy VibeVoice:** To use VibeVoice instead, set `TTS_BACKEND=vibevoice` and run:
 ```bash
 python scripts/setup_vibevoice.py

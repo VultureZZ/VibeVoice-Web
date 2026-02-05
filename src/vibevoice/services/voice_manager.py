@@ -319,6 +319,11 @@ class VoiceManager:
 
             # Calculate combined duration
             combined_duration_seconds = len(combined_audio) / 1000.0
+            truncated_for_qwen3 = False
+            if (config.TTS_BACKEND or "qwen3").strip().lower() == "qwen3" and combined_duration_seconds > 60:
+                combined_audio = combined_audio[:60000]
+                combined_duration_seconds = 60.0
+                truncated_for_qwen3 = True
 
             # Validate audio files (analyze individual files and combined result)
             # Build list of saved file paths for validation
@@ -327,6 +332,10 @@ class VoiceManager:
                 audio_files=saved_file_paths,
                 combined_duration_seconds=combined_duration_seconds,
             )
+            if truncated_for_qwen3:
+                validation_feedback["warnings"].append(
+                    "Combined reference was over 60s and was truncated to 60s for Qwen3-TTS."
+                )
 
             # Export combined audio as WAV
             combined_audio.export(str(combined_path), format="wav", parameters=["-ar", "24000"])

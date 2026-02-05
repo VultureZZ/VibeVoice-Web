@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse, JSONResponse
 
+from ..config import config
 from ..models.schemas import (
     AudioValidationFeedback,
     ErrorResponse,
@@ -267,7 +268,8 @@ async def create_voice_from_audio_clips(
 
     # Guardrails to limit abuse
     max_clips = 50
-    max_total_selected_seconds = 600.0  # 10 minutes
+    is_qwen3 = (config.TTS_BACKEND or "qwen3").strip().lower() == "qwen3"
+    max_total_selected_seconds = 60.0 if is_qwen3 else 600.0  # Qwen3: 60s ref; legacy: 10 min
     min_clip_seconds = 0.5
 
     if len(clip_ranges_raw) > max_clips:
@@ -349,9 +351,14 @@ async def create_voice_from_audio_clips(
 
             total_selected_seconds += clip_duration
             if total_selected_seconds > max_total_selected_seconds:
+                detail = (
+                    "For Qwen3-TTS, total selected clip duration must be at most 60 seconds."
+                    if is_qwen3
+                    else f"Total selected clip duration exceeds {max_total_selected_seconds:.0f}s"
+                )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Total selected clip duration exceeds {max_total_selected_seconds:.0f}s",
+                    detail=detail,
                 )
 
             parsed_ranges.append((start_seconds, end_seconds))
