@@ -20,6 +20,7 @@ from ..models.schemas import (
     VoiceProfile,
     VoiceProfileRequest,
     VoiceProfileResponse,
+    VoiceQualityAnalysis,
     VoiceResponse,
     VoiceUpdateRequest,
     VoiceUpdateResponse,
@@ -153,6 +154,16 @@ async def create_voice(
             image_url = None
             if voice_data.get("image_filename"):
                 image_url = f"/api/v1/voices/{voice_data['id']}/image"
+            quality_analysis = None
+            if voice_data.get("quality_analysis"):
+                qa = voice_data["quality_analysis"]
+                quality_analysis = VoiceQualityAnalysis(
+                    clone_quality=qa.get("clone_quality", "fair"),
+                    issues=qa.get("issues", []),
+                    recording_quality_score=qa.get("recording_quality_score", 0.5),
+                    background_music_detected=qa.get("background_music_detected", False),
+                    background_noise_detected=qa.get("background_noise_detected", False),
+                )
             voice_response = VoiceResponse(
                 id=voice_data["id"],
                 name=voice_data["name"],
@@ -165,6 +176,7 @@ async def create_voice(
                 created_at=created_at,
                 audio_files=voice_data.get("audio_files"),
                 image_url=image_url,
+                quality_analysis=quality_analysis,
             )
 
             # Parse validation feedback if present
@@ -387,6 +399,17 @@ async def create_voice_from_audio_clips(
             except (ValueError, AttributeError):
                 created_at = None
 
+        image_url = f"/api/v1/voices/{voice_data['id']}/image" if voice_data.get("image_filename") else None
+        quality_analysis = None
+        if voice_data.get("quality_analysis"):
+            qa = voice_data["quality_analysis"]
+            quality_analysis = VoiceQualityAnalysis(
+                clone_quality=qa.get("clone_quality", "fair"),
+                issues=qa.get("issues", []),
+                recording_quality_score=qa.get("recording_quality_score", 0.5),
+                background_music_detected=qa.get("background_music_detected", False),
+                background_noise_detected=qa.get("background_noise_detected", False),
+            )
         voice_response = VoiceResponse(
             id=voice_data["id"],
             name=voice_data["name"],
@@ -398,6 +421,8 @@ async def create_voice_from_audio_clips(
             type=voice_data.get("type", "custom"),
             created_at=created_at,
             audio_files=voice_data.get("audio_files"),
+            image_url=image_url,
+            quality_analysis=quality_analysis,
         )
 
         # Parse validation feedback if present
@@ -571,6 +596,16 @@ async def list_voices() -> VoiceListResponse:
             image_url = None
             if voice_data.get("image_filename"):
                 image_url = f"/api/v1/voices/{voice_data['id']}/image"
+            quality_analysis = None
+            if voice_data.get("quality_analysis"):
+                qa = voice_data["quality_analysis"]
+                quality_analysis = VoiceQualityAnalysis(
+                    clone_quality=qa.get("clone_quality", "fair"),
+                    issues=qa.get("issues", []),
+                    recording_quality_score=qa.get("recording_quality_score", 0.5),
+                    background_music_detected=qa.get("background_music_detected", False),
+                    background_noise_detected=qa.get("background_noise_detected", False),
+                )
             voices.append(
                 VoiceResponse(
                     id=voice_data["id"],
@@ -584,6 +619,7 @@ async def list_voices() -> VoiceListResponse:
                     created_at=created_at,
                     audio_files=voice_data.get("audio_files"),
                     image_url=image_url,
+                    quality_analysis=quality_analysis,
                 )
             )
 
@@ -698,6 +734,16 @@ async def update_voice_image(
         except (ValueError, AttributeError):
             created_at = None
     image_url = f"/api/v1/voices/{voice_id}/image" if updated_voice.get("image_filename") else None
+    quality_analysis = None
+    if updated_voice.get("quality_analysis"):
+        qa = updated_voice["quality_analysis"]
+        quality_analysis = VoiceQualityAnalysis(
+            clone_quality=qa.get("clone_quality", "fair"),
+            issues=qa.get("issues", []),
+            recording_quality_score=qa.get("recording_quality_score", 0.5),
+            background_music_detected=qa.get("background_music_detected", False),
+            background_noise_detected=qa.get("background_noise_detected", False),
+        )
     voice_response = VoiceResponse(
         id=updated_voice["id"],
         name=updated_voice["name"],
@@ -710,6 +756,7 @@ async def update_voice_image(
         created_at=created_at,
         audio_files=updated_voice.get("audio_files"),
         image_url=image_url,
+        quality_analysis=quality_analysis,
     )
     return VoiceUpdateResponse(
         success=True,
@@ -829,6 +876,16 @@ async def update_voice(
         image_url = None
         if updated_voice.get("image_filename"):
             image_url = f"/api/v1/voices/{updated_voice['id']}/image"
+        quality_analysis = None
+        if updated_voice.get("quality_analysis"):
+            qa = updated_voice["quality_analysis"]
+            quality_analysis = VoiceQualityAnalysis(
+                clone_quality=qa.get("clone_quality", "fair"),
+                issues=qa.get("issues", []),
+                recording_quality_score=qa.get("recording_quality_score", 0.5),
+                background_music_detected=qa.get("background_music_detected", False),
+                background_noise_detected=qa.get("background_noise_detected", False),
+            )
         voice_response = VoiceResponse(
             id=updated_voice["id"],
             name=updated_voice["name"],
@@ -841,6 +898,7 @@ async def update_voice(
             created_at=created_at,
             audio_files=updated_voice.get("audio_files"),
             image_url=image_url,
+            quality_analysis=quality_analysis,
         )
 
         return VoiceUpdateResponse(

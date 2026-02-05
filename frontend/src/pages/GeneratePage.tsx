@@ -94,7 +94,7 @@ Speaker 2: Yes, speech generation is successful.`);
 
   const speakerOptions = voices.map((voice) => ({
     value: voice.name,
-    label: formatVoiceLabel(voice),
+    label: formatVoiceLabel(voice, { showQuality: true }),
   }));
 
   const languageOptions = SUPPORTED_LANGUAGES;

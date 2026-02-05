@@ -60,7 +60,7 @@ export function PodcastPage() {
 
   const speakerOptions = voices.map((voice) => ({
     value: voice.name,
-    label: formatVoiceLabel(voice),
+    label: formatVoiceLabel(voice, { showQuality: true }),
   }));
 
   const handleGenerateScript = async () => {

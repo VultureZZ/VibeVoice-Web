@@ -32,6 +32,16 @@ class SpeechGenerateResponse(BaseModel):
     file_path: Optional[str] = Field(None, description="Path to generated audio file")
 
 
+class VoiceQualityAnalysis(BaseModel):
+    """Audio quality analysis for a voice clone."""
+
+    clone_quality: str = Field(..., description="Overall clone quality: excellent, good, fair, poor")
+    issues: List[str] = Field(default_factory=list, description="Detected issues (e.g., background_music, background_noise)")
+    recording_quality_score: float = Field(0.5, description="Recording quality score 0-1")
+    background_music_detected: bool = Field(False, description="Whether background music was detected")
+    background_noise_detected: bool = Field(False, description="Whether background noise was detected")
+
+
 class VoiceResponse(BaseModel):
     """Response model for a single voice."""
 
@@ -51,6 +61,9 @@ class VoiceResponse(BaseModel):
     audio_files: Optional[List[str]] = Field(None, description="List of audio file names")
     image_url: Optional[str] = Field(
         None, description="Relative URL to voice avatar image (e.g. /api/v1/voices/{id}/image) when present"
+    )
+    quality_analysis: Optional[VoiceQualityAnalysis] = Field(
+        None, description="Audio quality analysis (custom voices only)"
     )
 
 

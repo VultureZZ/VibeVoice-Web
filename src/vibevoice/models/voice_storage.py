@@ -72,6 +72,7 @@ class VoiceStorage:
         language_code: Optional[str] = None,
         gender: Optional[str] = None,
         image_filename: Optional[str] = None,
+        quality_analysis: Optional[Dict] = None,
     ) -> None:
         """
         Add a new voice to storage.
@@ -83,6 +84,7 @@ class VoiceStorage:
             audio_files: List of audio file names
             profile: Optional voice profile data
             image_filename: Optional image filename (e.g. image.jpg) for voice avatar
+            quality_analysis: Optional audio quality analysis (clone_quality, issues, etc.)
         """
         data = self._load()
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -101,6 +103,8 @@ class VoiceStorage:
             voice_data["profile"] = profile
         if image_filename:
             voice_data["image_filename"] = image_filename
+        if quality_analysis:
+            voice_data["quality_analysis"] = quality_analysis
         data["voices"][voice_id] = voice_data
         self._save(data)
 

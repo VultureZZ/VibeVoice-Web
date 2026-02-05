@@ -3,7 +3,13 @@
  */
 
 import { VoiceResponse } from '../types/api';
-import { formatDate, formatVoiceLabel, getVoiceDisplayName } from '../utils/format';
+import {
+  formatDate,
+  formatVoiceLabel,
+  getVoiceDisplayName,
+  getQualityDisplayLabel,
+  getIssueDisplayLabels,
+} from '../utils/format';
 import { Button } from './Button';
 
 interface VoiceCardProps {
@@ -71,6 +77,34 @@ export function VoiceCard({
               <span className="px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-800">
                 Profiled
               </span>
+            )}
+            {voice.quality_analysis && (
+              <span
+                className={`px-2 py-0.5 text-xs font-medium rounded ${
+                  voice.quality_analysis.clone_quality === 'excellent'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : voice.quality_analysis.clone_quality === 'good'
+                      ? 'bg-green-100 text-green-800'
+                      : voice.quality_analysis.clone_quality === 'fair'
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-red-100 text-red-800'
+                }`}
+              >
+                {getQualityDisplayLabel(voice.quality_analysis.clone_quality)}
+              </span>
+            )}
+            {voice.quality_analysis?.issues && voice.quality_analysis.issues.length > 0 && (
+              <>
+                {getIssueDisplayLabels(voice.quality_analysis.issues).map((issueLabel) => (
+                  <span
+                    key={issueLabel}
+                    className="px-2 py-0.5 text-xs font-medium rounded bg-orange-100 text-orange-800"
+                    title={`Quality issue: ${issueLabel}`}
+                  >
+                    {issueLabel}
+                  </span>
+                ))}
+              </>
             )}
           </div>
           {voice.description && (

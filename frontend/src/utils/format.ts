@@ -71,8 +71,13 @@ export function getVoiceDisplayName(voice: Pick<VoiceResponse, 'name' | 'display
   return voice.display_name || voice.name;
 }
 
+export interface FormatVoiceLabelOptions {
+  showQuality?: boolean;
+}
+
 export function formatVoiceLabel(
-  voice: Pick<VoiceResponse, 'name' | 'display_name' | 'language_code' | 'language_label' | 'gender'>
+  voice: Pick<VoiceResponse, 'name' | 'display_name' | 'language_code' | 'language_label' | 'gender' | 'quality_analysis'>,
+  options?: FormatVoiceLabelOptions
 ): string {
   const displayName = getVoiceDisplayName(voice);
   const genderIcon = getGenderIcon(voice.gender);
@@ -84,5 +89,37 @@ export function formatVoiceLabel(
   if (genderIcon) suffixParts.push(genderIcon);
   if (languageLabel) suffixParts.push(`(${languageLabel})`);
 
-  return suffixParts.length ? `${displayName} ${suffixParts.join(' ')}` : displayName;
+  let label = suffixParts.length ? `${displayName} ${suffixParts.join(' ')}` : displayName;
+
+  if (options?.showQuality && voice.quality_analysis) {
+    const qa = voice.quality_analysis;
+    const issueLabels = getIssueDisplayLabels(qa.issues);
+    if (issueLabels.length > 0) {
+      label += ` - ${issueLabels.join(', ')}`;
+    } else {
+      label += ` - ${getQualityDisplayLabel(qa.clone_quality)}`;
+    }
+  }
+
+  return label;
+}
+
+export function getQualityDisplayLabel(cloneQuality: string): string {
+  const labels: Record<string, string> = {
+    excellent: 'Excellent',
+    good: 'Good',
+    fair: 'Fair',
+    poor: 'Poor',
+  };
+  return labels[cloneQuality] || cloneQuality;
+}
+
+export function getIssueDisplayLabels(issues: string[]): string[] {
+  const labels: Record<string, string> = {
+    background_music: 'Background music',
+    background_noise: 'Background noise',
+    low_recording_quality: 'Low recording quality',
+    background_audio: 'Background audio',
+  };
+  return issues.map((i) => labels[i] || i);
 }

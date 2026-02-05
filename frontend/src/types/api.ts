@@ -21,6 +21,14 @@ export interface SpeechGenerateResponse {
   file_path?: string;
 }
 
+export interface VoiceQualityAnalysis {
+  clone_quality: string;
+  issues: string[];
+  recording_quality_score: number;
+  background_music_detected: boolean;
+  background_noise_detected: boolean;
+}
+
 export interface VoiceResponse {
   id: string;
   name: string;
@@ -33,6 +41,7 @@ export interface VoiceResponse {
   created_at?: string;
   audio_files?: string[];
   image_url?: string;
+  quality_analysis?: VoiceQualityAnalysis;
 }
 
 export interface VoiceListResponse {

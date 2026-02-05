@@ -10,6 +10,7 @@ from typing import List, Optional
 
 from ..config import config
 from ..models.voice_storage import voice_storage
+from .audio_quality_analyzer import audio_quality_analyzer
 from .audio_validator import AudioValidator
 
 # Default voices that cannot be deleted
@@ -330,6 +331,20 @@ class VoiceManager:
             # Export combined audio as WAV
             combined_audio.export(str(combined_path), format="wav", parameters=["-ar", "24000"])
 
+            # Analyze audio quality (background music, noise, recording quality, clone quality)
+            quality_analysis = None
+            try:
+                quality_analysis = audio_quality_analyzer.analyze_quality(
+                    audio_files=saved_file_paths,
+                    combined_path=combined_path,
+                    total_duration_seconds=combined_duration_seconds,
+                )
+                validation_feedback["quality_metrics"].update(quality_analysis)
+            except Exception as e:
+                import logging
+                log = logging.getLogger(__name__)
+                log.warning("Audio quality analysis failed: %s", e, exc_info=True)
+
             # Save optional avatar image
             image_filename = None
             if image_path and image_path.exists():
@@ -349,6 +364,7 @@ class VoiceManager:
                 language_code=normalized_language_code,
                 gender=normalized_gender,
                 image_filename=image_filename,
+                quality_analysis=quality_analysis,
             )
 
             # Automatically profile the voice (non-blocking - don't fail if profiling fails)
