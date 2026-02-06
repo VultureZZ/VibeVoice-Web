@@ -328,11 +328,13 @@ export function CreateVoiceModal({ isOpen, onClose, onCreate }: CreateVoiceModal
                 rows={4}
                 value={voiceDesignPrompt}
                 onChange={(e) => setVoiceDesignPrompt(e.target.value)}
-                placeholder="e.g., young female, calm and clear tone, slightly slow pace"
+                placeholder="e.g., A clear female voice, moderate speed, stable tone, suitable for news or conversation. Or: Young male, warm and confident, slight rasp, calm delivery."
                 required
               />
               <p className="mt-1 text-xs text-gray-500">
-                Describe the voice in natural language (gender, age, tone, pace). English or Chinese.
+                Be specific and multi-dimensional. Include: Persona (male/female, age), Pace (fast/moderate/slow),
+                Timbre (clear, deep, warm, raspy), Emotion (calm, enthusiastic, serious), and optionally Scenario (news, storytelling).
+                Rich descriptions adhere better than single words.
               </p>
             </div>
           )}

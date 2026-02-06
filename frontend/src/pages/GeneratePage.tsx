@@ -35,13 +35,13 @@ export function GeneratePage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
-  // Initialize with example transcript
+  // Initialize with example transcript (avoids Qwen3 TTS pitfalls: no greeting-style intros, no abbreviations)
   useEffect(() => {
     if (!transcript) {
-      setTranscript(`Speaker 1: Hello, this is a test of the AudioMesh API.
-Speaker 2: The API is working correctly.
-Speaker 1: This is great news!
-Speaker 2: Yes, speech generation is successful.`);
+      setTranscript(`Speaker 1: Run a quick check on the pipeline.
+Speaker 2: Everything looks good from here.
+Speaker 1: Output format is correct.
+Speaker 2: Generation completed successfully.`);
     }
   }, []);
 
@@ -172,7 +172,8 @@ Speaker 2: Yes, speech generation is successful.`);
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">Style instructions (optional)</label>
             <p className="text-xs text-gray-500 mb-2">
-              One per speaker, e.g. &quot;speak in a happy tone&quot; or &quot;sound calm and slow&quot;
+              One per speaker. Use descriptive phrases for best results: &quot;Speak in an angry, frustrated tone&quot;,
+              &quot;Sound excited and enthusiastic&quot;, or single words (angry, excited, calm, whisper).
             </p>
             {selectedSpeakers.map((name, i) => (
               <Input
@@ -184,7 +185,7 @@ Speaker 2: Yes, speech generation is successful.`);
                   next[i] = e.target.value;
                   setSpeakerInstructions(next);
                 }}
-                placeholder="Optional style or emotion"
+                placeholder="e.g. angry, excited, or speak in a calm tone"
               />
             ))}
           </div>

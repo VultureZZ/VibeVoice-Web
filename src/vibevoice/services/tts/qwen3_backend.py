@@ -44,6 +44,35 @@ def _get_qwen3_language(lang: str) -> str:
     return QWEN3_LANGUAGE_MAP.get(normalized, "English")
 
 
+# Expand short emotion keywords into more descriptive instructions for better model response.
+# Qwen3-TTS responds better to explicit phrasing like "Speak in an X tone" than single words.
+_EMOTION_EXPANSIONS = {
+    "angry": "Speak in an angry, frustrated tone.",
+    "excited": "Speak in an excited, enthusiastic tone.",
+    "happy": "Speak in a happy, cheerful tone.",
+    "sad": "Speak in a sad, somber tone.",
+    "calm": "Speak in a calm, relaxed tone.",
+    "nervous": "Speak in a nervous, anxious tone.",
+    "serious": "Speak in a serious, solemn tone.",
+    "playful": "Speak in a playful, lighthearted tone.",
+    "whisper": "Speak in a soft whisper.",
+    "shouting": "Speak loudly, as if shouting.",
+}
+
+
+def _expand_instruct(instruct: str) -> str:
+    """Expand short emotion keywords for clearer model instruction."""
+    if not instruct or not instruct.strip():
+        return ""
+    s = instruct.strip().lower()
+    # Only expand if it looks like a single short keyword (no punctuation, few words)
+    if len(s) <= 20 and " " not in s:
+        expanded = _EMOTION_EXPANSIONS.get(s)
+        if expanded:
+            return expanded
+    return instruct.strip()
+
+
 class Qwen3Backend(TTSBackend):
     """
     TTS backend using Qwen3-TTS (CustomVoice for built-in, Base for cloning).
@@ -155,13 +184,18 @@ class Qwen3Backend(TTSBackend):
         if not text or not text.strip():
             return np.array([], dtype=np.float32), 24000
 
-        instruct = (speaker_ref.instruct or "").strip() if getattr(speaker_ref, "instruct", None) else ""
+        style_instruct = (speaker_ref.instruct or "").strip() if getattr(speaker_ref, "instruct", None) else ""
+        style_instruct = _expand_instruct(style_instruct)
 
         if getattr(speaker_ref, "use_voice_design", False) and getattr(
             speaker_ref, "voice_design_instructions", None
         ):
             model = self._get_voice_design_model()
-            instruct = (speaker_ref.voice_design_instructions or "").strip()
+            voice_desc = (speaker_ref.voice_design_instructions or "").strip()
+            # Combine voice description with per-segment style instruction when provided
+            instruct = voice_desc
+            if style_instruct:
+                instruct = f"{voice_desc}. {style_instruct}" if voice_desc else style_instruct
             # Ensure we use VoiceDesign model (has tts_model_type "voice_design")
             tts_type = getattr(model.model, "tts_model_type", None)
             if tts_type != "voice_design":
@@ -169,10 +203,21 @@ class Qwen3Backend(TTSBackend):
                     f"VoiceDesign segment requires VoiceDesign model, got tts_model_type={tts_type}. "
                     "Check QWEN_TTS_VOICE_DESIGN_MODEL config."
                 )
+            # Tuned for adherence to description (inspired by qwen3-TTS-studio)
+            gen_kwargs = {
+                "temperature": 0.35,
+                "top_k": 50,
+                "top_p": 0.9,
+                "repetition_penalty": 1.05,
+                "subtalker_temperature": 0.35,
+                "subtalker_top_k": 50,
+                "subtalker_top_p": 0.9,
+            }
             wavs, sr = model.generate_voice_design(
                 text=text.strip(),
                 instruct=instruct,
                 language=qwen_lang,
+                **gen_kwargs,
             )
             return wavs[0], sr
         if speaker_ref.use_custom_voice:
@@ -182,7 +227,7 @@ class Qwen3Backend(TTSBackend):
                 text=text.strip(),
                 language=qwen_lang,
                 speaker=speaker_name,
-                instruct=instruct,
+                instruct=style_instruct or None,
             )
             return wavs[0], sr
         else:
