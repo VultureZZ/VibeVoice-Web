@@ -6,14 +6,12 @@ import { useState, useEffect } from 'react';
 import { useApi } from '../hooks/useApi';
 import { useVoices } from '../hooks/useVoices';
 import { useSettings } from '../hooks/useSettings';
-import { validateVoiceName } from '../utils/validation';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { FileUpload } from '../components/FileUpload';
 import { VoiceCard } from '../components/VoiceCard';
 import { VoiceProfileModal } from '../components/VoiceProfileModal';
 import { VoiceProfileFromAudioModal } from '../components/VoiceProfileFromAudioModal';
-import { CreateVoiceFromClipsModal } from '../components/CreateVoiceFromClipsModal';
+import { CreateVoiceModal } from '../components/CreateVoiceModal';
 import { Alert } from '../components/Alert';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { Select } from '../components/Select';
@@ -23,8 +21,7 @@ export function VoicesPage() {
   const { voices, loading: voicesLoading, refresh } = useVoices();
   const { settings } = useSettings();
   const {
-    createVoice,
-    createVoiceFromClips,
+    createVoiceUnified,
     deleteVoice,
     updateVoice,
     uploadVoiceImage,
@@ -38,15 +35,7 @@ export function VoicesPage() {
     error: apiError,
   } = useApi();
 
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [voiceName, setVoiceName] = useState('');
-  const [voiceDescription, setVoiceDescription] = useState('');
-  const [voiceKeywords, setVoiceKeywords] = useState('');
-  const [voiceLanguageCode, setVoiceLanguageCode] = useState<string>('');
-  const [voiceGender, setVoiceGender] = useState<string>('unknown');
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [createVoiceModalOpen, setCreateVoiceModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -56,99 +45,31 @@ export function VoicesPage() {
   const [editImage, setEditImage] = useState<File | null>(null);
   const [profileModalVoiceId, setProfileModalVoiceId] = useState<string | null>(null);
   const [profileFromAudioOpen, setProfileFromAudioOpen] = useState(false);
-  const [createFromClipsOpen, setCreateFromClipsOpen] = useState(false);
   const [voiceProfiles, setVoiceProfiles] = useState<Record<string, boolean>>({});
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [validationFeedback, setValidationFeedback] = useState<string | null>(null);
 
-  const nameValidation = validateVoiceName(voiceName);
-
-  const handleCreateVoice = async () => {
-    if (!nameValidation.valid || selectedFiles.length === 0) {
-      setErrorMessage('Please provide a valid voice name and at least one audio file');
-      return;
-    }
-
-    setCreating(true);
+  const handleCreateVoiceUnified = async (
+    params: Parameters<typeof createVoiceUnified>[0]
+  ): Promise<import('../types/api').VoiceCreateResponse | null> => {
     setErrorMessage(null);
     setSuccessMessage(null);
     setValidationFeedback(null);
 
-    const response = await createVoice(
-      voiceName.trim(),
-      voiceDescription.trim() || undefined,
-      selectedFiles,
-      voiceKeywords.trim() || undefined,
-      voiceLanguageCode || undefined,
-      voiceGender || undefined,
-      selectedImage || undefined
-    );
-
-    setCreating(false);
-
-    if (response) {
-      if (response.success) {
-        setSuccessMessage(response.message);
-        setVoiceName('');
-        setVoiceDescription('');
-        setVoiceKeywords('');
-        setVoiceLanguageCode('');
-        setVoiceGender('unknown');
-        setSelectedFiles([]);
-        setSelectedImage(null);
-        setShowCreateForm(false);
-        refresh();
-
-        // Show validation feedback if present
-        if (response.validation_feedback) {
-          const feedback = response.validation_feedback;
-          const warnings = feedback.warnings.length > 0
-            ? `\nWarnings: ${feedback.warnings.join(', ')}`
-            : '';
-          const recommendations = feedback.recommendations.length > 0
-            ? `\nRecommendations: ${feedback.recommendations.join(', ')}`
-            : '';
-          setValidationFeedback(`Total duration: ${feedback.total_duration_seconds.toFixed(2)}s${warnings}${recommendations}`);
-        }
-      } else {
-        setErrorMessage(response.message || 'Failed to create voice');
-      }
-    }
-  };
-
-  const handleCreateVoiceFromClips = async (
-    name: string,
-    description: string | undefined,
-    audioFile: File,
-    clipRanges: import('../types/api').AudioClipRange[],
-    keywords?: string,
-    languageCode?: string,
-    gender?: string
-  ) => {
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    setValidationFeedback(null);
-
-    const response = await createVoiceFromClips(
-      name,
-      description,
-      audioFile,
-      clipRanges,
-      keywords,
-      languageCode,
-      gender
-    );
+    const response = await createVoiceUnified(params);
     if (response) {
       if (response.success) {
         setSuccessMessage(response.message);
         refresh();
-
         if (response.validation_feedback) {
           const feedback = response.validation_feedback;
-          const warnings = feedback.warnings.length > 0 ? `\nWarnings: ${feedback.warnings.join(', ')}` : '';
+          const warnings =
+            feedback.warnings.length > 0 ? `\nWarnings: ${feedback.warnings.join(', ')}` : '';
           const recommendations =
-            feedback.recommendations.length > 0 ? `\nRecommendations: ${feedback.recommendations.join(', ')}` : '';
+            feedback.recommendations.length > 0
+              ? `\nRecommendations: ${feedback.recommendations.join(', ')}`
+              : '';
           setValidationFeedback(
             `Total duration: ${feedback.total_duration_seconds.toFixed(2)}s${warnings}${recommendations}`
           );
@@ -312,11 +233,8 @@ export function VoicesPage() {
           <Button variant="secondary" onClick={() => setProfileFromAudioOpen(true)}>
             Analyze Audio → Profile
           </Button>
-          <Button variant="secondary" onClick={() => setCreateFromClipsOpen(true)}>
-            Create from Clips
-          </Button>
-          <Button variant="primary" onClick={() => setShowCreateForm(!showCreateForm)}>
-            {showCreateForm ? 'Cancel' : 'Create Voice'}
+          <Button variant="primary" onClick={() => setCreateVoiceModalOpen(true)}>
+            Create Voice
           </Button>
         </div>
       </div>
@@ -336,97 +254,6 @@ export function VoicesPage() {
           message={validationFeedback}
           onClose={() => setValidationFeedback(null)}
         />
-      )}
-
-      {showCreateForm && (
-        <div className="bg-white rounded-lg shadow p-6 space-y-6">
-          <h2 className="text-xl font-semibold text-gray-900">Create Custom Voice</h2>
-
-          <div className="space-y-4">
-            <Input
-              label="Voice Name"
-              value={voiceName}
-              onChange={(e) => setVoiceName(e.target.value)}
-              error={voiceName && !nameValidation.valid ? nameValidation.error : undefined}
-              required
-              placeholder="e.g., My Custom Voice"
-            />
-            <Input
-              label="Description (Optional)"
-              multiline
-              rows={3}
-              value={voiceDescription}
-              onChange={(e) => setVoiceDescription(e.target.value)}
-              placeholder="Describe this voice..."
-            />
-            <Input
-              label="Keywords (Optional)"
-              value={voiceKeywords}
-              onChange={(e) => setVoiceKeywords(e.target.value)}
-              placeholder="e.g., Donald Trump, President (comma-separated)"
-              helpText="Enter keywords to help identify unique speech patterns (e.g., person's name)"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Select
-              label="Language (Optional)"
-              options={[{ value: '', label: 'Unknown' }, { value: 'in', label: 'Indian' }, ...SUPPORTED_LANGUAGES]}
-              value={voiceLanguageCode}
-              onChange={(e) => setVoiceLanguageCode(e.target.value)}
-            />
-            <Select
-              label="Gender (Optional)"
-              options={[
-                { value: 'unknown', label: 'Unknown' },
-                { value: 'female', label: 'Female' },
-                { value: 'male', label: 'Male' },
-                { value: 'neutral', label: 'Gender-neutral' },
-              ]}
-              value={voiceGender}
-              onChange={(e) => setVoiceGender(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-4">
-            <FileUpload
-              onFilesChange={setSelectedFiles}
-              error={selectedFiles.length === 0 ? 'At least one audio file is required' : undefined}
-            />
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Avatar image (optional)
-              </label>
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
-                onChange={(e) => setSelectedImage(e.target.files?.[0] ?? null)}
-              />
-              <p className="mt-1 text-xs text-gray-500">JPEG, PNG or WebP. Max 5MB. Shown as the voice avatar.</p>
-            </div>
-          </div>
-
-          <details className="rounded border border-gray-200 bg-gray-50 p-3">
-            <summary className="cursor-pointer text-sm font-medium text-gray-700">Tips for best quality</summary>
-            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-gray-600">
-              <li>5–15 seconds of clear speech (or one clean clip in that range) works best.</li>
-              <li>Use a quiet environment; no background music or other voices.</li>
-              <li>Normal speech with varied intonation; include a transcript in the voice profile if possible.</li>
-              <li>Mono, 24 kHz+ is handled by the server; keep file under 10 MB when possible.</li>
-            </ul>
-          </details>
-
-          <Button
-            variant="primary"
-            onClick={handleCreateVoice}
-            isLoading={creating || apiLoading}
-            disabled={!nameValidation.valid || selectedFiles.length === 0}
-            className="w-full"
-          >
-            Create Voice
-          </Button>
-        </div>
       )}
 
       <div className="space-y-6">
@@ -579,11 +406,11 @@ export function VoicesPage() {
         />
       )}
 
-      {createFromClipsOpen && (
-        <CreateVoiceFromClipsModal
-          isOpen={createFromClipsOpen}
-          onClose={() => setCreateFromClipsOpen(false)}
-          onCreate={handleCreateVoiceFromClips}
+      {createVoiceModalOpen && (
+        <CreateVoiceModal
+          isOpen={createVoiceModalOpen}
+          onClose={() => setCreateVoiceModalOpen(false)}
+          onCreate={handleCreateVoiceUnified}
         />
       )}
     </div>

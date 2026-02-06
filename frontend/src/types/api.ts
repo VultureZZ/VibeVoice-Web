@@ -11,6 +11,7 @@ export interface SpeechSettings {
 export interface SpeechGenerateRequest {
   transcript: string;
   speakers: string[];
+  speaker_instructions?: string[];
   settings?: SpeechSettings;
 }
 

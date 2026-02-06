@@ -67,10 +67,15 @@ class Qwen3Backend(TTSBackend):
             base_model or getattr(config, "QWEN_TTS_BASE_MODEL", None)
             or "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
         )
+        self._voice_design_model = (
+            getattr(config, "QWEN_TTS_VOICE_DESIGN_MODEL", None)
+            or "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+        )
         self._device_map = device_map or getattr(config, "QWEN_TTS_DEVICE", "cuda:0")
         self._dtype_str = dtype or getattr(config, "QWEN_TTS_DTYPE", "bfloat16")
         self._custom_voice_model_instance: Any = None
         self._base_model_instance: Any = None
+        self._voice_design_model_instance: Any = None
         self._clone_prompt_cache: Dict[str, Any] = {}
 
     def _model_kwargs(self):
@@ -108,6 +113,17 @@ class Qwen3Backend(TTSBackend):
             )
         return self._base_model_instance
 
+    def _get_voice_design_model(self):
+        if self._voice_design_model_instance is None:
+            from qwen_tts import Qwen3TTSModel
+
+            logger.info("Loading Qwen3-TTS VoiceDesign model: %s", self._voice_design_model)
+            self._voice_design_model_instance = Qwen3TTSModel.from_pretrained(
+                self._voice_design_model,
+                **self._model_kwargs(),
+            )
+        return self._voice_design_model_instance
+
     def _get_or_create_clone_prompt(self, ref_audio_path: Path, ref_text: Optional[str]) -> Any:
         """Get cached voice_clone_prompt or create and cache it."""
         cache_key = str(ref_audio_path)
@@ -139,6 +155,19 @@ class Qwen3Backend(TTSBackend):
         if not text or not text.strip():
             return np.array([], dtype=np.float32), 24000
 
+        instruct = (speaker_ref.instruct or "").strip() if getattr(speaker_ref, "instruct", None) else ""
+
+        if getattr(speaker_ref, "use_voice_design", False) and getattr(
+            speaker_ref, "voice_design_instructions", None
+        ):
+            model = self._get_voice_design_model()
+            instructions = (speaker_ref.voice_design_instructions or "").strip()
+            wavs, sr = model.generate_voice_design(
+                text=text.strip(),
+                language=qwen_lang,
+                instructions=instructions,
+            )
+            return wavs[0], sr
         if speaker_ref.use_custom_voice:
             model = self._get_custom_voice_model()
             speaker_name = speaker_ref.speaker_id or "Ryan"
@@ -146,7 +175,7 @@ class Qwen3Backend(TTSBackend):
                 text=text.strip(),
                 language=qwen_lang,
                 speaker=speaker_name,
-                instruct="",
+                instruct=instruct,
             )
             return wavs[0], sr
         else:
@@ -230,9 +259,24 @@ def resolve_speaker_to_qwen3_ref(
     if qwen_speaker is not None:
         return SpeakerRef(use_custom_voice=True, speaker_id=qwen_speaker)
 
-    # Custom voice: get path to combined.wav via voice_id
     voice_data = voice_manager.get_voice_by_name(normalized) or voice_manager.get_voice_by_name(speaker_name)
-    if not voice_data or voice_data.get("type") != "custom":
+    if not voice_data:
+        raise ValueError(f"Voice not found: {speaker_name}")
+
+    voice_type = voice_data.get("type", "custom")
+
+    if voice_type == "voice_design":
+        profile = voice_data.get("profile") or {}
+        instructions = profile.get("voice_design_prompt") or voice_data.get("voice_design_prompt") or ""
+        if not (instructions and isinstance(instructions, str) and instructions.strip()):
+            raise ValueError(f"VoiceDesign voice '{speaker_name}' has no voice_design_prompt")
+        return SpeakerRef(
+            use_custom_voice=False,
+            use_voice_design=True,
+            voice_design_instructions=instructions.strip(),
+        )
+
+    if voice_type != "custom":
         raise ValueError(f"Voice not found or not custom: {speaker_name}")
 
     voice_id = voice_data.get("id")

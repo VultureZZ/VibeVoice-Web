@@ -35,6 +35,250 @@ ALLOWED_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024  # 5MB
 
 
+def _build_voice_create_response(voice_data: dict) -> VoiceCreateResponse:
+    """Build VoiceCreateResponse from voice_data dict."""
+    created_at = voice_data.get("created_at")
+    if isinstance(created_at, str):
+        try:
+            created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            created_at = None
+    image_url = f"/api/v1/voices/{voice_data['id']}/image" if voice_data.get("image_filename") else None
+    quality_analysis = None
+    if voice_data.get("quality_analysis"):
+        qa = voice_data["quality_analysis"]
+        quality_analysis = VoiceQualityAnalysis(
+            clone_quality=qa.get("clone_quality", "fair"),
+            issues=qa.get("issues", []),
+            recording_quality_score=qa.get("recording_quality_score", 0.5),
+            background_music_detected=qa.get("background_music_detected", False),
+            background_noise_detected=qa.get("background_noise_detected", False),
+        )
+    voice_response = VoiceResponse(
+        id=voice_data["id"],
+        name=voice_data["name"],
+        display_name=voice_data.get("display_name"),
+        language_code=voice_data.get("language_code"),
+        language_label=voice_data.get("language_label"),
+        gender=voice_data.get("gender"),
+        description=voice_data.get("description"),
+        type=voice_data.get("type", "custom"),
+        created_at=created_at,
+        audio_files=voice_data.get("audio_files"),
+        image_url=image_url,
+        quality_analysis=quality_analysis,
+    )
+    validation_feedback = None
+    if "validation_feedback" in voice_data:
+        feedback_data = voice_data["validation_feedback"]
+        individual_files = [
+            IndividualFileAnalysis(**f) for f in feedback_data.get("individual_files", [])
+        ]
+        validation_feedback = AudioValidationFeedback(
+            total_duration_seconds=feedback_data.get("total_duration_seconds", 0.0),
+            individual_files=individual_files,
+            warnings=feedback_data.get("warnings", []),
+            recommendations=feedback_data.get("recommendations", []),
+            quality_metrics=feedback_data.get("quality_metrics", {}),
+        )
+    message = f"Voice '{voice_data.get('name', '')}' created successfully"
+    if validation_feedback and validation_feedback.warnings:
+        message += f" ({len(validation_feedback.warnings)} warning(s) about audio quality/duration)"
+    return VoiceCreateResponse(
+        success=True,
+        message=message,
+        voice=voice_response,
+        validation_feedback=validation_feedback,
+    )
+
+
+async def _create_voice_from_prompt(
+    name: str,
+    description: str,
+    voice_design_prompt: str,
+    image: UploadFile,
+    language_code: str,
+    gender: str,
+) -> VoiceCreateResponse:
+    """Create a VoiceDesign voice from text description."""
+    temp_image_path = None
+    if image and image.filename:
+        content_type = (image.content_type or "").lower()
+        if content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Image must be JPEG, PNG, or WebP. Got: {content_type}",
+            )
+        image_content = await image.read()
+        if len(image_content) > MAX_IMAGE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Image must be at most {MAX_IMAGE_SIZE_BYTES // (1024*1024)}MB",
+            )
+        ext = Path(image.filename).suffix.lower()
+        if ext not in (".jpg", ".jpeg", ".png", ".webp"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Image must have extension .jpg, .png, or .webp",
+            )
+        temp_image = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+        temp_image.write(image_content)
+        temp_image.close()
+        temp_image_path = Path(temp_image.name)
+    try:
+        voice_data = voice_manager.create_voice_from_prompt(
+            name=name,
+            description=description,
+            voice_design_prompt=voice_design_prompt.strip(),
+            language_code=language_code,
+            gender=gender,
+            image_path=temp_image_path,
+        )
+        return _build_voice_create_response(voice_data)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    finally:
+        if temp_image_path and temp_image_path.exists():
+            temp_image_path.unlink(missing_ok=True)
+
+
+async def _create_voice_from_clips_impl(
+    name: str,
+    description: str,
+    audio_file: UploadFile,
+    clip_ranges: str,
+    image: UploadFile,
+    keywords: str,
+    language_code: str,
+    gender: str,
+) -> VoiceCreateResponse:
+    """Create voice from clips within a single audio file (shared implementation)."""
+    clip_ranges_raw = json.loads(clip_ranges)
+    if not isinstance(clip_ranges_raw, list) or len(clip_ranges_raw) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="clip_ranges must be a non-empty JSON array",
+        )
+    max_clips = 50
+    is_qwen3 = (config.TTS_BACKEND or "qwen3").strip().lower() == "qwen3"
+    max_total_selected_seconds = 60.0 if is_qwen3 else 600.0
+    min_clip_seconds = 0.5
+    if len(clip_ranges_raw) > max_clips:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many clips requested (max {max_clips})",
+        )
+    temp_input_path = None
+    temp_clip_paths = []
+    temp_image_path = None
+    if image and image.filename:
+        content_type = (image.content_type or "").lower()
+        if content_type in ALLOWED_IMAGE_CONTENT_TYPES:
+            image_content = await image.read()
+            if len(image_content) <= MAX_IMAGE_SIZE_BYTES:
+                ext = Path(image.filename).suffix.lower()
+                if ext in (".jpg", ".jpeg", ".png", ".webp"):
+                    temp_image = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+                    temp_image.write(image_content)
+                    temp_image.close()
+                    temp_image_path = Path(temp_image.name)
+
+    try:
+        suffix = Path(audio_file.filename).suffix
+        temp_input = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        temp_input_path = Path(temp_input.name)
+        content = await audio_file.read()
+        if not content:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Audio file is empty")
+        temp_input.write(content)
+        temp_input.close()
+
+        from pydub import AudioSegment
+
+        audio = AudioSegment.from_file(str(temp_input_path))
+        duration_seconds = len(audio) / 1000.0
+        if duration_seconds <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Audio file has zero duration")
+        parsed_ranges = []
+        total_selected_seconds = 0.0
+        for idx, item in enumerate(clip_ranges_raw):
+            if not isinstance(item, dict):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"clip_ranges[{idx}] must be an object with start_seconds and end_seconds",
+                )
+            start_seconds = float(item.get("start_seconds"))
+            end_seconds = float(item.get("end_seconds"))
+            if start_seconds < 0 or end_seconds <= 0 or start_seconds >= end_seconds:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"clip_ranges[{idx}] invalid start_seconds/end_seconds",
+                )
+            if end_seconds > duration_seconds:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"clip_ranges[{idx}] end_seconds exceeds audio duration",
+                )
+            clip_duration = end_seconds - start_seconds
+            if clip_duration < min_clip_seconds:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"clip_ranges[{idx}] too short (min {min_clip_seconds}s)",
+                )
+            total_selected_seconds += clip_duration
+            if total_selected_seconds > max_total_selected_seconds:
+                detail = (
+                    "For Qwen3-TTS, total selected clip duration must be at most 60 seconds."
+                    if is_qwen3
+                    else f"Total selected clip duration exceeds {max_total_selected_seconds:.0f}s"
+                )
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+            parsed_ranges.append((start_seconds, end_seconds))
+
+        for start_seconds, end_seconds in parsed_ranges:
+            start_ms = int(start_seconds * 1000)
+            end_ms = int(end_seconds * 1000)
+            segment = audio[start_ms:end_ms]
+            if segment.frame_rate != 24000:
+                segment = segment.set_frame_rate(24000)
+            if segment.channels > 1:
+                segment = segment.set_channels(1)
+            clip_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+            clip_path = Path(clip_temp.name)
+            clip_temp.close()
+            segment.export(str(clip_path), format="wav", parameters=["-ar", "24000"])
+            temp_clip_paths.append(clip_path)
+
+        keywords_list = [k.strip() for k in keywords.split(",") if k.strip()] if keywords else None
+        voice_data = voice_manager.create_custom_voice(
+            name=name,
+            description=description,
+            audio_files=temp_clip_paths,
+            keywords=keywords_list,
+            ollama_url=None,
+            ollama_model=None,
+            language_code=language_code,
+            gender=gender,
+            image_path=temp_image_path,
+        )
+        return _build_voice_create_response(voice_data)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid clip_ranges JSON: {e}",
+        ) from e
+    finally:
+        for p in temp_clip_paths:
+            if p.exists():
+                p.unlink(missing_ok=True)
+        if temp_input_path and temp_input_path.exists():
+            temp_input_path.unlink(missing_ok=True)
+        if temp_image_path and temp_image_path.exists():
+            temp_image_path.unlink(missing_ok=True)
+
+
 @router.post(
     "",
     response_model=VoiceCreateResponse,
@@ -48,28 +292,73 @@ MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024  # 5MB
 async def create_voice(
     name: str = Form(...),
     description: str = Form(None),
-    audio_files: list[UploadFile] = File(...),
+    creation_source: str = Form("audio"),
+    audio_files: list[UploadFile] = File(None),
+    audio_file: UploadFile = File(None),
+    clip_ranges: str = Form(None),
+    voice_design_prompt: str = Form(None),
     image: UploadFile = File(None),
     keywords: str = Form(None),
     language_code: str = Form(None),
     gender: str = Form(None),
 ) -> VoiceCreateResponse:
     """
-    Create a custom voice from uploaded audio files.
+    Create a voice: from audio files, from clips in one file, or from a text description (VoiceDesign).
 
-    Args:
-        name: Voice name (must be unique)
-        description: Optional voice description
-        audio_files: List of audio files to combine for training
-        keywords: Optional comma-separated keywords for voice profiling
-
-    Returns:
-        Voice creation response with voice details
+    creation_source: "audio" (default) | "clips" | "prompt"
+    - audio: provide audio_files (multiple files combined)
+    - clips: provide audio_file and clip_ranges (JSON array of {start_seconds, end_seconds})
+    - prompt: provide voice_design_prompt (natural-language voice description)
     """
+    source = (creation_source or "audio").strip().lower()
+    if source not in ("audio", "clips", "prompt"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="creation_source must be one of: audio, clips, prompt",
+        )
+
+    if source == "prompt":
+        if not voice_design_prompt or not voice_design_prompt.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="voice_design_prompt is required when creation_source is prompt",
+            )
+        return await _create_voice_from_prompt(
+            name=name,
+            description=description,
+            voice_design_prompt=voice_design_prompt,
+            image=image,
+            language_code=language_code,
+            gender=gender,
+        )
+
+    if source == "clips":
+        if not audio_file or not audio_file.filename:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="audio_file is required when creation_source is clips",
+            )
+        if not clip_ranges or not clip_ranges.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="clip_ranges is required when creation_source is clips",
+            )
+        return await _create_voice_from_clips_impl(
+            name=name,
+            description=description,
+            audio_file=audio_file,
+            clip_ranges=clip_ranges,
+            image=image,
+            keywords=keywords,
+            language_code=language_code,
+            gender=gender,
+        )
+
+    # source == "audio"
     if not audio_files or len(audio_files) == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="At least one audio file is required",
+            detail="At least one audio file is required when creation_source is audio",
         )
 
     # Optional avatar image validation
@@ -130,7 +419,7 @@ async def create_voice(
         ollama_url = None  # Could be added as form field if needed
         ollama_model = None  # Could be added as form field if needed
 
-        # Create voice
+        # Create voice (audio source)
         try:
             voice_data = voice_manager.create_custom_voice(
                 name=name,
@@ -143,71 +432,7 @@ async def create_voice(
                 gender=gender,
                 image_path=temp_image_path,
             )
-
-            # Parse created_at if it's a string
-            created_at = voice_data.get("created_at")
-            if isinstance(created_at, str):
-                try:
-                    created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                except (ValueError, AttributeError):
-                    created_at = None
-
-            image_url = None
-            if voice_data.get("image_filename"):
-                image_url = f"/api/v1/voices/{voice_data['id']}/image"
-            quality_analysis = None
-            if voice_data.get("quality_analysis"):
-                qa = voice_data["quality_analysis"]
-                quality_analysis = VoiceQualityAnalysis(
-                    clone_quality=qa.get("clone_quality", "fair"),
-                    issues=qa.get("issues", []),
-                    recording_quality_score=qa.get("recording_quality_score", 0.5),
-                    background_music_detected=qa.get("background_music_detected", False),
-                    background_noise_detected=qa.get("background_noise_detected", False),
-                )
-            voice_response = VoiceResponse(
-                id=voice_data["id"],
-                name=voice_data["name"],
-                display_name=voice_data.get("display_name"),
-                language_code=voice_data.get("language_code"),
-                language_label=voice_data.get("language_label"),
-                gender=voice_data.get("gender"),
-                description=voice_data.get("description"),
-                type=voice_data.get("type", "custom"),
-                created_at=created_at,
-                audio_files=voice_data.get("audio_files"),
-                image_url=image_url,
-                quality_analysis=quality_analysis,
-            )
-
-            # Parse validation feedback if present
-            validation_feedback = None
-            if "validation_feedback" in voice_data:
-                feedback_data = voice_data["validation_feedback"]
-                individual_files = [
-                    IndividualFileAnalysis(**file_data) for file_data in feedback_data.get("individual_files", [])
-                ]
-                validation_feedback = AudioValidationFeedback(
-                    total_duration_seconds=feedback_data.get("total_duration_seconds", 0.0),
-                    individual_files=individual_files,
-                    warnings=feedback_data.get("warnings", []),
-                    recommendations=feedback_data.get("recommendations", []),
-                    quality_metrics=feedback_data.get("quality_metrics", {}),
-                )
-
-            # Build message with warnings if any
-            message = f"Voice '{name}' created successfully"
-            if validation_feedback and validation_feedback.warnings:
-                warning_count = len(validation_feedback.warnings)
-                message += f" ({warning_count} warning{'s' if warning_count > 1 else ''} about audio quality/duration)"
-
-            return VoiceCreateResponse(
-                success=True,
-                message=message,
-                voice=voice_response,
-                validation_feedback=validation_feedback,
-            )
-
+            return _build_voice_create_response(voice_data)
         except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -238,20 +463,38 @@ async def create_voice_from_audio_clips(
     description: str = Form(None),
     audio_file: UploadFile = File(...),
     clip_ranges: str = Form(...),
+    image: UploadFile = File(None),
     keywords: str = Form(None),
     language_code: str = Form(None),
     gender: str = Form(None),
 ) -> VoiceCreateResponse:
     """
-    Create a custom voice from multiple time-ranged clips within a single uploaded audio file.
-
-    The server slices the provided audio into short WAV clips, then reuses the existing
-    multi-file custom voice creation pipeline.
+    Create a voice from clips within a single audio file (alias for POST / with creation_source=clips).
     """
     if not audio_file.filename:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Audio file must have a filename")
+    return await _create_voice_from_clips_impl(
+        name=name,
+        description=description,
+        audio_file=audio_file,
+        clip_ranges=clip_ranges,
+        image=image,
+        keywords=keywords or "",
+        language_code=language_code,
+        gender=gender,
+    )
 
-    # Parse and validate clip ranges JSON
+
+async def _create_voice_from_audio_clips_deprecated(
+    name: str,
+    description: str,
+    audio_file: UploadFile,
+    clip_ranges: str,
+    keywords: str,
+    language_code: str,
+    gender: str,
+) -> VoiceCreateResponse:
+    """Deprecated: kept only for reference. Use _create_voice_from_clips_impl."""
     try:
         clip_ranges_raw = json.loads(clip_ranges)
     except json.JSONDecodeError as e:

@@ -46,6 +46,9 @@ class Config:
     QWEN_TTS_BASE_MODEL: str = os.getenv(
         "QWEN_TTS_BASE_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
     )
+    QWEN_TTS_VOICE_DESIGN_MODEL: str = os.getenv(
+        "QWEN_TTS_VOICE_DESIGN_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+    )
     QWEN_TTS_DEVICE: str = os.getenv("QWEN_TTS_DEVICE", "cuda:0")
     QWEN_TTS_DTYPE: str = os.getenv("QWEN_TTS_DTYPE", "bfloat16")
 

@@ -104,11 +104,13 @@ class VoiceGenerator:
         speakers: List[str],
         output_filename: Optional[str] = None,
         language: Optional[str] = None,
+        speaker_instructions: Optional[List[str]] = None,
     ) -> Path:
         """
         Generate speech from transcript.
 
         Uses Qwen3-TTS backend by default; set TTS_BACKEND=vibevoice for legacy subprocess.
+        speaker_instructions: optional list of style/emotion instructions (one per speaker).
         """
         logger.info("Starting speech generation process...")
         logger.info("  Transcript length: %s characters", len(transcript))
@@ -116,6 +118,10 @@ class VoiceGenerator:
         logger.info("  Output filename: %s", output_filename or "auto-generated")
 
         self.validate_speakers(speakers)
+        if speaker_instructions is not None and len(speaker_instructions) != len(speakers):
+            raise ValueError(
+                f"speaker_instructions length ({len(speaker_instructions)}) must match speakers ({len(speakers)})"
+            )
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
         if output_filename is None:
@@ -125,7 +131,9 @@ class VoiceGenerator:
 
         if self._use_legacy:
             return self._generate_speech_legacy(transcript, speakers, output_path)
-        return self._generate_speech_backend(transcript, speakers, output_path, language or "en")
+        return self._generate_speech_backend(
+            transcript, speakers, output_path, language or "en", speaker_instructions
+        )
 
     def _generate_speech_backend(
         self,
@@ -133,6 +141,7 @@ class VoiceGenerator:
         speakers: List[str],
         output_path: Path,
         language: str = "en",
+        speaker_instructions: Optional[List[str]] = None,
     ) -> Path:
         """Generate using TTS backend (Qwen3-TTS)."""
         from .tts import parse_transcript_into_segments
@@ -152,6 +161,10 @@ class VoiceGenerator:
         for name in speakers:
             ref = resolve_speaker_to_qwen3_ref(name, voice_manager)
             speaker_refs.append(ref)
+        if speaker_instructions:
+            for i, instr in enumerate(speaker_instructions):
+                if i < len(speaker_refs) and instr and isinstance(instr, str):
+                    speaker_refs[i].instruct = instr.strip()
 
         backend.generate(segments, speaker_refs, language, output_path)
         logger.info("Speech generation completed: %s", output_path)

@@ -20,6 +20,10 @@ class SpeechGenerateRequest(BaseModel):
 
     transcript: str = Field(..., description="Transcript text with speaker labels (e.g., 'Speaker 1: Hello')")
     speakers: List[str] = Field(..., min_length=1, description="List of speaker names")
+    speaker_instructions: Optional[List[str]] = Field(
+        None,
+        description="Optional style/emotion instruction per speaker (e.g. 'speak in a happy tone'). Length must match speakers.",
+    )
     settings: Optional[SpeechSettings] = Field(default_factory=SpeechSettings, description="Speech generation settings")
 
 

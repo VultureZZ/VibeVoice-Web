@@ -11,6 +11,7 @@ from typing import List, Optional
 from ..config import config
 from ..models.voice_storage import voice_storage
 from .audio_quality_analyzer import audio_quality_analyzer
+from .audio_transcriber import audio_transcriber
 from .audio_validator import AudioValidator
 
 # Default voices that cannot be deleted
@@ -376,6 +377,20 @@ class VoiceManager:
                 quality_analysis=quality_analysis,
             )
 
+            # Transcribe combined reference audio for Qwen3-TTS (ref_text improves clone quality)
+            reference_transcript = None
+            try:
+                transcription = audio_transcriber.transcribe(combined_path)
+                if transcription and transcription.text.strip():
+                    reference_transcript = transcription.text.strip()
+                    import logging
+                    logging.getLogger(__name__).info(
+                        "Transcribed reference audio for voice %s (%d chars)", name, len(reference_transcript)
+                    )
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning("Reference transcription skipped for %s: %s", name, e)
+
             # Automatically profile the voice (non-blocking - don't fail if profiling fails)
             import logging
             logger = logging.getLogger(__name__)
@@ -399,17 +414,27 @@ class VoiceManager:
                     # Ensure keywords are included in profile
                     if keywords:
                         profile["keywords"] = keywords
+                    # Store reference transcript for Qwen3-TTS (ref_text) when available
+                    if reference_transcript:
+                        profile["transcript"] = reference_transcript
                     # Store profile in voice metadata
                     voice_storage.update_voice_profile(voice_id, profile)
                     logger.info(f"Successfully created and saved profile for voice: {name}")
                 else:
                     logger.warning(f"Profile creation returned empty profile for voice: {name}")
+                    # Still save transcript if we have it and profiling produced nothing
+                    if reference_transcript:
+                        voice_storage.update_voice_profile(voice_id, {"transcript": reference_transcript})
             except RuntimeError as e:
                 # RuntimeError means Ollama is not available or model missing - log as warning
                 logger.warning(f"Could not profile voice {name}: {e}")
+                if reference_transcript:
+                    voice_storage.update_voice_profile(voice_id, {"transcript": reference_transcript})
             except Exception as e:
                 # Log error but don't fail voice creation
                 logger.error(f"Failed to automatically profile voice {name}: {e}", exc_info=True)
+                if reference_transcript:
+                    voice_storage.update_voice_profile(voice_id, {"transcript": reference_transcript})
 
             # Return voice metadata with validation feedback
             voice_data = voice_storage.get_voice(voice_id)
@@ -430,6 +455,83 @@ class VoiceManager:
             if voice_dir.exists():
                 shutil.rmtree(voice_dir)
             raise
+
+    def create_voice_from_prompt(
+        self,
+        name: str,
+        description: Optional[str],
+        voice_design_prompt: str,
+        language_code: Optional[str] = None,
+        gender: Optional[str] = None,
+        image_path: Optional[Path] = None,
+    ) -> dict:
+        """
+        Create a VoiceDesign voice from a natural-language description (no audio).
+
+        Args:
+            name: Voice name (must be unique)
+            description: Optional voice description
+            voice_design_prompt: Text description of the voice (e.g. "young female, calm tone")
+            language_code: Optional language code
+            gender: Optional gender
+            image_path: Optional path to avatar image
+
+        Returns:
+            Dict with voice metadata (type=voice_design)
+        """
+        if not name or not name.strip():
+            raise ValueError("Voice name cannot be empty")
+        if not voice_design_prompt or not voice_design_prompt.strip():
+            raise ValueError("Voice design prompt cannot be empty")
+        if self.is_default_voice(name):
+            raise ValueError(f"Voice name '{name}' is reserved for default voices")
+
+        voice_id = self.get_voice_id_from_name(name)
+        if voice_storage.voice_exists(voice_id):
+            raise ValueError(f"Voice with name '{name}' already exists")
+        if voice_storage.name_exists(name):
+            raise ValueError(f"Voice with name '{name}' already exists")
+
+        normalized_language_code = None
+        if language_code:
+            normalized_language_code = language_code.strip().lower() or None
+        normalized_gender = None
+        if gender:
+            normalized_gender = _normalize_gender(gender)
+        if normalized_gender is not None and normalized_gender not in {"male", "female", "neutral", "unknown"}:
+            raise ValueError("gender must be one of: male, female, neutral, unknown")
+
+        profile = {"voice_design_prompt": voice_design_prompt.strip()}
+        image_filename = None
+        if image_path and image_path.exists():
+            voice_dir = self.custom_voices_dir / voice_id
+            voice_dir.mkdir(parents=True, exist_ok=True)
+            ext = image_path.suffix.lower()
+            if ext in self.ALLOWED_IMAGE_EXTENSIONS:
+                dest = voice_dir / ("image" + ext)
+                shutil.copy2(image_path, dest)
+                image_filename = "image" + ext
+
+        voice_storage.add_voice(
+            voice_id=voice_id,
+            name=name,
+            description=description or "",
+            audio_files=None,
+            profile=profile,
+            language_code=normalized_language_code,
+            gender=normalized_gender,
+            image_filename=image_filename,
+            voice_type="voice_design",
+        )
+        voice_data = voice_storage.get_voice(voice_id)
+        if voice_data:
+            voice_data.setdefault("display_name", voice_data.get("name"))
+            lc = voice_data.get("language_code")
+            if lc:
+                voice_data["language_label"] = _get_language_label(lc)
+            if not voice_data.get("gender"):
+                voice_data["gender"] = "unknown"
+        return voice_data
 
     def delete_custom_voice(self, voice_id: str) -> bool:
         """

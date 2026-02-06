@@ -116,36 +116,52 @@ class ApiClient {
   }
 
   /**
-   * Create a custom voice
+   * Create a voice: from audio files, from clips, or from a text description (VoiceDesign).
    */
-  async createVoice(
-    name: string,
-    description: string | undefined,
-    files: File[],
-    keywords?: string,
-    languageCode?: string,
-    gender?: string,
-    image?: File
-  ): Promise<VoiceCreateResponse> {
+  async createVoice(params: {
+    name: string;
+    description?: string;
+    creation_source: 'audio' | 'clips' | 'prompt';
+    audio_files?: File[];
+    audio_file?: File;
+    clip_ranges?: AudioClipRange[];
+    voice_design_prompt?: string;
+    keywords?: string;
+    language_code?: string;
+    gender?: string;
+    image?: File;
+  }): Promise<VoiceCreateResponse> {
     const formData = new FormData();
-    formData.append('name', name);
-    if (description) {
-      formData.append('description', description);
+    formData.append('name', params.name);
+    if (params.description) {
+      formData.append('description', params.description);
     }
-    if (keywords) {
-      formData.append('keywords', keywords);
+    formData.append('creation_source', params.creation_source);
+    if (params.keywords) {
+      formData.append('keywords', params.keywords);
     }
-    files.forEach((file) => {
-      formData.append('audio_files', file);
-    });
-    if (languageCode) {
-      formData.append('language_code', languageCode);
+    if (params.language_code) {
+      formData.append('language_code', params.language_code);
     }
-    if (gender) {
-      formData.append('gender', gender);
+    if (params.gender) {
+      formData.append('gender', params.gender);
     }
-    if (image) {
-      formData.append('image', image);
+    if (params.image) {
+      formData.append('image', params.image);
+    }
+    if (params.creation_source === 'audio' && params.audio_files?.length) {
+      params.audio_files.forEach((file) => formData.append('audio_files', file));
+    }
+    if (params.creation_source === 'clips') {
+      if (params.audio_file) {
+        formData.append('audio_file', params.audio_file);
+      }
+      if (params.clip_ranges?.length) {
+        formData.append('clip_ranges', JSON.stringify(params.clip_ranges));
+      }
+    }
+    if (params.creation_source === 'prompt' && params.voice_design_prompt) {
+      formData.append('voice_design_prompt', params.voice_design_prompt);
     }
 
     const response = await this.client.post<VoiceCreateResponse>('/api/v1/voices', formData, {
@@ -171,7 +187,7 @@ class ApiClient {
   }
 
   /**
-   * Create a custom voice from selected clips within a single audio file
+   * Create a voice from clips (convenience wrapper for createVoice with creation_source=clips).
    */
   async createVoiceFromClips(
     name: string,
@@ -180,31 +196,20 @@ class ApiClient {
     clipRanges: AudioClipRange[],
     keywords?: string,
     languageCode?: string,
-    gender?: string
+    gender?: string,
+    image?: File
   ): Promise<VoiceCreateResponse> {
-    const formData = new FormData();
-    formData.append('name', name);
-    if (description) {
-      formData.append('description', description);
-    }
-    if (keywords) {
-      formData.append('keywords', keywords);
-    }
-    formData.append('audio_file', audioFile);
-    formData.append('clip_ranges', JSON.stringify(clipRanges));
-    if (languageCode) {
-      formData.append('language_code', languageCode);
-    }
-    if (gender) {
-      formData.append('gender', gender);
-    }
-
-    const response = await this.client.post<VoiceCreateResponse>(
-      '/api/v1/voices/from-audio-clips',
-      formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
-    );
-    return response.data;
+    return this.createVoice({
+      name,
+      description,
+      creation_source: 'clips',
+      audio_file: audioFile,
+      clip_ranges: clipRanges,
+      keywords,
+      language_code: languageCode,
+      gender,
+      image,
+    });
   }
 
   /**

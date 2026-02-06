@@ -73,6 +73,7 @@ class VoiceStorage:
         gender: Optional[str] = None,
         image_filename: Optional[str] = None,
         quality_analysis: Optional[Dict] = None,
+        voice_type: str = "custom",
     ) -> None:
         """
         Add a new voice to storage.
@@ -81,8 +82,9 @@ class VoiceStorage:
             voice_id: Unique voice identifier
             name: Voice name
             description: Voice description
-            audio_files: List of audio file names
-            profile: Optional voice profile data
+            audio_files: List of audio file names (for type custom)
+            profile: Optional voice profile data (for custom: transcript etc.; for voice_design: voice_design_prompt)
+            voice_type: "custom" (from audio) or "voice_design" (from text description)
             image_filename: Optional image filename (e.g. image.jpg) for voice avatar
             quality_analysis: Optional audio quality analysis (clone_quality, issues, etc.)
         """
@@ -91,7 +93,7 @@ class VoiceStorage:
         voice_data = {
             "name": name,
             "description": description or "",
-            "type": "custom",
+            "type": voice_type,
             "created_at": now,
             "audio_files": audio_files or [],
         }

@@ -76,6 +76,7 @@ async def generate_speech(
             transcript=formatted_transcript,
             speakers=request.speakers,
             language=language,
+            speaker_instructions=request.speaker_instructions,
         )
 
         logger.info("")

@@ -23,6 +23,7 @@ export function GeneratePage() {
 
   const [transcript, setTranscript] = useState('');
   const [selectedSpeakers, setSelectedSpeakers] = useState<string[]>([]);
+  const [speakerInstructions, setSpeakerInstructions] = useState<string[]>([]);
   const [speechSettings, setSpeechSettings] = useState<SpeechSettings>({
     language: settings.defaultLanguage,
     output_format: settings.defaultOutputFormat,
@@ -44,6 +45,16 @@ Speaker 2: Yes, speech generation is successful.`);
     }
   }, []);
 
+  // Keep speaker instructions in sync with number of speakers
+  useEffect(() => {
+    setSpeakerInstructions((prev) => {
+      const n = selectedSpeakers.length;
+      if (prev.length === n) return prev;
+      if (prev.length > n) return prev.slice(0, n);
+      return [...prev, ...Array(n - prev.length).fill('')];
+    });
+  }, [selectedSpeakers.length]);
+
   const handleGenerate = async () => {
     if (!transcript.trim()) {
       setSuccessMessage(null);
@@ -59,11 +70,15 @@ Speaker 2: Yes, speech generation is successful.`);
     setAudioFilename(null);
     setSuccessMessage(null);
 
-    const response = await generateSpeech({
+    const request: Parameters<typeof generateSpeech>[0] = {
       transcript,
       speakers: selectedSpeakers,
       settings: speechSettings,
-    });
+    };
+    if (speakerInstructions.some((s) => s.trim())) {
+      request.speaker_instructions = speakerInstructions.map((s) => s.trim());
+    }
+    const response = await generateSpeech(request);
 
     if (response && response.audio_url) {
       const fullUrl = `${settings.apiEndpoint}${response.audio_url}`;
@@ -152,6 +167,28 @@ Speaker 2: Yes, speech generation is successful.`);
             />
           )}
         </div>
+
+        {selectedSpeakers.length > 0 && (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">Style instructions (optional)</label>
+            <p className="text-xs text-gray-500 mb-2">
+              One per speaker, e.g. &quot;speak in a happy tone&quot; or &quot;sound calm and slow&quot;
+            </p>
+            {selectedSpeakers.map((name, i) => (
+              <Input
+                key={name + i}
+                label={`Instruction for ${name}`}
+                value={speakerInstructions[i] ?? ''}
+                onChange={(e) => {
+                  const next = [...speakerInstructions];
+                  next[i] = e.target.value;
+                  setSpeakerInstructions(next);
+                }}
+                placeholder="Optional style or emotion"
+              />
+            ))}
+          </div>
+        )}
 
         <div>
           <Button

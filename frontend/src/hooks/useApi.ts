@@ -79,8 +79,26 @@ export function useApi() {
       image?: File
     ): Promise<VoiceCreateResponse | null> => {
       return execute(() =>
-        apiClient.createVoice(name, description, files, keywords, languageCode, gender, image)
+        apiClient.createVoice({
+          name,
+          description,
+          creation_source: 'audio',
+          audio_files: files,
+          keywords,
+          language_code: languageCode,
+          gender,
+          image,
+        })
       );
+    },
+    [execute]
+  );
+
+  const createVoiceUnified = useCallback(
+    async (
+      params: Parameters<typeof apiClient.createVoice>[0]
+    ): Promise<VoiceCreateResponse | null> => {
+      return execute(() => apiClient.createVoice(params));
     },
     [execute]
   );
@@ -222,6 +240,7 @@ export function useApi() {
     downloadAudio,
     listVoices,
     createVoice,
+    createVoiceUnified,
     createVoiceFromClips,
     deleteVoice,
     updateVoice,
