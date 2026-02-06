@@ -41,10 +41,14 @@ class ApiClient {
       },
     });
 
-    // Request interceptor for API key
+    // Request interceptor for API key and FormData handling
     this.client.interceptors.request.use((config) => {
       if (this.apiKey) {
         config.headers['X-API-Key'] = this.apiKey;
+      }
+      // Let browser set Content-Type with boundary for FormData; explicit multipart/form-data without boundary breaks parsing
+      if (config.data instanceof FormData) {
+        delete config.headers['Content-Type'];
       }
       return config;
     });
@@ -164,11 +168,7 @@ class ApiClient {
       formData.append('voice_design_prompt', params.voice_design_prompt);
     }
 
-    const response = await this.client.post<VoiceCreateResponse>('/api/v1/voices', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await this.client.post<VoiceCreateResponse>('/api/v1/voices', formData);
     return response.data;
   }
 

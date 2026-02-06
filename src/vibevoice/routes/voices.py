@@ -96,9 +96,9 @@ async def _create_voice_from_prompt(
     name: str,
     description: str,
     voice_design_prompt: str,
-    image: UploadFile,
-    language_code: str,
-    gender: str,
+    image: UploadFile | None,
+    language_code: str | None,
+    gender: str | None,
 ) -> VoiceCreateResponse:
     """Create a VoiceDesign voice from text description."""
     temp_image_path = None
@@ -325,11 +325,11 @@ async def create_voice(
             )
         return await _create_voice_from_prompt(
             name=name,
-            description=description,
+            description=description or "",
             voice_design_prompt=voice_design_prompt,
             image=image,
-            language_code=language_code,
-            gender=gender,
+            language_code=language_code or None,
+            gender=gender or None,
         )
 
     if source == "clips":
