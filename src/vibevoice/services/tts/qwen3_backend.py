@@ -162,10 +162,16 @@ class Qwen3Backend(TTSBackend):
         ):
             model = self._get_voice_design_model()
             instruct = (speaker_ref.voice_design_instructions or "").strip()
-            # Signature: (text, instruct, language=...) - instruct is required positional
+            # Ensure we use VoiceDesign model (has tts_model_type "voice_design")
+            tts_type = getattr(model.model, "tts_model_type", None)
+            if tts_type != "voice_design":
+                raise ValueError(
+                    f"VoiceDesign segment requires VoiceDesign model, got tts_model_type={tts_type}. "
+                    "Check QWEN_TTS_VOICE_DESIGN_MODEL config."
+                )
             wavs, sr = model.generate_voice_design(
-                text.strip(),
-                instruct,
+                text=text.strip(),
+                instruct=instruct,
                 language=qwen_lang,
             )
             return wavs[0], sr
