@@ -137,7 +137,7 @@ export function CreateVoiceModal({ isOpen, onClose, onCreate }: CreateVoiceModal
     setCreating(true);
     setError(null);
 
-    const params = {
+    const base = {
       name: voiceName.trim(),
       description: voiceDescription.trim() || undefined,
       creation_source: creationSource,
@@ -147,16 +147,16 @@ export function CreateVoiceModal({ isOpen, onClose, onCreate }: CreateVoiceModal
       image: selectedImage || undefined,
     };
 
-    if (creationSource === 'audio') {
-      (params as { audio_files: File[] }).audio_files = selectedFiles;
-    } else if (creationSource === 'clips' && audioFile) {
-      (params as { audio_file: File; clip_ranges: AudioClipRange[] }).audio_file = audioFile;
-      (params as { audio_file: File; clip_ranges: AudioClipRange[] }).clip_ranges = clips;
-    } else if (creationSource === 'prompt') {
-      (params as { voice_design_prompt: string }).voice_design_prompt = voiceDesignPrompt.trim();
-    }
+    const params =
+      creationSource === 'audio'
+        ? { ...base, audio_files: selectedFiles }
+        : creationSource === 'clips' && audioFile
+          ? { ...base, audio_file: audioFile, clip_ranges: clips }
+          : creationSource === 'prompt'
+            ? { ...base, voice_design_prompt: voiceDesignPrompt.trim() }
+            : base;
 
-    const resp = await onCreate(params as Parameters<typeof onCreate>[0]);
+    const resp = await onCreate(params);
     setCreating(false);
     if (!resp) return;
     if (!resp.success) {
