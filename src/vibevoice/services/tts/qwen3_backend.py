@@ -161,11 +161,11 @@ class Qwen3Backend(TTSBackend):
             speaker_ref, "voice_design_instructions", None
         ):
             model = self._get_voice_design_model()
-            instructions = (speaker_ref.voice_design_instructions or "").strip()
+            instruct = (speaker_ref.voice_design_instructions or "").strip()
             wavs, sr = model.generate_voice_design(
                 text=text.strip(),
                 language=qwen_lang,
-                instructions=instructions,
+                instruct=instruct,
             )
             return wavs[0], sr
         if speaker_ref.use_custom_voice:
