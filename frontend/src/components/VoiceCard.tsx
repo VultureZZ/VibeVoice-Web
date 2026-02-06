@@ -31,7 +31,8 @@ export function VoiceCard({
   isDeleting,
   hasProfile,
 }: VoiceCardProps) {
-  const isCustom = voice.type === 'custom';
+  const isCustom =
+    voice.type === 'custom' || voice.type === 'voice_design';
   const displayName = getVoiceDisplayName(voice);
   const formattedLabel = formatVoiceLabel(voice);
   const suffix = formattedLabel.startsWith(displayName) ? formattedLabel.slice(displayName.length).trim() : '';

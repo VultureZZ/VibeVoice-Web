@@ -217,7 +217,9 @@ export function VoicesPage() {
     return null;
   };
 
-  const customVoices = voices.filter((v) => v.type === 'custom');
+  const customVoices = voices.filter(
+    (v) => v.type === 'custom' || v.type === 'voice_design'
+  );
   const defaultVoices = voices.filter((v) => v.type === 'default');
 
   return (
