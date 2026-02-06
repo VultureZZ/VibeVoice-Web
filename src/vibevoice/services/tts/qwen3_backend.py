@@ -162,10 +162,11 @@ class Qwen3Backend(TTSBackend):
         ):
             model = self._get_voice_design_model()
             instruct = (speaker_ref.voice_design_instructions or "").strip()
+            # Signature: (text, instruct, language=...) - instruct is required positional
             wavs, sr = model.generate_voice_design(
-                text=text.strip(),
+                text.strip(),
+                instruct,
                 language=qwen_lang,
-                instruct=instruct,
             )
             return wavs[0], sr
         if speaker_ref.use_custom_voice:
