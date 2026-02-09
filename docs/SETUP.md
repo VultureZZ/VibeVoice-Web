@@ -100,6 +100,7 @@ Notes:
 - `QWEN_TTS_DEVICE=cuda:0` or `cpu`
 - `QWEN_TTS_CUSTOM_VOICE_MODEL=Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice`
 - `QWEN_TTS_BASE_MODEL=Qwen/Qwen3-TTS-12Hz-1.7B-Base`
+- `TTS_MODEL_IDLE_UNLOAD_SECONDS=15` — unload TTS models after this many seconds of no use (0 = never unload)
 
 Optional FlashAttention 2 for lower GPU memory:
 ```bash

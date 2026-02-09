@@ -4,6 +4,7 @@ Qwen3-TTS backend using the official qwen-tts package.
 Uses CustomVoice model for built-in speakers and Base model for voice cloning.
 """
 import logging
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -77,7 +78,8 @@ class Qwen3Backend(TTSBackend):
     """
     TTS backend using Qwen3-TTS (CustomVoice for built-in, Base for cloning).
 
-    Lazy-loads CustomVoice and Base models on first use.
+    Lazy-loads CustomVoice and Base models on first use; unloads after idle
+    (configurable via TTS_MODEL_IDLE_UNLOAD_SECONDS, default 15s) to free memory.
     Caches voice_clone_prompt per ref_audio_path for custom voices.
     """
 
@@ -106,6 +108,11 @@ class Qwen3Backend(TTSBackend):
         self._base_model_instance: Any = None
         self._voice_design_model_instance: Any = None
         self._clone_prompt_cache: Dict[str, Any] = {}
+        self._lock = threading.Lock()
+        self._unload_timer: Optional[threading.Timer] = None
+        self._idle_unload_seconds: int = getattr(
+            config, "TTS_MODEL_IDLE_UNLOAD_SECONDS", 15
+        )
 
     def _model_kwargs(self):
         """Build common kwargs for from_pretrained (device, dtype, attn). Only use flash_attention_2 if installed."""
@@ -120,38 +127,90 @@ class Qwen3Backend(TTSBackend):
                 logger.debug("flash_attn not installed; using default attention")
         return kwargs
 
-    def _get_custom_voice_model(self):
-        if self._custom_voice_model_instance is None:
-            from qwen_tts import Qwen3TTSModel
+    def _do_unload(self) -> None:
+        """Unload all models and clear caches to free memory. Called by idle timer."""
+        with self._lock:
+            if self._unload_timer is not None:
+                self._unload_timer = None
+            if (
+                self._custom_voice_model_instance is None
+                and self._base_model_instance is None
+                and self._voice_design_model_instance is None
+            ):
+                return
+            logger.info("Unloading Qwen3-TTS models after idle timeout")
+            self._custom_voice_model_instance = None
+            self._base_model_instance = None
+            self._voice_design_model_instance = None
+            self._clone_prompt_cache.clear()
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:  # pragma: no cover
+            pass
 
-            logger.info("Loading Qwen3-TTS CustomVoice model: %s", self._custom_voice_model)
-            self._custom_voice_model_instance = Qwen3TTSModel.from_pretrained(
-                self._custom_voice_model,
-                **self._model_kwargs(),
-            )
-        return self._custom_voice_model_instance
+    def _schedule_unload(self) -> None:
+        """Schedule model unload after idle timeout. Call with lock held."""
+        if self._idle_unload_seconds <= 0:
+            return
+        if self._unload_timer is not None:
+            self._unload_timer.cancel()
+            self._unload_timer = None
+        self._unload_timer = threading.Timer(
+            self._idle_unload_seconds,
+            self._do_unload,
+        )
+        self._unload_timer.daemon = True
+        self._unload_timer.start()
+
+    def _get_custom_voice_model(self):
+        with self._lock:
+            if self._unload_timer is not None:
+                self._unload_timer.cancel()
+                self._unload_timer = None
+            if self._custom_voice_model_instance is None:
+                from qwen_tts import Qwen3TTSModel
+
+                logger.info("Loading Qwen3-TTS CustomVoice model: %s", self._custom_voice_model)
+                self._custom_voice_model_instance = Qwen3TTSModel.from_pretrained(
+                    self._custom_voice_model,
+                    **self._model_kwargs(),
+                )
+            self._schedule_unload()
+            return self._custom_voice_model_instance
 
     def _get_base_model(self):
-        if self._base_model_instance is None:
-            from qwen_tts import Qwen3TTSModel
+        with self._lock:
+            if self._unload_timer is not None:
+                self._unload_timer.cancel()
+                self._unload_timer = None
+            if self._base_model_instance is None:
+                from qwen_tts import Qwen3TTSModel
 
-            logger.info("Loading Qwen3-TTS Base model: %s", self._base_model)
-            self._base_model_instance = Qwen3TTSModel.from_pretrained(
-                self._base_model,
-                **self._model_kwargs(),
-            )
-        return self._base_model_instance
+                logger.info("Loading Qwen3-TTS Base model: %s", self._base_model)
+                self._base_model_instance = Qwen3TTSModel.from_pretrained(
+                    self._base_model,
+                    **self._model_kwargs(),
+                )
+            self._schedule_unload()
+            return self._base_model_instance
 
     def _get_voice_design_model(self):
-        if self._voice_design_model_instance is None:
-            from qwen_tts import Qwen3TTSModel
+        with self._lock:
+            if self._unload_timer is not None:
+                self._unload_timer.cancel()
+                self._unload_timer = None
+            if self._voice_design_model_instance is None:
+                from qwen_tts import Qwen3TTSModel
 
-            logger.info("Loading Qwen3-TTS VoiceDesign model: %s", self._voice_design_model)
-            self._voice_design_model_instance = Qwen3TTSModel.from_pretrained(
-                self._voice_design_model,
-                **self._model_kwargs(),
-            )
-        return self._voice_design_model_instance
+                logger.info("Loading Qwen3-TTS VoiceDesign model: %s", self._voice_design_model)
+                self._voice_design_model_instance = Qwen3TTSModel.from_pretrained(
+                    self._voice_design_model,
+                    **self._model_kwargs(),
+                )
+            self._schedule_unload()
+            return self._voice_design_model_instance
 
     def _get_or_create_clone_prompt(self, ref_audio_path: Path, ref_text: Optional[str]) -> Any:
         """Get cached voice_clone_prompt or create and cache it."""

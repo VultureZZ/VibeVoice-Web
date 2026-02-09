@@ -51,6 +51,8 @@ class Config:
     )
     QWEN_TTS_DEVICE: str = os.getenv("QWEN_TTS_DEVICE", "cuda:0")
     QWEN_TTS_DTYPE: str = os.getenv("QWEN_TTS_DTYPE", "bfloat16")
+    # Seconds of idle time after which TTS models are unloaded to free memory. 0 = never unload.
+    TTS_MODEL_IDLE_UNLOAD_SECONDS: int = int(os.getenv("TTS_MODEL_IDLE_UNLOAD_SECONDS", "15"))
 
     # Legacy VibeVoice (when TTS_BACKEND=vibevoice)
     MODEL_PATH: Path = Path(os.getenv("MODEL_PATH", "models/VibeVoice-1.5B"))
