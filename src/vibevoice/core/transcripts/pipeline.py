@@ -166,7 +166,8 @@ class TranscriptPipeline:
         await self._set_status(
             transcript_id, status="analyzing", progress=95, stage="Generating report..."
         )
-        await transcript_reporter.generate_pdf(
+        # Always generate JSON/Markdown reports; PDF is best-effort if reportlab exists.
+        await transcript_reporter.generate_json(
             transcript_id,
             analysis,
             transcript.get("transcript", []),
@@ -174,6 +175,25 @@ class TranscriptPipeline:
             title=transcript.get("title") or "Transcript",
             recording_type=transcript.get("recording_type") or "meeting",
         )
+        await transcript_reporter.generate_markdown(
+            transcript_id,
+            analysis,
+            transcript.get("transcript", []),
+            transcript.get("speakers", []),
+            title=transcript.get("title") or "Transcript",
+            recording_type=transcript.get("recording_type") or "meeting",
+        )
+        try:
+            await transcript_reporter.generate_pdf(
+                transcript_id,
+                analysis,
+                transcript.get("transcript", []),
+                transcript.get("speakers", []),
+                title=transcript.get("title") or "Transcript",
+                recording_type=transcript.get("recording_type") or "meeting",
+            )
+        except Exception as exc:
+            logger.warning("Skipping PDF report generation for %s: %s", transcript_id, exc)
 
         await self._set_status(
             transcript_id, status="complete", progress=100, stage="Processing complete."

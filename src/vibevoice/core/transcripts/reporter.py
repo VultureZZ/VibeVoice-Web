@@ -8,9 +8,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-from reportlab.lib.pagesizes import LETTER
-from reportlab.pdfgen import canvas
-
 from ...config import config
 
 
@@ -44,6 +41,14 @@ class TranscriptReporter:
         title: str,
         recording_type: str,
     ) -> str:
+        try:
+            from reportlab.lib.pagesizes import LETTER
+            from reportlab.pdfgen import canvas
+        except Exception as exc:
+            raise RuntimeError(
+                "PDF report generation requires reportlab. Install with: pip install reportlab"
+            ) from exc
+
         reports_dir = config.TRANSCRIPTS_DIR / "reports"
         reports_dir.mkdir(parents=True, exist_ok=True)
         path = reports_dir / f"{transcript_id}.pdf"
