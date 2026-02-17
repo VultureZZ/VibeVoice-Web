@@ -115,6 +115,15 @@ class Config:
     LLM_MODEL: str = os.getenv("LLM_MODEL", "claude-opus-4-6")
     ANTHROPIC_API_KEY: Optional[str] = os.getenv("ANTHROPIC_API_KEY", None)
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY", None)
+    # Transcript processor mode:
+    # - inprocess: run transcript pipeline in API process
+    # - subprocess: run transcript pipeline in external worker python env
+    TRANSCRIPT_PROCESSOR_MODE: str = os.getenv("TRANSCRIPT_PROCESSOR_MODE", "subprocess").strip().lower()
+    # Python executable for subprocess worker mode (separate venv recommended).
+    TRANSCRIPT_WORKER_PYTHON: str = os.getenv(
+        "TRANSCRIPT_WORKER_PYTHON",
+        str((PROJECT_ROOT / ".venv-transcripts" / "bin" / "python")),
+    )
 
     def __init__(self):
         """Initialize configuration and ensure directories exist."""

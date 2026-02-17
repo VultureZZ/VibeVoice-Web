@@ -4,6 +4,7 @@ Transcript CRUD/upload/job management service.
 from __future__ import annotations
 
 import asyncio
+import os
 import logging
 import uuid
 from datetime import datetime
@@ -14,7 +15,6 @@ from fastapi import UploadFile
 from pydub import AudioSegment
 
 from ..config import config
-from ..core.transcripts.pipeline import transcript_pipeline
 from ..models.transcript_storage import transcript_storage
 
 logger = logging.getLogger(__name__)
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 class TranscriptService:
     def __init__(self) -> None:
         self._jobs: dict[str, asyncio.Task[None]] = {}
+        self._processor_mode = (config.TRANSCRIPT_PROCESSOR_MODE or "subprocess").strip().lower()
 
     @staticmethod
     def _ext_from_filename(filename: str) -> str:
@@ -63,6 +64,48 @@ class TranscriptService:
         segment.export(str(output_path), format="wav")
         return str(output_path)
 
+    def _worker_script_path(self) -> Path:
+        return config.PROJECT_ROOT / "src" / "vibevoice" / "workers" / "transcript_worker.py"
+
+    async def _run_worker_subprocess(self, action: str, transcript_id: str, wav_path: Optional[str] = None) -> None:
+        worker_python = (config.TRANSCRIPT_WORKER_PYTHON or "").strip()
+        if not worker_python:
+            raise RuntimeError("TRANSCRIPT_WORKER_PYTHON is not configured.")
+
+        script_path = self._worker_script_path()
+        if not script_path.exists():
+            raise RuntimeError(f"Transcript worker script not found: {script_path}")
+
+        cmd = [worker_python, str(script_path), action, transcript_id]
+        if wav_path:
+            cmd.append(wav_path)
+
+        env = os.environ.copy()
+        src_path = str(config.PROJECT_ROOT / "src")
+        existing_pythonpath = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = f"{src_path}:{existing_pythonpath}" if existing_pythonpath else src_path
+
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+        )
+        stdout, stderr = await process.communicate()
+        if process.returncode != 0:
+            stderr_text = (stderr or b"").decode("utf-8", errors="replace").strip()
+            stdout_text = (stdout or b"").decode("utf-8", errors="replace").strip()
+            detail = stderr_text or stdout_text or f"exit code {process.returncode}"
+            raise RuntimeError(f"Transcript worker failed ({action}): {detail}")
+
+    async def _run_pipeline_process(self, transcript_id: str, wav_path: str) -> None:
+        if self._processor_mode == "inprocess":
+            from ..core.transcripts.pipeline import transcript_pipeline
+
+            await transcript_pipeline.process_transcript(transcript_id, wav_path)
+            return
+        await self._run_worker_subprocess("process", transcript_id, wav_path)
+
     async def _run_job(self, transcript_id: str, source_path: str) -> None:
         try:
             transcript_storage.set_status(
@@ -79,7 +122,16 @@ class TranscriptService:
                 duration_seconds=duration_seconds,
                 converted_path=wav_path,
             )
-            await transcript_pipeline.process_transcript(transcript_id, wav_path)
+            await self._run_pipeline_process(transcript_id, wav_path)
+        except Exception as exc:
+            logger.exception("Transcript job failed for %s", transcript_id)
+            transcript_storage.set_status(
+                transcript_id,
+                status="failed",
+                progress_pct=100,
+                current_stage="Processing failed.",
+                error=str(exc),
+            )
         finally:
             self._jobs.pop(transcript_id, None)
 
@@ -117,6 +169,44 @@ class TranscriptService:
             "message": "File uploaded successfully. Processing queued.",
             "estimated_wait_seconds": 30,
         }
+
+    async def trigger_analysis(self, transcript_id: str) -> None:
+        item = transcript_storage.get_transcript(transcript_id)
+        if not item:
+            raise ValueError("Transcript not found")
+
+        transcript_storage.set_status(
+            transcript_id,
+            status="analyzing",
+            progress_pct=max(item.get("progress_pct", 75), 80),
+            current_stage="Generating transcript analysis...",
+        )
+
+        if self._processor_mode == "inprocess":
+            from ..core.transcripts.pipeline import transcript_pipeline
+
+            await transcript_pipeline.run_analysis(transcript_id)
+            return
+
+        job_key = f"analyze:{transcript_id}"
+
+        async def _runner() -> None:
+            try:
+                await self._run_worker_subprocess("analyze", transcript_id)
+            except Exception as exc:
+                logger.exception("Transcript analysis failed for %s", transcript_id)
+                transcript_storage.set_status(
+                    transcript_id,
+                    status="failed",
+                    progress_pct=100,
+                    current_stage="Analysis failed.",
+                    error=str(exc),
+                )
+            finally:
+                self._jobs.pop(job_key, None)
+
+        task = asyncio.create_task(_runner())
+        self._jobs[job_key] = task
 
     def get(self, transcript_id: str) -> Optional[dict]:
         return transcript_storage.get_transcript(transcript_id)

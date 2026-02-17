@@ -215,6 +215,25 @@ The frontend lives in `frontend/`. See `frontend/README.md` for setup, developme
 - `GET /api/v1/transcripts` - List transcripts
 - `DELETE /api/v1/transcripts/{transcript_id}` - Delete transcript and files
 
+### Transcript Worker Environment (recommended)
+
+To avoid dependency conflicts between TTS backends and transcript libraries, run transcript processing in a separate Python environment:
+
+```bash
+python -m venv .venv-transcripts
+source .venv-transcripts/bin/activate
+pip install -r requirements-transcripts.txt
+```
+
+Set runtime mode in `.env`:
+
+```bash
+TRANSCRIPT_PROCESSOR_MODE=subprocess
+TRANSCRIPT_WORKER_PYTHON=.venv-transcripts/bin/python
+```
+
+With this setup, the API process remains on your main `.venv` dependencies, while transcript jobs run in the dedicated worker environment.
+
 ### Podcast generation + library
 
 - `POST /api/v1/podcast/generate-script` - Generate a script from an article URL (Ollama-assisted)

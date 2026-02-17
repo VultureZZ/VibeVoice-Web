@@ -11,7 +11,6 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, sta
 from fastapi.responses import FileResponse, JSONResponse
 
 from ..config import config
-from ..core.transcripts.pipeline import transcript_pipeline
 from ..services.transcript_service import transcript_service
 from ..services.voice_manager import voice_manager
 
@@ -89,7 +88,7 @@ async def update_transcript_speakers(
     transcript_storage.update_transcript(transcript_id, speakers=item["speakers"])
 
     if proceed_to_analysis:
-        await transcript_pipeline.run_analysis(transcript_id)
+        await transcript_service.trigger_analysis(transcript_id)
         return {
             "transcript_id": transcript_id,
             "status": "analyzing",
