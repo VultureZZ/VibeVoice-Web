@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
 import { useVoices } from '../hooks/useVoices';
 import { useSettings } from '../hooks/useSettings';
@@ -15,14 +16,19 @@ import { Alert } from '../components/Alert';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SUPPORTED_LANGUAGES } from '../utils/languages';
 import { formatVoiceLabel } from '../utils/format';
+import { transcriptToGenerateFormat } from '../utils/transcript';
 
 export function GeneratePage() {
+  const [searchParams] = useSearchParams();
+  const fromTranscriptId = searchParams.get('from');
   const { settings } = useSettings();
   const { voices, loading: voicesLoading } = useVoices();
-  const { generateSpeech, downloadAudio, loading, error } = useApi();
+  const { generateSpeech, downloadAudio, getTranscript, loading, error } = useApi();
 
   const [transcript, setTranscript] = useState('');
   const [selectedSpeakers, setSelectedSpeakers] = useState<string[]>([]);
+  const [requiredSpeakerCount, setRequiredSpeakerCount] = useState<number | null>(null);
+  const [loadedTranscriptId, setLoadedTranscriptId] = useState<string | null>(null);
   const [speakerInstructions, setSpeakerInstructions] = useState<string[]>([]);
   const [speechSettings, setSpeechSettings] = useState<SpeechSettings>({
     language: settings.defaultLanguage,
@@ -37,13 +43,53 @@ export function GeneratePage() {
 
   // Initialize with example transcript (avoids Qwen3 TTS pitfalls: no greeting-style intros, no abbreviations)
   useEffect(() => {
-    if (!transcript) {
+    if (!fromTranscriptId && !transcript) {
       setTranscript(`Speaker 1: Run a quick check on the pipeline.
 Speaker 2: Everything looks good from here.
 Speaker 1: Output format is correct.
 Speaker 2: Generation completed successfully.`);
     }
-  }, []);
+  }, [fromTranscriptId, transcript]);
+
+  useEffect(() => {
+    if (!fromTranscriptId) return;
+    if (voicesLoading) return;
+    if (loadedTranscriptId === fromTranscriptId) return;
+
+    let cancelled = false;
+    const hydrateFromTranscript = async () => {
+      const item = await getTranscript(fromTranscriptId);
+      if (!item || cancelled) return;
+
+      const speakers = item.speakers || [];
+      const speakerCount = speakers.length;
+      const formattedTranscript = transcriptToGenerateFormat(item.transcript || [], speakers);
+
+      setTranscript(formattedTranscript);
+      setRequiredSpeakerCount(speakerCount > 0 ? speakerCount : null);
+
+      if (speakerCount > 0) {
+        const preselectedVoices = speakers.map((speaker) => {
+          if (!speaker.voice_library_match) return '';
+          const matched = voices.find((voice) => voice.id === speaker.voice_library_match);
+          return matched?.name ?? '';
+        });
+        setSelectedSpeakers(preselectedVoices);
+      } else {
+        setSelectedSpeakers([]);
+      }
+
+      setLoadedTranscriptId(fromTranscriptId);
+      setSuccessMessage(
+        `Loaded transcript "${item.title}" with ${speakerCount} speaker${speakerCount === 1 ? '' : 's'}.`
+      );
+    };
+
+    hydrateFromTranscript();
+    return () => {
+      cancelled = true;
+    };
+  }, [fromTranscriptId, getTranscript, loadedTranscriptId, voices, voicesLoading]);
 
   // Keep speaker instructions in sync with number of speakers
   useEffect(() => {
@@ -61,7 +107,15 @@ Speaker 2: Generation completed successfully.`);
       return;
     }
 
-    if (selectedSpeakers.length === 0) {
+    if (requiredSpeakerCount !== null) {
+      const hasMissingVoices =
+        selectedSpeakers.length !== requiredSpeakerCount ||
+        selectedSpeakers.some((speakerName) => !speakerName.trim());
+      if (hasMissingVoices) {
+        setSuccessMessage(null);
+        return;
+      }
+    } else if (selectedSpeakers.length === 0) {
       setSuccessMessage(null);
       return;
     }
@@ -111,6 +165,10 @@ Speaker 2: Generation completed successfully.`);
     value: voice.name,
     label: formatVoiceLabel(voice, { showQuality: true }),
   }));
+  const requiredSpeakerOptions = [
+    { value: '', label: 'Select a voice...' },
+    ...speakerOptions,
+  ];
 
   const languageOptions = SUPPORTED_LANGUAGES;
 
@@ -156,6 +214,36 @@ Speaker 2: Generation completed successfully.`);
               <LoadingSpinner size="sm" />
               <span className="text-sm text-gray-600">Loading voices...</span>
             </div>
+          ) : requiredSpeakerCount !== null ? (
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700">
+                Speakers
+                <span className="text-red-500 ml-1">*</span>
+              </label>
+              <p className="text-xs text-gray-500">
+                This transcript has {requiredSpeakerCount} speaker{requiredSpeakerCount === 1 ? '' : 's'}.
+                Select one voice per speaker.
+              </p>
+              {Array.from({ length: requiredSpeakerCount }).map((_, index) => (
+                <Select
+                  key={`transcript-speaker-${index}`}
+                  label={`Speaker ${index + 1} Voice`}
+                  options={requiredSpeakerOptions}
+                  value={selectedSpeakers[index] ?? ''}
+                  onChange={(e) => {
+                    const next = [...selectedSpeakers];
+                    next[index] = e.target.value;
+                    setSelectedSpeakers(next);
+                  }}
+                  error={
+                    transcript.trim() && !(selectedSpeakers[index] || '').trim()
+                      ? `Voice is required for Speaker ${index + 1}`
+                      : undefined
+                  }
+                  required
+                />
+              ))}
+            </div>
           ) : (
             <MultiSelect
               label="Speakers"
@@ -177,8 +265,12 @@ Speaker 2: Generation completed successfully.`);
             </p>
             {selectedSpeakers.map((name, i) => (
               <Input
-                key={name + i}
-                label={`Instruction for ${name}`}
+                key={`${name || 'speaker'}-${i}`}
+                label={
+                  requiredSpeakerCount !== null
+                    ? `Instruction for Speaker ${i + 1}${name ? ` (${name})` : ''}`
+                    : `Instruction for ${name}`
+                }
                 value={speakerInstructions[i] ?? ''}
                 onChange={(e) => {
                   const next = [...speakerInstructions];
@@ -237,7 +329,14 @@ Speaker 2: Generation completed successfully.`);
           variant="primary"
           onClick={handleGenerate}
           isLoading={loading}
-          disabled={!transcript.trim() || selectedSpeakers.length === 0 || voicesLoading}
+          disabled={
+            !transcript.trim() ||
+            voicesLoading ||
+            (requiredSpeakerCount !== null
+              ? selectedSpeakers.length !== requiredSpeakerCount ||
+                selectedSpeakers.some((speakerName) => !speakerName.trim())
+              : selectedSpeakers.length === 0)
+          }
           className="w-full"
         >
           Generate Speech

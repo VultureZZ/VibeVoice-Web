@@ -1,4 +1,4 @@
-import type { TranscriptSpeakerSegment } from '../types/api';
+import type { TranscriptSpeaker, TranscriptSpeakerSegment } from '../types/api';
 
 const SENTENCE_END = /[.!?]\s*$/;
 
@@ -41,4 +41,34 @@ export function mergeTranscriptSegments(
   if (acc) merged.push(acc);
 
   return merged;
+}
+
+/**
+ * Converts transcript segments to speech-generate format:
+ * "Speaker 1: ...", "Speaker 2: ..."
+ */
+export function transcriptToGenerateFormat(
+  segments: TranscriptSpeakerSegment[],
+  speakers: TranscriptSpeaker[]
+): string {
+  if (!segments.length) return '';
+
+  const ordered = mergeTranscriptSegments(segments);
+  const speakerIndexMap = new Map<string, number>();
+  speakers.forEach((speaker, index) => {
+    speakerIndexMap.set(speaker.id, index);
+  });
+
+  const lines = ordered
+    .map((segment) => {
+      const text = (segment.text || '').trim();
+      if (!text) return null;
+
+      const speakerIndex = speakerIndexMap.get(segment.speaker_id);
+      const labelIndex = speakerIndex ?? 0;
+      return `Speaker ${labelIndex + 1}: ${text}`;
+    })
+    .filter((line): line is string => Boolean(line));
+
+  return lines.join('\n');
 }

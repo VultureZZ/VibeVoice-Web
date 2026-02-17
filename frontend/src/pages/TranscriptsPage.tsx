@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
 import { Alert } from '../components/Alert';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -12,6 +13,7 @@ import type { RecordingType, TranscriptItem, TranscriptStatusResponse } from '..
 import { mergeTranscriptSegments } from '../utils/transcript';
 
 export function TranscriptsPage() {
+  const navigate = useNavigate();
   const {
     uploadTranscript,
     getTranscriptStatus,
@@ -143,6 +145,11 @@ export function TranscriptsPage() {
     setSuccessMessage('Transcript copied to clipboard.');
   };
 
+  const generateFromTranscript = () => {
+    if (!transcriptId || !item || item.speakers.length === 0) return;
+    navigate(`/generate?from=${encodeURIComponent(transcriptId)}`);
+  };
+
   const openResolvedTranscript = async (selectedId: string) => {
     setTranscriptId(selectedId);
     const s = await getTranscriptStatus(selectedId);
@@ -220,6 +227,8 @@ export function TranscriptsPage() {
                 onDownloadPdf={() => downloadReport('pdf')}
                 onDownloadJson={() => downloadReport('json')}
                 onCopyTranscript={copyTranscript}
+                onGenerateFromTranscript={generateFromTranscript}
+                canGenerateFromTranscript={item.speakers.length > 0}
                 isLoading={loading}
               />
             </>

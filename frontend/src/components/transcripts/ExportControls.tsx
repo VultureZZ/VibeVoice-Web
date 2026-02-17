@@ -4,6 +4,8 @@ interface ExportControlsProps {
   onDownloadPdf: () => Promise<void>;
   onDownloadJson: () => Promise<void>;
   onCopyTranscript: () => void;
+  onGenerateFromTranscript?: () => void;
+  canGenerateFromTranscript?: boolean;
   isLoading?: boolean;
 }
 
@@ -11,6 +13,8 @@ export function ExportControls({
   onDownloadPdf,
   onDownloadJson,
   onCopyTranscript,
+  onGenerateFromTranscript,
+  canGenerateFromTranscript = false,
   isLoading = false,
 }: ExportControlsProps) {
   return (
@@ -26,6 +30,11 @@ export function ExportControls({
         <Button variant="secondary" onClick={onCopyTranscript}>
           Copy Transcript
         </Button>
+        {canGenerateFromTranscript && onGenerateFromTranscript && (
+          <Button variant="primary" onClick={onGenerateFromTranscript}>
+            Generate from transcript
+          </Button>
+        )}
       </div>
     </div>
   );
