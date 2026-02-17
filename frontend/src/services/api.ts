@@ -22,6 +22,11 @@ import {
   VoiceUpdateRequest,
   VoiceUpdateResponse,
   AudioClipRange,
+  RecordingType,
+  TranscriptUploadResponse,
+  TranscriptStatusResponse,
+  TranscriptItem,
+  TranscriptListResponse,
 } from '../types/api';
 import { AppSettings } from '../types/settings';
 
@@ -372,6 +377,69 @@ class ApiClient {
    */
   async applyVoiceProfile(voiceId: string, request: VoiceProfileApplyRequest): Promise<VoiceProfileResponse> {
     const response = await this.client.put<VoiceProfileResponse>(`/api/v1/voices/${voiceId}/profile`, request);
+    return response.data;
+  }
+
+  async uploadTranscript(params: {
+    audioFile: File;
+    title?: string;
+    language?: string;
+    recordingType?: RecordingType;
+  }): Promise<TranscriptUploadResponse> {
+    const formData = new FormData();
+    formData.append('audio_file', params.audioFile);
+    if (params.title) formData.append('title', params.title);
+    if (params.language) formData.append('language', params.language);
+    if (params.recordingType) formData.append('recording_type', params.recordingType);
+    const response = await this.client.post<TranscriptUploadResponse>(
+      '/api/v1/transcripts/upload',
+      formData
+    );
+    return response.data;
+  }
+
+  async getTranscriptStatus(transcriptId: string): Promise<TranscriptStatusResponse> {
+    const response = await this.client.get<TranscriptStatusResponse>(
+      `/api/v1/transcripts/${transcriptId}/status`
+    );
+    return response.data;
+  }
+
+  async getTranscript(transcriptId: string): Promise<TranscriptItem> {
+    const response = await this.client.get<TranscriptItem>(`/api/v1/transcripts/${transcriptId}`);
+    return response.data;
+  }
+
+  async updateTranscriptSpeakers(
+    transcriptId: string,
+    payload: { speakers: { id: string; label: string }[]; proceed_to_analysis: boolean }
+  ): Promise<{ transcript_id: string; status: string; message: string }> {
+    const response = await this.client.patch<{ transcript_id: string; status: string; message: string }>(
+      `/api/v1/transcripts/${transcriptId}/speakers`,
+      payload
+    );
+    return response.data;
+  }
+
+  async listTranscripts(params?: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+    recording_type?: RecordingType;
+  }): Promise<TranscriptListResponse> {
+    const response = await this.client.get<TranscriptListResponse>('/api/v1/transcripts', { params });
+    return response.data;
+  }
+
+  async deleteTranscript(transcriptId: string): Promise<void> {
+    await this.client.delete(`/api/v1/transcripts/${transcriptId}`);
+  }
+
+  async downloadTranscriptReport(transcriptId: string, format: 'pdf' | 'json' | 'markdown'): Promise<Blob> {
+    const response = await this.client.get(`/api/v1/transcripts/${transcriptId}/report`, {
+      params: { format },
+      responseType: 'blob',
+    });
     return response.data;
   }
 }

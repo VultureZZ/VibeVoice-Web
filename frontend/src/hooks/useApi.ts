@@ -22,6 +22,11 @@ import {
   VoiceUpdateRequest,
   VoiceUpdateResponse,
   AudioClipRange,
+  RecordingType,
+  TranscriptUploadResponse,
+  TranscriptStatusResponse,
+  TranscriptItem,
+  TranscriptListResponse,
 } from '../types/api';
 
 export function useApi() {
@@ -190,6 +195,69 @@ export function useApi() {
     [execute]
   );
 
+  const uploadTranscript = useCallback(
+    async (params: {
+      audioFile: File;
+      title?: string;
+      language?: string;
+      recordingType?: RecordingType;
+    }): Promise<TranscriptUploadResponse | null> => {
+      return execute(() => apiClient.uploadTranscript(params));
+    },
+    [execute]
+  );
+
+  const getTranscriptStatus = useCallback(
+    async (transcriptId: string): Promise<TranscriptStatusResponse | null> => {
+      return execute(() => apiClient.getTranscriptStatus(transcriptId));
+    },
+    [execute]
+  );
+
+  const getTranscript = useCallback(
+    async (transcriptId: string): Promise<TranscriptItem | null> => {
+      return execute(() => apiClient.getTranscript(transcriptId));
+    },
+    [execute]
+  );
+
+  const updateTranscriptSpeakers = useCallback(
+    async (
+      transcriptId: string,
+      payload: { speakers: { id: string; label: string }[]; proceed_to_analysis: boolean }
+    ): Promise<{ transcript_id: string; status: string; message: string } | null> => {
+      return execute(() => apiClient.updateTranscriptSpeakers(transcriptId, payload));
+    },
+    [execute]
+  );
+
+  const listTranscripts = useCallback(
+    async (params?: {
+      limit?: number;
+      offset?: number;
+      status?: string;
+      recording_type?: RecordingType;
+    }): Promise<TranscriptListResponse | null> => {
+      return execute(() => apiClient.listTranscripts(params));
+    },
+    [execute]
+  );
+
+  const deleteTranscript = useCallback(
+    async (transcriptId: string): Promise<boolean> => {
+      const result = await execute(() => apiClient.deleteTranscript(transcriptId));
+      return result !== null;
+    },
+    [execute]
+  );
+
+  const downloadTranscriptReport = useCallback(
+    async (transcriptId: string, format: 'pdf' | 'json' | 'markdown'): Promise<Blob | null> => {
+      return execute(() => apiClient.downloadTranscriptReport(transcriptId, format));
+    },
+    [execute]
+  );
+
   const updateVoice = useCallback(
     async (voiceId: string, request: VoiceUpdateRequest): Promise<VoiceUpdateResponse | null> => {
       return execute(() => apiClient.updateVoice(voiceId, request));
@@ -257,5 +325,12 @@ export function useApi() {
     downloadPodcastById,
     analyzeVoiceProfileFromAudio,
     applyVoiceProfile,
+    uploadTranscript,
+    getTranscriptStatus,
+    getTranscript,
+    updateTranscriptSpeakers,
+    listTranscripts,
+    deleteTranscript,
+    downloadTranscriptReport,
   };
 }

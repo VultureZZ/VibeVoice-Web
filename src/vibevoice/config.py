@@ -35,6 +35,7 @@ class Config:
     CUSTOM_VOICES_DIR: Path = Path(os.getenv("CUSTOM_VOICES_DIR", "custom_voices"))
     OUTPUT_DIR: Path = Path(os.getenv("OUTPUT_DIR", "outputs"))
     PODCASTS_DIR: Path = Path(os.getenv("PODCASTS_DIR", "podcasts"))
+    TRANSCRIPTS_DIR: Path = Path(os.getenv("TRANSCRIPTS_DIR", "transcripts"))
 
     # TTS backend: "qwen3" (Qwen3-TTS), "vibevoice" (legacy subprocess), or "xtts"/"bark" when implemented
     TTS_BACKEND: str = os.getenv("TTS_BACKEND", "qwen3")
@@ -87,6 +88,34 @@ class Config:
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3.2")
 
+    # Transcript service configuration
+    HF_TOKEN: Optional[str] = os.getenv("HF_TOKEN", None)
+    TRANSCRIPT_WHISPER_MODEL: str = os.getenv("TRANSCRIPT_WHISPER_MODEL", "large-v3")
+    TRANSCRIPT_MAX_UPLOAD_MB: int = int(os.getenv("TRANSCRIPT_MAX_UPLOAD_MB", "500"))
+    TRANSCRIPT_SUPPORTED_FORMATS: list[str] = [
+        x.strip().lower()
+        for x in os.getenv(
+            "TRANSCRIPT_SUPPORTED_FORMATS",
+            "mp3,wav,m4a,mp4,webm,ogg,flac",
+        ).split(",")
+        if x.strip()
+    ]
+    TRANSCRIPT_SPEAKER_MATCH_THRESHOLD: float = float(
+        os.getenv("TRANSCRIPT_SPEAKER_MATCH_THRESHOLD", "0.75")
+    )
+    TRANSCRIPT_MAX_CONCURRENT_JOBS: int = int(os.getenv("TRANSCRIPT_MAX_CONCURRENT_JOBS", "2"))
+    TRANSCRIPT_RETENTION_HOURS: int = int(os.getenv("TRANSCRIPT_RETENTION_HOURS", "72"))
+    TRANSCRIPT_EXTRACT_SPEAKER_AUDIO: bool = (
+        os.getenv("TRANSCRIPT_EXTRACT_SPEAKER_AUDIO", "true").strip().lower() in {"1", "true", "yes", "on"}
+    )
+    TRANSCRIPT_MIN_SEGMENT_DURATION_SECONDS: float = float(
+        os.getenv("TRANSCRIPT_MIN_SEGMENT_DURATION_SECONDS", "3.0")
+    )
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "anthropic").strip().lower()
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "claude-opus-4-6")
+    ANTHROPIC_API_KEY: Optional[str] = os.getenv("ANTHROPIC_API_KEY", None)
+    OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY", None)
+
     def __init__(self):
         """Initialize configuration and ensure directories exist."""
         # Convert relative paths to absolute paths relative to project root
@@ -100,6 +129,8 @@ class Config:
             self.OUTPUT_DIR = PROJECT_ROOT / self.OUTPUT_DIR
         if not self.PODCASTS_DIR.is_absolute():
             self.PODCASTS_DIR = PROJECT_ROOT / self.PODCASTS_DIR
+        if not self.TRANSCRIPTS_DIR.is_absolute():
+            self.TRANSCRIPTS_DIR = PROJECT_ROOT / self.TRANSCRIPTS_DIR
         if not self.REALTIME_VIBEVOICE_REPO_DIR.is_absolute():
             self.REALTIME_VIBEVOICE_REPO_DIR = PROJECT_ROOT / self.REALTIME_VIBEVOICE_REPO_DIR
 
@@ -119,6 +150,11 @@ class Config:
         self.CUSTOM_VOICES_DIR.mkdir(parents=True, exist_ok=True)
         self.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         self.PODCASTS_DIR.mkdir(parents=True, exist_ok=True)
+        self.TRANSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
+        (self.TRANSCRIPTS_DIR / "uploads").mkdir(parents=True, exist_ok=True)
+        (self.TRANSCRIPTS_DIR / "segments").mkdir(parents=True, exist_ok=True)
+        (self.TRANSCRIPTS_DIR / "json").mkdir(parents=True, exist_ok=True)
+        (self.TRANSCRIPTS_DIR / "reports").mkdir(parents=True, exist_ok=True)
 
     @property
     def requires_api_key(self) -> bool:

@@ -73,6 +73,7 @@ class VoiceStorage:
         gender: Optional[str] = None,
         image_filename: Optional[str] = None,
         quality_analysis: Optional[Dict] = None,
+        speaker_embedding: Optional[List[float]] = None,
         voice_type: str = "custom",
     ) -> None:
         """
@@ -87,6 +88,7 @@ class VoiceStorage:
             voice_type: "custom" (from audio) or "voice_design" (from text description)
             image_filename: Optional image filename (e.g. image.jpg) for voice avatar
             quality_analysis: Optional audio quality analysis (clone_quality, issues, etc.)
+            speaker_embedding: Optional ECAPA embedding for matching in transcript service
         """
         data = self._load()
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -107,6 +109,8 @@ class VoiceStorage:
             voice_data["image_filename"] = image_filename
         if quality_analysis:
             voice_data["quality_analysis"] = quality_analysis
+        if speaker_embedding:
+            voice_data["speaker_embedding"] = speaker_embedding
         data["voices"][voice_id] = voice_data
         self._save(data)
 
@@ -197,6 +201,7 @@ class VoiceStorage:
         language_code: Optional[str] = None,
         gender: Optional[str] = None,
         image_filename: Optional[str] = None,
+        speaker_embedding: Optional[List[float]] = None,
     ) -> bool:
         """
         Update voice name, description, and/or image.
@@ -233,6 +238,11 @@ class VoiceStorage:
                 data["voices"][voice_id]["image_filename"] = image_filename
             else:
                 data["voices"][voice_id].pop("image_filename", None)
+        if speaker_embedding is not None:
+            if speaker_embedding:
+                data["voices"][voice_id]["speaker_embedding"] = speaker_embedding
+            else:
+                data["voices"][voice_id].pop("speaker_embedding", None)
 
         self._save(data)
         return True

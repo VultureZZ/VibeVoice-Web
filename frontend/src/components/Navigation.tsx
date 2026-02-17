@@ -13,6 +13,7 @@ export function Navigation() {
     { path: '/podcast', label: 'Article Podcaster' },
     { path: '/podcasts', label: 'Podcast Library' },
     { path: '/voices', label: 'Voices' },
+    { path: '/transcripts', label: 'Transcripts' },
     { path: '/settings', label: 'Settings' },
   ];
 

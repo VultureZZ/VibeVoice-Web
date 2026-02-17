@@ -10,6 +10,7 @@ from typing import List, Optional
 
 from ..config import config
 from ..models.voice_storage import voice_storage
+from ..core.transcripts.speaker_matcher import compute_file_embedding
 from .audio_quality_analyzer import audio_quality_analyzer
 from .audio_transcriber import audio_transcriber
 from .audio_validator import AudioValidator
@@ -366,6 +367,7 @@ class VoiceManager:
                     image_filename = stored_name
 
             # Save metadata
+            speaker_embedding = compute_file_embedding(combined_path)
             voice_storage.add_voice(
                 voice_id=voice_id,
                 name=name,
@@ -375,6 +377,7 @@ class VoiceManager:
                 gender=normalized_gender,
                 image_filename=image_filename,
                 quality_analysis=quality_analysis,
+                speaker_embedding=speaker_embedding,
             )
 
             # Transcribe combined reference audio for Qwen3-TTS (ref_text improves clone quality)

@@ -199,3 +199,84 @@ export interface VoiceUpdateResponse {
   message: string;
   voice?: VoiceResponse;
 }
+
+export type RecordingType = 'meeting' | 'call' | 'memo' | 'interview' | 'other';
+
+export interface TranscriptSpeakerSegment {
+  speaker_id: string;
+  start_ms: number;
+  end_ms: number;
+  text: string;
+  confidence: number;
+}
+
+export interface TranscriptSpeaker {
+  id: string;
+  label?: string | null;
+  voice_library_match?: string | null;
+  match_confidence?: number | null;
+  talk_time_seconds: number;
+  segment_count: number;
+  summary?: string | null;
+  audio_segment_path?: string | null;
+}
+
+export interface TranscriptActionItem {
+  action: string;
+  owner?: string | null;
+  due_hint?: string | null;
+  priority: 'low' | 'medium' | 'high' | string;
+}
+
+export interface TranscriptAnalysis {
+  summary: string;
+  action_items: TranscriptActionItem[];
+  key_decisions: string[];
+  open_questions: string[];
+  topics_discussed: string[];
+  sentiment: string;
+  duration_formatted: string;
+}
+
+export interface TranscriptItem {
+  id: string;
+  title: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  duration_seconds?: number;
+  file_name: string;
+  file_size_bytes: number;
+  language: string;
+  recording_type: RecordingType;
+  speakers: TranscriptSpeaker[];
+  transcript: TranscriptSpeakerSegment[];
+  analysis?: TranscriptAnalysis | null;
+  error?: string | null;
+  progress_pct: number;
+  current_stage?: string | null;
+}
+
+export interface TranscriptUploadResponse {
+  transcript_id: string;
+  status: string;
+  message: string;
+  estimated_wait_seconds: number;
+}
+
+export interface TranscriptStatusResponse {
+  transcript_id: string;
+  status: string;
+  progress_pct: number;
+  current_stage?: string | null;
+  duration_seconds?: number | null;
+  speakers_detected?: number | null;
+  error?: string | null;
+}
+
+export interface TranscriptListResponse {
+  transcripts: TranscriptItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}

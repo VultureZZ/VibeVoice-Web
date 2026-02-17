@@ -12,6 +12,7 @@ A FastAPI + React project for generating speech, managing voices, and producing 
 - Multi-speaker voice generation (Qwen3-TTS or VibeVoice)
 - Built-in default voices (Alice, Frank, Mary, Carter, Maya) and custom voice cloning
 - Support for English and other languages (Qwen3-TTS: Chinese, Japanese, Korean, etc.)
+- Transcript service for meetings, calls, voice memos, and interviews
 - GPU acceleration (CUDA) recommended
 - FastAPI backend with a web UI (React + TypeScript)
 - Optional realtime streaming TTS over WebSocket (VibeVoice-Realtime demo)
@@ -201,6 +202,18 @@ The frontend lives in `frontend/`. See `frontend/README.md` for setup, developme
 - `PUT /api/v1/voices/{voice_id}/profile` - Apply a full voice profile payload to a voice
 - `PUT /api/v1/voices/{voice_id}/profile/keywords` - Update profile keywords and re-profile
 - `POST /api/v1/voices/{voice_id}/profile/generate` - Force profile generation
+
+### Transcripts
+
+- `POST /api/v1/transcripts/upload` - Upload audio and start transcript pipeline
+- `GET /api/v1/transcripts/{transcript_id}/status` - Poll transcript progress
+- `GET /api/v1/transcripts/{transcript_id}` - Get transcript, speakers, and analysis
+- `PATCH /api/v1/transcripts/{transcript_id}/speakers` - Label speakers and trigger analysis
+- `GET /api/v1/transcripts/{transcript_id}/speakers/{speaker_id}/audio` - Download extracted speaker audio
+- `POST /api/v1/transcripts/{transcript_id}/speakers/{speaker_id}/add-to-library` - Create voice from extracted speaker audio
+- `GET /api/v1/transcripts/{transcript_id}/report` - Download report (`pdf`, `json`, `markdown`)
+- `GET /api/v1/transcripts` - List transcripts
+- `DELETE /api/v1/transcripts/{transcript_id}` - Delete transcript and files
 
 ### Podcast generation + library
 

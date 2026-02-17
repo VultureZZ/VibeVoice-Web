@@ -6,6 +6,7 @@ import { PodcastPage } from './pages/PodcastPage';
 import { PodcastsLibraryPage } from './pages/PodcastsLibraryPage';
 import { VoicesPage } from './pages/VoicesPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { TranscriptsPage } from './pages/TranscriptsPage';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
           <Route path="/podcast" element={<PodcastPage />} />
           <Route path="/podcasts" element={<PodcastsLibraryPage />} />
           <Route path="/voices" element={<VoicesPage />} />
+          <Route path="/transcripts" element={<TranscriptsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </Layout>
