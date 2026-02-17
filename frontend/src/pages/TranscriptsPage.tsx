@@ -9,6 +9,7 @@ import { TranscriptViewer } from '../components/transcripts/TranscriptViewer';
 import { SummaryView } from '../components/transcripts/SummaryView';
 import { ExportControls } from '../components/transcripts/ExportControls';
 import type { RecordingType, TranscriptItem, TranscriptStatusResponse } from '../types/api';
+import { mergeTranscriptSegments } from '../utils/transcript';
 
 export function TranscriptsPage() {
   const {
@@ -17,13 +18,29 @@ export function TranscriptsPage() {
     getTranscript,
     updateTranscriptSpeakers,
     downloadTranscriptReport,
+    listTranscripts,
     loading,
     error,
   } = useApi();
+  const [activeTab, setActiveTab] = useState<'new' | 'resolved'>('new');
   const [transcriptId, setTranscriptId] = useState<string | null>(null);
   const [status, setStatus] = useState<TranscriptStatusResponse | null>(null);
   const [item, setItem] = useState<TranscriptItem | null>(null);
+  const [resolvedItems, setResolvedItems] = useState<TranscriptItem[]>([]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const refreshResolved = async () => {
+    const result = await listTranscripts({ status: 'complete', limit: 50, offset: 0 });
+    if (result) {
+      setResolvedItems(result.transcripts || []);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'resolved') return;
+    refreshResolved();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   useEffect(() => {
     if (!transcriptId) return;
@@ -63,6 +80,7 @@ export function TranscriptsPage() {
     if (response) {
       setTranscriptId(response.transcript_id);
       setSuccessMessage(response.message);
+      setActiveTab('new');
     }
   };
 
@@ -81,7 +99,8 @@ export function TranscriptsPage() {
 
   const transcriptTextForCopy = useMemo(() => {
     if (!item?.transcript) return '';
-    return item.transcript.map((x) => `${x.speaker_id}: ${x.text}`).join('\n');
+    const merged = mergeTranscriptSegments(item.transcript);
+    return merged.map((x) => `${x.speaker_id} [${Math.round(x.start_ms / 1000)}s] ${x.text}`).join('\n');
   }, [item]);
 
   const downloadReport = async (format: 'pdf' | 'json') => {
@@ -104,6 +123,18 @@ export function TranscriptsPage() {
     setSuccessMessage('Transcript copied to clipboard.');
   };
 
+  const openResolvedTranscript = async (selectedId: string) => {
+    setTranscriptId(selectedId);
+    const s = await getTranscriptStatus(selectedId);
+    if (s) setStatus(s);
+    const full = await getTranscript(selectedId);
+    if (full) {
+      setItem(full);
+      setActiveTab('new');
+      setSuccessMessage(`Loaded transcript: ${full.title}`);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -113,38 +144,102 @@ export function TranscriptsPage() {
         </p>
       </div>
 
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab('new')}
+          className={`px-4 py-2 rounded-md text-sm font-medium ${
+            activeTab === 'new'
+              ? 'bg-primary-600 text-white'
+              : 'bg-white text-gray-700 border border-gray-300'
+          }`}
+        >
+          New Transcript
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('resolved')}
+          className={`px-4 py-2 rounded-md text-sm font-medium ${
+            activeTab === 'resolved'
+              ? 'bg-primary-600 text-white'
+              : 'bg-white text-gray-700 border border-gray-300'
+          }`}
+        >
+          Resolved History
+        </button>
+      </div>
+
       {error && <Alert type="error" message={error} />}
       {successMessage && (
         <Alert type="success" message={successMessage} onClose={() => setSuccessMessage(null)} />
       )}
 
-      <RecordingUpload isLoading={loading && !transcriptId} onSubmit={startUpload} />
-
-      {status && status.status !== 'complete' && status.status !== 'awaiting_labels' && (
-        <ProcessingStatus status={status} />
-      )}
-
-      {status?.status === 'awaiting_labels' && item?.speakers && (
-        <SpeakerLabeler speakers={item.speakers} onProceed={handleProceed} isLoading={loading} />
-      )}
-
-      {loading && transcriptId && !item ? (
-        <div className="flex justify-center py-8">
-          <LoadingSpinner size="lg" />
-        </div>
-      ) : null}
-
-      {item && (
+      {activeTab === 'new' && (
         <>
-          <SummaryView analysis={item.analysis} recordingType={item.recording_type} />
-          <TranscriptViewer transcript={item.transcript || []} />
-          <ExportControls
-            onDownloadPdf={() => downloadReport('pdf')}
-            onDownloadJson={() => downloadReport('json')}
-            onCopyTranscript={copyTranscript}
-            isLoading={loading}
-          />
+          <RecordingUpload isLoading={loading && !transcriptId} onSubmit={startUpload} />
+
+          {status && status.status !== 'complete' && status.status !== 'awaiting_labels' && (
+            <ProcessingStatus status={status} />
+          )}
+
+          {status?.status === 'awaiting_labels' && item?.speakers && (
+            <SpeakerLabeler speakers={item.speakers} onProceed={handleProceed} isLoading={loading} />
+          )}
+
+          {loading && transcriptId && !item ? (
+            <div className="flex justify-center py-8">
+              <LoadingSpinner size="lg" />
+            </div>
+          ) : null}
+
+          {item && (
+            <>
+              <SummaryView analysis={item.analysis} recordingType={item.recording_type} />
+              <TranscriptViewer transcript={item.transcript || []} />
+              <ExportControls
+                onDownloadPdf={() => downloadReport('pdf')}
+                onDownloadJson={() => downloadReport('json')}
+                onCopyTranscript={copyTranscript}
+                isLoading={loading}
+              />
+            </>
+          )}
         </>
+      )}
+
+      {activeTab === 'resolved' && (
+        <div className="bg-white rounded-lg shadow p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-gray-900">Resolved Transcripts</h2>
+            <button
+              type="button"
+              onClick={refreshResolved}
+              className="px-3 py-2 text-sm border rounded-md bg-gray-50 hover:bg-gray-100"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {resolvedItems.length === 0 ? (
+            <p className="text-sm text-gray-500">No completed transcripts yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {resolvedItems.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => openResolvedTranscript(t.id)}
+                  className="w-full text-left border rounded-md p-3 hover:bg-gray-50"
+                >
+                  <div className="font-medium text-gray-900">{t.title || t.file_name}</div>
+                  <div className="text-sm text-gray-600">
+                    {t.recording_type} • {t.language} • {new Date(t.created_at).toLocaleString()}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
