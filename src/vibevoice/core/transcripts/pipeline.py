@@ -31,6 +31,32 @@ def _extract_unique_speakers(segments: list[dict[str, Any]]) -> list[str]:
     return ordered
 
 
+def _segments_from_transcript(transcript_like: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    Fallback segment builder when diarization is unavailable.
+    Produces SPEAKER_00-attributed segments from transcript timestamps.
+    """
+    out: list[dict[str, Any]] = []
+    for segment in transcript_like.get("segments", []):
+        text = (segment.get("text") or "").strip()
+        if not text:
+            continue
+        start_ms = int(float(segment.get("start", 0.0)) * 1000)
+        end_ms = int(float(segment.get("end", 0.0)) * 1000)
+        score = segment.get("avg_logprob")
+        confidence = float(score) if isinstance(score, (float, int)) else 0.0
+        out.append(
+            {
+                "speaker_id": "SPEAKER_00",
+                "start_ms": start_ms,
+                "end_ms": end_ms,
+                "text": text,
+                "confidence": confidence,
+            }
+        )
+    return out
+
+
 def _build_speakers(
     speaker_ids: list[str],
     segments: list[dict[str, Any]],
@@ -103,21 +129,42 @@ class TranscriptPipeline:
                 await self._set_status(
                     transcript_id, status="diarizing", progress=40, stage="Identifying speakers..."
                 )
-                diarization = await transcript_diarizer.run(wav_path)
-                segments = await transcript_diarizer.assign_speakers(aligned, diarization)
+                diarization = None
+                try:
+                    diarization = await transcript_diarizer.run(wav_path)
+                    segments = await transcript_diarizer.assign_speakers(aligned, diarization)
+                except Exception as exc:
+                    logger.warning(
+                        "Diarization unavailable for %s, falling back to single-speaker transcript: %s",
+                        transcript_id,
+                        exc,
+                    )
+                    segments = _segments_from_transcript(aligned)
+                    await self._set_status(
+                        transcript_id,
+                        status="matching",
+                        progress=50,
+                        stage="Diarization unavailable. Continuing with single-speaker mode...",
+                    )
 
                 await self._set_status(
                     transcript_id, status="matching", progress=60, stage="Matching speakers with voice library..."
                 )
                 speaker_ids = _extract_unique_speakers(segments)
-                matches = await transcript_speaker_matcher.match_all(speaker_ids, wav_path, diarization)
+                if diarization is None:
+                    matches = [{"speaker_id": sid, "voice_id": None, "confidence": None} for sid in speaker_ids]
+                else:
+                    matches = await transcript_speaker_matcher.match_all(speaker_ids, wav_path, diarization)
 
                 await self._set_status(
                     transcript_id, status="matching", progress=70, stage="Extracting speaker audio segments..."
                 )
-                speaker_audio_paths = await transcript_audio_extractor.extract_all(
-                    wav_path, speaker_ids, diarization, transcript_id
-                )
+                if diarization is None:
+                    speaker_audio_paths = {}
+                else:
+                    speaker_audio_paths = await transcript_audio_extractor.extract_all(
+                        wav_path, speaker_ids, diarization, transcript_id
+                    )
 
                 speakers = _build_speakers(speaker_ids, segments, matches, speaker_audio_paths)
                 transcript_storage.update_transcript(
