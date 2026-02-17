@@ -4,9 +4,11 @@ TTS backend interface and shared types.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, List
+from typing import Any, Callable, List, Optional
 
 from .segments import TranscriptSegment
+
+ProgressCallback = Optional[Callable[[int, int, str], None]]
 
 
 @dataclass
@@ -50,6 +52,7 @@ class TTSBackend(ABC):
         speaker_refs: List[SpeakerRef],
         language: str,
         output_path: Path,
+        progress_callback: ProgressCallback = None,
     ) -> Path:
         """
         Generate speech from transcript segments and write to output_path.
@@ -59,6 +62,7 @@ class TTSBackend(ABC):
             speaker_refs: SpeakerRef for each distinct speaker (indexed by speaker_index in segments).
             language: Language code (e.g. "en", "Chinese").
             output_path: Path to write the final WAV.
+            progress_callback: Optional callback(current, total, message) for progress updates.
 
         Returns:
             output_path after writing.

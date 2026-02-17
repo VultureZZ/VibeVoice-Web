@@ -10,7 +10,7 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from ..config import config
 from .voice_manager import voice_manager
@@ -105,6 +105,7 @@ class VoiceGenerator:
         output_filename: Optional[str] = None,
         language: Optional[str] = None,
         speaker_instructions: Optional[List[str]] = None,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
     ) -> Path:
         """
         Generate speech from transcript.
@@ -132,7 +133,12 @@ class VoiceGenerator:
         if self._use_legacy:
             return self._generate_speech_legacy(transcript, speakers, output_path)
         return self._generate_speech_backend(
-            transcript, speakers, output_path, language or "en", speaker_instructions
+            transcript,
+            speakers,
+            output_path,
+            language or "en",
+            speaker_instructions,
+            progress_callback,
         )
 
     def _generate_speech_backend(
@@ -142,6 +148,7 @@ class VoiceGenerator:
         output_path: Path,
         language: str = "en",
         speaker_instructions: Optional[List[str]] = None,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
     ) -> Path:
         """Generate using TTS backend (Qwen3-TTS)."""
         from .tts import parse_transcript_into_segments
@@ -166,7 +173,9 @@ class VoiceGenerator:
                 if i < len(speaker_refs) and instr and isinstance(instr, str):
                     speaker_refs[i].instruct = instr.strip()
 
-        backend.generate(segments, speaker_refs, language, output_path)
+        backend.generate(
+            segments, speaker_refs, language, output_path, progress_callback
+        )
         logger.info("Speech generation completed: %s", output_path)
         return output_path
 

@@ -1,11 +1,14 @@
 """
 Speech generation endpoints.
 """
+import asyncio
+import json
 import logging
+import queue
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from ..models.schemas import ErrorResponse, SpeechGenerateRequest, SpeechGenerateResponse
 from ..services.voice_generator import voice_generator
@@ -113,6 +116,104 @@ async def generate_speech(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error: {str(e)}",
         ) from e
+
+
+def _sse_event(data: dict) -> str:
+    """Format a dict as an SSE data line."""
+    return f"data: {json.dumps(data)}\n\n"
+
+
+@router.post(
+    "/generate-stream",
+    responses={
+        400: {"model": ErrorResponse},
+        429: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+async def generate_speech_stream(
+    request: SpeechGenerateRequest, http_request: Request
+) -> StreamingResponse:
+    """
+    Generate speech with Server-Sent Events for progress updates.
+
+    Streams progress events (type: progress) and a final result event (type: complete or error).
+    """
+    progress_queue: queue.Queue = queue.Queue()
+
+    def on_progress(current: int, total: int, message: str) -> None:
+        progress_queue.put(("progress", current, total, message))
+
+    def run_generation() -> None:
+        try:
+            formatted = voice_generator.format_transcript(
+                request.transcript, request.speakers
+            )
+            language = request.settings.language if request.settings else "en"
+            output_path = voice_generator.generate_speech(
+                transcript=formatted,
+                speakers=request.speakers,
+                language=language,
+                speaker_instructions=request.speaker_instructions,
+                progress_callback=on_progress,
+            )
+            progress_queue.put(
+                (
+                    "complete",
+                    str(output_path.name),
+                    f"/api/v1/speech/download/{output_path.name}",
+                )
+            )
+        except Exception as e:
+            progress_queue.put(("error", str(e), None))
+
+    async def event_generator():
+        loop = asyncio.get_event_loop()
+        gen_task = loop.run_in_executor(None, run_generation)
+
+        while True:
+            try:
+                ev = await asyncio.to_thread(progress_queue.get, timeout=0.25)
+            except queue.Empty:
+                if gen_task.done():
+                    break
+                continue
+
+            if ev[0] == "progress":
+                _, current, total, message = ev
+                yield _sse_event(
+                    {"type": "progress", "current": current, "total": total, "message": message}
+                )
+            elif ev[0] == "complete":
+                _, filename, audio_url = ev
+                yield _sse_event(
+                    {
+                        "type": "complete",
+                        "success": True,
+                        "message": "Speech generated successfully",
+                        "audio_url": audio_url,
+                        "filename": filename,
+                    }
+                )
+                break
+            elif ev[0] == "error":
+                _, detail, _ = ev
+                yield _sse_event(
+                    {"type": "error", "success": False, "detail": detail}
+                )
+                break
+
+        await gen_task
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get(

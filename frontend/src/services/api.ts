@@ -107,6 +107,84 @@ class ApiClient {
   }
 
   /**
+   * Generate speech with progress updates via SSE.
+   * Calls onProgress(current, total, message) for each progress event.
+   */
+  async generateSpeechWithProgress(
+    request: SpeechGenerateRequest,
+    onProgress: (current: number, total: number, message: string) => void
+  ): Promise<SpeechGenerateResponse | null> {
+    const url = `${this.baseURL}/api/v1/speech/generate-stream`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (this.apiKey) {
+      headers['X-API-Key'] = this.apiKey;
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(err.detail || err.error || 'Speech generation failed');
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('No response body');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const jsonStr = line.slice(6);
+          if (jsonStr === '[DONE]' || jsonStr.trim() === '') continue;
+          try {
+            const data = JSON.parse(jsonStr) as {
+              type: string;
+              current?: number;
+              total?: number;
+              message?: string;
+              success?: boolean;
+              audio_url?: string;
+              filename?: string;
+              detail?: string;
+            };
+            if (data.type === 'progress' && data.current != null && data.total != null) {
+              onProgress(data.current, data.total, data.message ?? '');
+            } else if (data.type === 'complete' && data.success && data.audio_url) {
+              return {
+                success: true,
+                message: 'Speech generated successfully',
+                audio_url: data.audio_url,
+              };
+            } else if (data.type === 'error' && data.detail) {
+              throw new Error(data.detail);
+            }
+          } catch (e) {
+            if (e instanceof SyntaxError) continue;
+            throw e;
+          }
+        }
+      }
+    }
+
+    throw new Error('Generation completed without result');
+  }
+
+  /**
    * Download generated audio file
    */
   async downloadAudio(filename: string): Promise<Blob> {

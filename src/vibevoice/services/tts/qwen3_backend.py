@@ -315,6 +315,7 @@ class Qwen3Backend(TTSBackend):
         speaker_refs: List[SpeakerRef],
         language: str,
         output_path: Path,
+        progress_callback: Optional[Any] = None,
     ) -> Path:
         """Generate speech from segments and concatenate into one WAV."""
         import numpy as np
@@ -326,16 +327,22 @@ class Qwen3Backend(TTSBackend):
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
+        total = len(segments)
+        if progress_callback:
+            progress_callback(0, total, "Starting generation...")
+
         all_wavs: List[np.ndarray] = []
         sample_rate = 24000
 
-        for seg in segments:
+        for i, seg in enumerate(segments):
             if seg.speaker_index >= len(speaker_refs):
                 raise ValueError(
                     f"Segment speaker_index {seg.speaker_index} out of range (have {len(speaker_refs)} speaker_refs)"
                 )
             ref = speaker_refs[seg.speaker_index]
             wav, sr = self._generate_segment(seg.text, ref, language)
+            if progress_callback:
+                progress_callback(i + 1, total, f"Generated segment {i + 1} of {total}")
             if wav is not None and len(wav) > 0:
                 if not all_wavs:
                     sample_rate = sr

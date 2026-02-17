@@ -62,6 +62,27 @@ export function useApi() {
     [execute]
   );
 
+  const generateSpeechWithProgress = useCallback(
+    async (
+      request: SpeechGenerateRequest,
+      onProgress: (current: number, total: number, message: string) => void
+    ): Promise<SpeechGenerateResponse | null> => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await apiClient.generateSpeechWithProgress(request, onProgress);
+        return result;
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+        setError(errorMessage);
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
   const downloadAudio = useCallback(
     async (filename: string): Promise<Blob | null> => {
       return execute(() => apiClient.downloadAudio(filename));

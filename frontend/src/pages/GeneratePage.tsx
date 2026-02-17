@@ -23,7 +23,7 @@ export function GeneratePage() {
   const fromTranscriptId = searchParams.get('from');
   const { settings } = useSettings();
   const { voices, loading: voicesLoading } = useVoices();
-  const { generateSpeech, downloadAudio, getTranscript, loading, error } = useApi();
+  const { generateSpeechWithProgress, downloadAudio, getTranscript, loading, error } = useApi();
 
   const [transcript, setTranscript] = useState('');
   const [selectedSpeakers, setSelectedSpeakers] = useState<string[]>([]);
@@ -40,6 +40,11 @@ export function GeneratePage() {
   const [audioFilename, setAudioFilename] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [progress, setProgress] = useState<{
+    current: number;
+    total: number;
+    message: string;
+  } | null>(null);
 
   // Initialize with example transcript (avoids Qwen3 TTS pitfalls: no greeting-style intros, no abbreviations)
   useEffect(() => {
@@ -123,8 +128,9 @@ Speaker 2: Generation completed successfully.`);
     setAudioUrl(null);
     setAudioFilename(null);
     setSuccessMessage(null);
+    setProgress({ current: 0, total: 1, message: 'Starting...' });
 
-    const request: Parameters<typeof generateSpeech>[0] = {
+    const request: Parameters<typeof generateSpeechWithProgress>[0] = {
       transcript,
       speakers: selectedSpeakers,
       settings: speechSettings,
@@ -132,13 +138,19 @@ Speaker 2: Generation completed successfully.`);
     if (speakerInstructions.some((s) => s.trim())) {
       request.speaker_instructions = speakerInstructions.map((s) => s.trim());
     }
-    const response = await generateSpeech(request);
+    try {
+      const response = await generateSpeechWithProgress(request, (cur, tot, msg) => {
+        setProgress({ current: cur, total: tot || 1, message: msg });
+      });
 
-    if (response && response.audio_url) {
-      const fullUrl = `${settings.apiEndpoint}${response.audio_url}`;
-      setAudioUrl(fullUrl);
-      setAudioFilename(response.audio_url.split('/').pop() || null);
-      setSuccessMessage(response.message || 'Speech generated successfully!');
+      if (response && response.audio_url) {
+        const fullUrl = `${settings.apiEndpoint}${response.audio_url}`;
+        setAudioUrl(fullUrl);
+        setAudioFilename(response.audio_url.split('/').pop() || null);
+        setSuccessMessage(response.message || 'Speech generated successfully!');
+      }
+    } finally {
+      setProgress(null);
     }
   };
 
@@ -324,6 +336,25 @@ Speaker 2: Generation completed successfully.`);
             </div>
           )}
         </div>
+
+        {progress && (
+          <div className="space-y-2">
+            <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary-600 transition-all duration-300"
+                style={{
+                  width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%`,
+                }}
+              />
+            </div>
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>{progress.message}</span>
+              <span>
+                {progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0}%
+              </span>
+            </div>
+          </div>
+        )}
 
         <Button
           variant="primary"
