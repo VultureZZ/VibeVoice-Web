@@ -45,20 +45,40 @@ export function TranscriptsPage() {
   useEffect(() => {
     if (!transcriptId) return;
     let stop = false;
+    let timer: number | null = null;
+    const processingStatuses = new Set([
+      'uploading',
+      'queued',
+      'transcribing',
+      'diarizing',
+      'matching',
+      'analyzing',
+    ]);
+
     const poll = async () => {
       const s = await getTranscriptStatus(transcriptId);
       if (stop || !s) return;
       setStatus(s);
-      if (['complete', 'awaiting_labels', 'failed'].includes(s.status)) {
+
+      // Terminal states: fetch once then stop polling.
+      if (!processingStatuses.has(s.status)) {
         const full = await getTranscript(transcriptId);
         if (!stop && full) setItem(full);
+        if (timer !== null) {
+          window.clearInterval(timer);
+          timer = null;
+        }
+        return;
       }
     };
+
     poll();
-    const timer = window.setInterval(poll, 3000);
+    timer = window.setInterval(poll, 3000);
     return () => {
       stop = true;
-      window.clearInterval(timer);
+      if (timer !== null) {
+        window.clearInterval(timer);
+      }
     };
   }, [transcriptId, getTranscriptStatus, getTranscript]);
 
