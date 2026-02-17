@@ -139,7 +139,7 @@ Speaker 2: Generation completed successfully.`);
       request.speaker_instructions = speakerInstructions.map((s) => s.trim());
     }
     try {
-      const response = await generateSpeechWithProgress(request, (cur, tot, msg) => {
+      const response = await generateSpeechWithProgress(request, (cur: number, tot: number, msg: string) => {
         setProgress({ current: cur, total: tot || 1, message: msg });
       });
 

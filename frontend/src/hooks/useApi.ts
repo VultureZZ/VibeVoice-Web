@@ -326,6 +326,7 @@ export function useApi() {
     error,
     healthCheck,
     generateSpeech,
+    generateSpeechWithProgress,
     downloadAudio,
     listVoices,
     createVoice,
