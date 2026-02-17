@@ -18,12 +18,13 @@ export function mergeTranscriptSegments(
     const text = (seg.text || '').trim();
     if (!text) continue;
 
-    const sameSpeaker = acc && acc.speaker_id === seg.speaker_id;
+    const sameSpeaker = acc !== null && acc.speaker_id === seg.speaker_id;
     const endsSentence = SENTENCE_END.test(text);
 
-    if (acc && sameSpeaker) {
+    if (acc !== null && sameSpeaker) {
       acc = {
-        ...acc,
+        speaker_id: acc.speaker_id,
+        start_ms: acc.start_ms,
         text: `${acc.text} ${text}`.trim(),
         end_ms: seg.end_ms,
         confidence: (acc.confidence + seg.confidence) / 2,
