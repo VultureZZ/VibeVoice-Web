@@ -65,16 +65,56 @@ class TranscriptTranscriber:
             self._align_model = align_model
             self._align_metadata = align_metadata
 
-        aligned = await asyncio.to_thread(
-            whisperx.align,
-            transcript.get("segments", []),
-            self._align_model,
-            self._align_metadata,
-            audio_path,
-            self._device,
-            False,
-        )
-        return aligned
+        # WhisperX versions differ in defaults around interpolation.
+        # Explicitly set interpolate_method to avoid pandas ValueError
+        # ("method should be a string, not None") seen in some envs.
+        try:
+            return await asyncio.to_thread(
+                whisperx.align,
+                transcript.get("segments", []),
+                self._align_model,
+                self._align_metadata,
+                audio_path,
+                self._device,
+                return_char_alignments=False,
+                interpolate_method="nearest",
+            )
+        except TypeError:
+            # Older whisperx versions may not support interpolate_method kwarg.
+            # Retry with a minimal argument set.
+            try:
+                return await asyncio.to_thread(
+                    whisperx.align,
+                    transcript.get("segments", []),
+                    self._align_model,
+                    self._align_metadata,
+                    audio_path,
+                    self._device,
+                    False,
+                )
+            except ValueError as exc:
+                if "method" not in str(exc):
+                    raise
+                logger.warning("WhisperX align fallback hit pandas method=None bug; returning raw transcript.")
+                return transcript
+        except ValueError as exc:
+            if "method" not in str(exc):
+                raise
+            # Final defensive retry for version-mismatch edge cases.
+            try:
+                return await asyncio.to_thread(
+                    whisperx.align,
+                    transcript.get("segments", []),
+                    self._align_model,
+                    self._align_metadata,
+                    audio_path,
+                    self._device,
+                    return_char_alignments=False,
+                    interpolate_method="linear",
+                )
+            except Exception:
+                logger.warning("WhisperX align failed after retries; returning raw transcript.")
+                return transcript
 
 
 transcript_transcriber = TranscriptTranscriber()

@@ -94,7 +94,11 @@ class TranscriptPipeline:
                 raw_transcript = await transcript_transcriber.transcribe(
                     wav_path, language=transcript.get("language") or "en"
                 )
-                aligned = await transcript_transcriber.align(raw_transcript, wav_path)
+                try:
+                    aligned = await transcript_transcriber.align(raw_transcript, wav_path)
+                except Exception as exc:
+                    logger.warning("Alignment failed for %s, continuing with raw transcript: %s", transcript_id, exc)
+                    aligned = raw_transcript
 
                 await self._set_status(
                     transcript_id, status="diarizing", progress=40, stage="Identifying speakers..."
