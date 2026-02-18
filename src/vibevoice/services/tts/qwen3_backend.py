@@ -3,6 +3,7 @@ Qwen3-TTS backend using the official qwen-tts package.
 
 Uses CustomVoice model for built-in speakers and Base model for voice cloning.
 """
+import gc
 import logging
 import threading
 from pathlib import Path
@@ -139,6 +140,11 @@ class Qwen3Backend(TTSBackend):
             ):
                 return
             logger.info("Unloading Qwen3-TTS models after idle timeout")
+            models = [
+                self._custom_voice_model_instance,
+                self._base_model_instance,
+                self._voice_design_model_instance,
+            ]
             self._custom_voice_model_instance = None
             self._base_model_instance = None
             self._voice_design_model_instance = None
@@ -146,7 +152,21 @@ class Qwen3Backend(TTSBackend):
         try:
             import torch
             if torch.cuda.is_available():
+                vram_before = torch.cuda.memory_allocated() / (1024 ** 2)
+                torch.cuda.synchronize()
+                del models
+                gc.collect()
                 torch.cuda.empty_cache()
+                vram_after = torch.cuda.memory_allocated() / (1024 ** 2)
+                logger.info(
+                    "VRAM released: %.0f MiB -> %.0f MiB (freed %.0f MiB)",
+                    vram_before,
+                    vram_after,
+                    vram_before - vram_after,
+                )
+            else:
+                del models
+                gc.collect()
         except Exception:  # pragma: no cover
             pass
 
