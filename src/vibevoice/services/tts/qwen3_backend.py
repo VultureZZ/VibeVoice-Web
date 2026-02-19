@@ -151,24 +151,43 @@ class Qwen3Backend(TTSBackend):
             self._clone_prompt_cache.clear()
         try:
             import torch
+
+            # Some wrappers keep internal module refs; move any underlying module to CPU first.
+            for model in models:
+                if model is None:
+                    continue
+                try:
+                    inner = getattr(model, "model", None)
+                    if inner is not None and hasattr(inner, "to"):
+                        inner.to("cpu")
+                    elif hasattr(model, "to"):
+                        model.to("cpu")
+                except Exception:
+                    logger.debug("Best-effort CPU offload failed during model unload", exc_info=True)
+
             if torch.cuda.is_available():
-                vram_before = torch.cuda.memory_allocated() / (1024 ** 2)
+                allocated_before = torch.cuda.memory_allocated() / (1024 ** 2)
+                reserved_before = torch.cuda.memory_reserved() / (1024 ** 2)
                 torch.cuda.synchronize()
                 del models
                 gc.collect()
                 torch.cuda.empty_cache()
-                vram_after = torch.cuda.memory_allocated() / (1024 ** 2)
+                # Also release CUDA IPC memory held by allocator internals.
+                torch.cuda.ipc_collect()
+                allocated_after = torch.cuda.memory_allocated() / (1024 ** 2)
+                reserved_after = torch.cuda.memory_reserved() / (1024 ** 2)
                 logger.info(
-                    "VRAM released: %.0f MiB -> %.0f MiB (freed %.0f MiB)",
-                    vram_before,
-                    vram_after,
-                    vram_before - vram_after,
+                    "VRAM cleanup complete: allocated %.0f->%.0f MiB, reserved %.0f->%.0f MiB",
+                    allocated_before,
+                    allocated_after,
+                    reserved_before,
+                    reserved_after,
                 )
             else:
                 del models
                 gc.collect()
-        except Exception:  # pragma: no cover
-            pass
+        except Exception:
+            logger.warning("Qwen3 unload cleanup encountered an error", exc_info=True)
 
     def _schedule_unload(self) -> None:
         """Schedule model unload after idle timeout. Call with lock held."""
