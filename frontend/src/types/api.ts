@@ -206,10 +206,16 @@ export interface MusicLyricsResponse {
 
 export interface MusicSimpleRequest {
   description: string;
+  input_mode?: 'refine' | 'exact';
   instrumental?: boolean;
   vocal_language?: string;
   duration?: number;
   batch_size?: number;
+  exact_caption?: string;
+  exact_lyrics?: string;
+  exact_bpm?: number;
+  exact_keyscale?: string;
+  exact_timesignature?: string;
 }
 
 export interface MusicHealthResponse {

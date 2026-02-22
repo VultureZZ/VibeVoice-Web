@@ -2,7 +2,7 @@
 Pydantic models for request/response validation.
 """
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -256,11 +256,20 @@ class MusicLyricsResponse(BaseModel):
 class MusicSimpleGenerateRequest(BaseModel):
     """Request model for simple description-driven generation."""
 
-    description: str = Field(..., description="Natural language music description")
+    description: str = Field(default="", description="Natural language music description (required for refine mode)")
+    input_mode: Literal["refine", "exact"] = Field(
+        default="refine",
+        description="Simple input mode: 'refine' uses Ollama shaping, 'exact' forwards ACE-Step-ready fields",
+    )
     instrumental: bool = Field(default=False, description="Generate instrumental-only output")
     vocal_language: Optional[str] = Field(default=None, description="Optional vocal language override")
     duration: Optional[float] = Field(default=None, ge=10, le=600, description="Optional target duration in seconds")
     batch_size: int = Field(default=1, ge=1, le=4, description="Number of generated variations")
+    exact_caption: Optional[str] = Field(default=None, description="Exact mode caption to send to ACE-Step")
+    exact_lyrics: Optional[str] = Field(default=None, description="Exact mode lyrics to send to ACE-Step")
+    exact_bpm: Optional[int] = Field(default=None, ge=30, le=300, description="Exact mode BPM override")
+    exact_keyscale: Optional[str] = Field(default=None, description="Exact mode key/scale override")
+    exact_timesignature: Optional[str] = Field(default=None, description="Exact mode time signature override")
 
 
 class MusicHealthResponse(BaseModel):

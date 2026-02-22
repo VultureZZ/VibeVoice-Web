@@ -8,7 +8,7 @@ import json
 import logging
 import threading
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
 import httpx
@@ -155,59 +155,192 @@ class MusicGenerator:
             raise RuntimeError("ACE-Step did not return a task_id")
         return task_id
 
-    async def create_sample(
+    @staticmethod
+    def _clean_text(value: Optional[str]) -> str:
+        return (value or "").strip()
+
+    @staticmethod
+    def _parse_ollama_json(response_text: str) -> dict[str, Any]:
+        text = response_text.strip()
+        if not text:
+            raise RuntimeError("Ollama returned an empty refinement response")
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            start = text.find("{")
+            end = text.rfind("}")
+            if start == -1 or end == -1 or end <= start:
+                raise RuntimeError("Ollama refinement response was not valid JSON")
+            try:
+                return json.loads(text[start : end + 1])
+            except json.JSONDecodeError as exc:
+                raise RuntimeError("Ollama refinement response could not be parsed as JSON") from exc
+
+    def _refine_prompt_with_ollama(
         self,
-        query: str,
+        *,
+        description: str,
+        instrumental: bool,
+        vocal_language: Optional[str],
+        duration: Optional[float],
+    ) -> dict[str, Any]:
+        language = (vocal_language or "en").strip().lower() if not instrumental else None
+        refinement_prompt = (
+            "You are a music prompt refiner for ACE-Step.\n"
+            "Convert user intent into strict JSON only.\n"
+            "Do not include markdown or explanations.\n\n"
+            "Output schema:\n"
+            "{\n"
+            '  "caption": "string",\n'
+            '  "lyrics": "string (optional, empty for instrumental)",\n'
+            '  "bpm": 120,\n'
+            '  "keyscale": "C Major",\n'
+            '  "timesignature": "4"\n'
+            "}\n\n"
+            "Rules:\n"
+            "- Keep places, names, and narrative details faithful to user input.\n"
+            "- Never switch language.\n"
+            "- Keep vocals language aligned with requested language.\n"
+            "- Keep output concise and model-friendly.\n"
+            "- Return empty lyrics for instrumental tracks.\n\n"
+            f"User description: {description}\n"
+            f"Instrumental: {instrumental}\n"
+            f"Vocal language: {language or 'n/a'}\n"
+            f"Target duration seconds: {int(duration) if duration and duration > 0 else 'auto'}\n"
+        )
+
+        response = ollama_client.client.post(
+            f"{ollama_client.base_url}/api/generate",
+            json={
+                "model": ollama_client.model,
+                "prompt": refinement_prompt,
+                "stream": False,
+                "options": {"temperature": 0.4, "top_p": 0.9},
+            },
+        )
+        response.raise_for_status()
+        raw_text = response.json().get("response", "")
+        parsed = self._parse_ollama_json(raw_text)
+        if not isinstance(parsed, dict):
+            raise RuntimeError("Ollama refinement output had unexpected shape")
+        return parsed
+
+    def prepare_simple_payload(
+        self,
+        *,
+        description: str,
+        input_mode: Literal["refine", "exact"] = "refine",
         instrumental: bool,
         vocal_language: Optional[str] = None,
         duration: Optional[float] = None,
         batch_size: int = 1,
-    ) -> str:
-        # NOTE:
-        # ACE-Step's sample_mode can strongly rewrite user intent (e.g., language/duration drift).
-        # For AudioMesh "Simple Mode", we keep intent constrained by using normal generation
-        # with LM-assisted refinement and explicit user constraints.
-        enriched_query = query.strip()
-        if not instrumental:
-            lang = (vocal_language or "en").strip().lower()
-            enriched_query = (
-                f"{enriched_query}. Keep vocals and lyrics in {lang}. "
-                "Do not switch language."
-            )
-        if duration and duration > 0:
-            enriched_query = (
-                f"{enriched_query} Target duration: {int(duration)} seconds."
-            )
+        exact_caption: Optional[str] = None,
+        exact_lyrics: Optional[str] = None,
+        exact_bpm: Optional[int] = None,
+        exact_keyscale: Optional[str] = None,
+        exact_timesignature: Optional[str] = None,
+    ) -> dict[str, Any]:
+        description_text = self._clean_text(description)
 
+        if input_mode not in {"refine", "exact"}:
+            raise ValueError("input_mode must be 'refine' or 'exact'")
+
+        normalized_language = (vocal_language or "en").strip().lower() if not instrumental else None
         payload: dict[str, Any] = {
-            "prompt": enriched_query,
             "thinking": True,
             "batch_size": max(1, min(batch_size, 4)),
             "instrumental": instrumental,
-            "use_cot_caption": True,
-            # When caller explicitly provides language/duration, do not let CoT rewrite those.
-            "use_cot_language": False if (vocal_language and not instrumental) else True,
-            "use_cot_metas": False if (duration and duration > 0) else True,
+            "use_cot_caption": False,
+            "use_cot_language": False,
+            "use_cot_metas": False,
+            "use_format": False,
         }
-        if vocal_language and not instrumental:
-            payload["vocal_language"] = vocal_language
-        if not instrumental:
-            # Provide minimal structured lyrics to strongly bias toward vocal generation.
-            # Without lyrics, ACE-Step may still produce instrumental tracks in simple mode.
-            payload["lyrics"] = (
-                "[Verse 1]\n"
-                f"{query.strip()}\n"
-                "[Chorus]\n"
-                "Rowing with my homies, we keep moving with the flow.\n"
-                "[Verse 2]\n"
-                "On the river with the crew, we grind and let it show.\n"
-                "[Chorus]\n"
-                "Rowing with my homies, we keep moving with the flow."
-            )
-            payload["use_format"] = True
+
         if duration and duration > 0:
             payload["duration"] = duration
+        if normalized_language:
+            payload["vocal_language"] = normalized_language
 
+        if input_mode == "exact":
+            caption = self._clean_text(exact_caption)
+            lyrics = self._clean_text(exact_lyrics)
+            if not caption and not lyrics:
+                raise ValueError("Exact mode requires at least one of exact_caption or exact_lyrics")
+
+            payload["prompt"] = caption or description_text or ("instrumental track" if instrumental else "song")
+            if not instrumental and lyrics:
+                payload["lyrics"] = lyrics
+            if exact_bpm is not None:
+                payload["bpm"] = exact_bpm
+            if exact_keyscale:
+                payload["keyscale"] = exact_keyscale.strip()
+            if exact_timesignature:
+                payload["timesignature"] = exact_timesignature.strip()
+        else:
+            if not description_text:
+                raise ValueError("Description is required in refine mode")
+            refined = self._refine_prompt_with_ollama(
+                description=description_text,
+                instrumental=instrumental,
+                vocal_language=normalized_language,
+                duration=duration,
+            )
+            caption = self._clean_text(str(refined.get("caption", "")))
+            lyrics = self._clean_text(str(refined.get("lyrics", "")))
+            payload["prompt"] = caption or description_text
+            if not instrumental and lyrics:
+                payload["lyrics"] = lyrics
+
+            bpm = refined.get("bpm")
+            if isinstance(bpm, int) and 30 <= bpm <= 300:
+                payload["bpm"] = bpm
+            keyscale = refined.get("keyscale")
+            if isinstance(keyscale, str) and keyscale.strip():
+                payload["keyscale"] = keyscale.strip()
+            timesignature = refined.get("timesignature")
+            if isinstance(timesignature, str) and timesignature.strip():
+                payload["timesignature"] = timesignature.strip()
+
+        if instrumental:
+            payload.pop("lyrics", None)
+            payload.pop("vocal_language", None)
+
+        logger.info(
+            "Prepared simple music payload: mode=%s instrumental=%s keys=%s",
+            input_mode,
+            instrumental,
+            sorted(payload.keys()),
+        )
+        return payload
+
+    async def create_sample(
+        self,
+        description: str,
+        input_mode: Literal["refine", "exact"] = "refine",
+        instrumental: bool = False,
+        vocal_language: Optional[str] = None,
+        duration: Optional[float] = None,
+        batch_size: int = 1,
+        exact_caption: Optional[str] = None,
+        exact_lyrics: Optional[str] = None,
+        exact_bpm: Optional[int] = None,
+        exact_keyscale: Optional[str] = None,
+        exact_timesignature: Optional[str] = None,
+        prepared_payload: Optional[dict[str, Any]] = None,
+    ) -> str:
+        payload = prepared_payload or self.prepare_simple_payload(
+            description=description,
+            input_mode=input_mode,
+            instrumental=instrumental,
+            vocal_language=vocal_language,
+            duration=duration,
+            batch_size=batch_size,
+            exact_caption=exact_caption,
+            exact_lyrics=exact_lyrics,
+            exact_bpm=exact_bpm,
+            exact_keyscale=exact_keyscale,
+            exact_timesignature=exact_timesignature,
+        )
         return await self.generate_music(payload)
 
     async def get_status(self, task_id: str) -> dict[str, Any]:

@@ -168,22 +168,49 @@ async def simple_generate_music(request: MusicSimpleGenerateRequest) -> MusicGen
         effective_language = request.vocal_language
         if not request.instrumental and not effective_language:
             effective_language = "en"
-        task_id = await music_generator.create_sample(
-            query=request.description,
+        prepared_payload = music_generator.prepare_simple_payload(
+            description=request.description,
+            input_mode=request.input_mode,
             instrumental=request.instrumental,
             vocal_language=effective_language,
             duration=request.duration,
             batch_size=request.batch_size,
+            exact_caption=request.exact_caption,
+            exact_lyrics=request.exact_lyrics,
+            exact_bpm=request.exact_bpm,
+            exact_keyscale=request.exact_keyscale,
+            exact_timesignature=request.exact_timesignature,
+        )
+        task_id = await music_generator.create_sample(
+            description=request.description,
+            input_mode=request.input_mode,
+            instrumental=request.instrumental,
+            vocal_language=effective_language,
+            duration=request.duration,
+            batch_size=request.batch_size,
+            exact_caption=request.exact_caption,
+            exact_lyrics=request.exact_lyrics,
+            exact_bpm=request.exact_bpm,
+            exact_keyscale=request.exact_keyscale,
+            exact_timesignature=request.exact_timesignature,
+            prepared_payload=prepared_payload,
         )
         music_storage.create_history_entry(
             task_id=task_id,
             mode="simple",
             request_payload={
                 "description": request.description,
+                "input_mode": request.input_mode,
                 "instrumental": request.instrumental,
                 "vocal_language": request.vocal_language,
                 "duration": request.duration,
                 "batch_size": request.batch_size,
+                "exact_caption": request.exact_caption,
+                "exact_lyrics": request.exact_lyrics,
+                "exact_bpm": request.exact_bpm,
+                "exact_keyscale": request.exact_keyscale,
+                "exact_timesignature": request.exact_timesignature,
+                "effective_payload": prepared_payload,
             },
         )
         return MusicGenerateResponse(
@@ -191,6 +218,8 @@ async def simple_generate_music(request: MusicSimpleGenerateRequest) -> MusicGen
             message="Simple music generation task submitted",
             task_id=task_id,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("Simple music generation failed: %s", exc)
         raise HTTPException(

@@ -14,6 +14,7 @@ import { Alert } from '../components/Alert';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 
 type MusicTab = 'simple' | 'custom';
+type SimpleInputMode = 'refine' | 'exact';
 
 const GENRES = [
   { value: 'Pop', label: 'Pop' },
@@ -93,10 +94,16 @@ export function MusicPage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const [simpleDescription, setSimpleDescription] = useState('');
+  const [simpleInputMode, setSimpleInputMode] = useState<SimpleInputMode>('refine');
   const [simpleInstrumental, setSimpleInstrumental] = useState(false);
   const [simpleLanguage, setSimpleLanguage] = useState('en');
   const [simpleDuration, setSimpleDuration] = useState('60');
   const [simpleBatchSize, setSimpleBatchSize] = useState('1');
+  const [simpleExactCaption, setSimpleExactCaption] = useState('');
+  const [simpleExactLyrics, setSimpleExactLyrics] = useState('');
+  const [simpleExactBpm, setSimpleExactBpm] = useState('');
+  const [simpleExactKeyscale, setSimpleExactKeyscale] = useState('');
+  const [simpleExactTimesignature, setSimpleExactTimesignature] = useState('');
 
   const [caption, setCaption] = useState('');
   const [lyrics, setLyrics] = useState('');
@@ -198,12 +205,21 @@ export function MusicPage() {
 
   const handleSimpleGenerate = async () => {
     resetTaskState();
+    const normalizedMode: SimpleInputMode = simpleInputMode === 'exact' ? 'exact' : 'refine';
     const response = await simpleGenerateMusic({
       description: simpleDescription.trim(),
+      input_mode: normalizedMode,
       instrumental: simpleInstrumental,
       vocal_language: simpleInstrumental ? undefined : simpleLanguage,
       duration: Number(simpleDuration),
       batch_size: Number(simpleBatchSize),
+      exact_caption: normalizedMode === 'exact' ? simpleExactCaption.trim() || undefined : undefined,
+      exact_lyrics:
+        normalizedMode === 'exact' && !simpleInstrumental ? simpleExactLyrics.trim() || undefined : undefined,
+      exact_bpm: normalizedMode === 'exact' && simpleExactBpm.trim() ? Number(simpleExactBpm) : undefined,
+      exact_keyscale: normalizedMode === 'exact' ? simpleExactKeyscale.trim() || undefined : undefined,
+      exact_timesignature:
+        normalizedMode === 'exact' ? simpleExactTimesignature.trim() || undefined : undefined,
     });
     if (response?.task_id) {
       setTaskId(response.task_id);
@@ -272,10 +288,16 @@ export function MusicPage() {
 
   const applySimpleValues = (values: Record<string, unknown>) => {
     setSimpleDescription(String(values.description ?? ''));
+    setSimpleInputMode(values.input_mode === 'exact' ? 'exact' : 'refine');
     setSimpleInstrumental(Boolean(values.instrumental ?? false));
     setSimpleLanguage(String(values.vocal_language ?? 'en'));
     setSimpleDuration(String(values.duration ?? '60'));
     setSimpleBatchSize(String(values.batch_size ?? '1'));
+    setSimpleExactCaption(String(values.exact_caption ?? ''));
+    setSimpleExactLyrics(String(values.exact_lyrics ?? ''));
+    setSimpleExactBpm(values.exact_bpm == null ? '' : String(values.exact_bpm));
+    setSimpleExactKeyscale(String(values.exact_keyscale ?? ''));
+    setSimpleExactTimesignature(String(values.exact_timesignature ?? ''));
     setActiveTab('simple');
   };
 
@@ -314,10 +336,16 @@ export function MusicPage() {
       activeTab === 'simple'
         ? {
             description: simpleDescription,
+            input_mode: simpleInputMode,
             instrumental: simpleInstrumental,
             vocal_language: simpleLanguage,
             duration: Number(simpleDuration),
             batch_size: Number(simpleBatchSize),
+            exact_caption: simpleInputMode === 'exact' ? simpleExactCaption : undefined,
+            exact_lyrics: simpleInputMode === 'exact' ? simpleExactLyrics : undefined,
+            exact_bpm: simpleInputMode === 'exact' && simpleExactBpm.trim() ? Number(simpleExactBpm) : undefined,
+            exact_keyscale: simpleInputMode === 'exact' ? simpleExactKeyscale : undefined,
+            exact_timesignature: simpleInputMode === 'exact' ? simpleExactTimesignature : undefined,
           }
         : {
             caption,
@@ -453,15 +481,64 @@ export function MusicPage() {
 
         {activeTab === 'simple' ? (
           <div className="space-y-4">
+            <Select
+              label="Simple Input Mode"
+              options={[
+                { value: 'refine', label: 'Refine with Ollama' },
+                { value: 'exact', label: 'Exact ACE-Step Input' },
+              ]}
+              value={simpleInputMode}
+              onChange={(e) => setSimpleInputMode(e.target.value as SimpleInputMode)}
+            />
             <Input
-              label="Description"
+              label={simpleInputMode === 'refine' ? 'Description' : 'Description / Context'}
               multiline
               rows={4}
               value={simpleDescription}
               onChange={(e) => setSimpleDescription(e.target.value)}
-              placeholder="e.g. a chill lo-fi beat for studying with warm vinyl texture"
+              placeholder={
+                simpleInputMode === 'refine'
+                  ? 'e.g. a chill lo-fi beat for studying with warm vinyl texture'
+                  : 'Optional extra context for exact mode'
+              }
               required
             />
+            {simpleInputMode === 'exact' && (
+              <div className="space-y-4 p-4 border rounded-lg bg-gray-50">
+                <Input
+                  label="Exact Caption"
+                  value={simpleExactCaption}
+                  onChange={(e) => setSimpleExactCaption(e.target.value)}
+                  placeholder="ACE-Step caption/style prompt"
+                />
+                <Input
+                  label="Exact Lyrics"
+                  multiline
+                  rows={6}
+                  value={simpleExactLyrics}
+                  onChange={(e) => setSimpleExactLyrics(e.target.value)}
+                  placeholder="[Verse 1]..."
+                  disabled={simpleInstrumental}
+                />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Input
+                    label="Exact BPM (optional)"
+                    value={simpleExactBpm}
+                    onChange={(e) => setSimpleExactBpm(e.target.value)}
+                  />
+                  <Input
+                    label="Exact Key/Scale (optional)"
+                    value={simpleExactKeyscale}
+                    onChange={(e) => setSimpleExactKeyscale(e.target.value)}
+                  />
+                  <Input
+                    label="Exact Time Signature (optional)"
+                    value={simpleExactTimesignature}
+                    onChange={(e) => setSimpleExactTimesignature(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Select label="Vocal Language" options={LANGUAGE_OPTIONS} value={simpleLanguage} onChange={(e) => setSimpleLanguage(e.target.value)} disabled={simpleInstrumental} />
               <Input label="Duration (seconds)" type="text" value={simpleDuration} onChange={(e) => setSimpleDuration(e.target.value)} />
@@ -475,7 +552,14 @@ export function MusicPage() {
               variant="primary"
               onClick={handleSimpleGenerate}
               isLoading={loading}
-              disabled={!simpleDescription.trim() || isGenerating}
+              disabled={
+                isGenerating ||
+                (simpleInputMode === 'refine' && !simpleDescription.trim()) ||
+                (simpleInputMode === 'exact' &&
+                  !simpleDescription.trim() &&
+                  !simpleExactCaption.trim() &&
+                  !simpleExactLyrics.trim())
+              }
               className="w-full"
             >
               Generate

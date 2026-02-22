@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from ..config import config
+from .music_presets import DEFAULT_MUSIC_PRESETS
 
 
 def _utc_now_iso() -> str:
@@ -29,12 +30,36 @@ class MusicStorage:
         self._ensure_storage_file()
 
     def _ensure_storage_file(self) -> None:
-        if not self.storage_file.exists():
-            with self.lock:
-                self.storage_file.parent.mkdir(parents=True, exist_ok=True)
-                self.storage_file.write_text(
-                    json.dumps({"presets": {}, "history": {}}, indent=2)
-                )
+        with self.lock:
+            payload: Dict[str, Any] = {"presets": {}, "history": {}}
+
+            if self.storage_file.exists():
+                try:
+                    loaded = json.loads(self.storage_file.read_text())
+                    if isinstance(loaded, dict):
+                        payload = loaded
+                except Exception:
+                    payload = {"presets": {}, "history": {}}
+
+            payload.setdefault("presets", {})
+            payload.setdefault("history", {})
+
+            if not payload["presets"]:
+                now = _utc_now_iso()
+                seeded_presets: Dict[str, Dict[str, Any]] = {}
+                for preset in DEFAULT_MUSIC_PRESETS:
+                    preset_id = str(uuid4())
+                    seeded_presets[preset_id] = {
+                        "name": str(preset.get("name", "")).strip(),
+                        "mode": str(preset.get("mode", "custom")).strip(),
+                        "values": dict(preset.get("values", {})),
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                payload["presets"] = seeded_presets
+
+            self.storage_file.parent.mkdir(parents=True, exist_ok=True)
+            self.storage_file.write_text(json.dumps(payload, indent=2))
 
     def _load(self) -> Dict[str, Any]:
         try:
