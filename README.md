@@ -49,13 +49,17 @@ pip install -r requirements.txt
 
 With default `TTS_BACKEND=qwen3`, this installs `qwen-tts` and `soundfile`. Model weights download on first use.
 
-### 4. (Optional) Legacy VibeVoice
+### 4. Provision model repos (recommended)
 
-To use legacy VibeVoice instead, set `TTS_BACKEND=vibevoice` and run:
+Run setup once to provision both:
+- legacy VibeVoice assets (for `TTS_BACKEND=vibevoice`)
+- ACE-Step repository and dependencies (for Music generation)
 
 ```bash
 python scripts/setup_vibevoice.py
 ```
+
+If you only use default Qwen3-TTS speech and do not use the Music feature, this step is optional.
 
 ### 5. Run the test script
 
@@ -138,6 +142,8 @@ Run the setup script again:
 ```bash
 python scripts/setup_vibevoice.py
 ```
+
+If the Music page shows `ACE-Step Not Configured`, ensure the setup script completed successfully and that `ACESTEP_REPO_DIR` points to the cloned ACE-Step folder.
 
 ### Slow Generation
 

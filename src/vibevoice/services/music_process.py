@@ -152,7 +152,8 @@ class MusicProcessManager:
         if not cfg.repo_dir.exists():
             raise RuntimeError(
                 f"ACE-Step repo not found at {cfg.repo_dir}. "
-                "Clone https://github.com/ace-step/ACE-Step-1.5 and set ACESTEP_REPO_DIR."
+                "Run `python scripts/setup_vibevoice.py` to provision it, "
+                "or clone https://github.com/ace-step/ACE-Step-1.5 and set ACESTEP_REPO_DIR."
             )
 
         if cfg.server_command:

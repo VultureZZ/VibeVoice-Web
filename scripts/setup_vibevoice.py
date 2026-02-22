@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """
-Setup script for legacy VibeVoice backend (AudioMesh).
+Setup script for AudioMesh model dependencies.
 
 This script:
-1. Clones the community VibeVoice repository
+1. Clones the community VibeVoice repository (legacy backend support)
 2. Downloads the VibeVoice-1.5B model from Hugging Face
 3. Installs the VibeVoice package
-4. Verifies the installation
+4. Clones ACE-Step-1.5 for music generation
+5. Runs `uv sync` in ACE-Step-1.5 to install its dependencies
+6. Verifies the installation
 """
 
 import os
 import sys
 import subprocess
+import shutil
 from pathlib import Path
 from huggingface_hub import snapshot_download
 
@@ -20,6 +23,8 @@ VIBEVOICE_REPO_URL = "https://github.com/vibevoice-community/VibeVoice.git"
 VIBEVOICE_REPO_DIR = Path(__file__).parent.parent / "VibeVoice"
 MODEL_REPO_ID = "microsoft/VibeVoice-1.5B"
 MODEL_DIR = Path(__file__).parent.parent / "models" / "VibeVoice-1.5B"
+ACESTEP_REPO_URL = "https://github.com/ace-step/ACE-Step-1.5.git"
+ACESTEP_REPO_DIR = Path(__file__).parent.parent / "ACE-Step-1.5"
 
 
 def run_command(cmd, cwd=None, check=True):
@@ -77,6 +82,53 @@ def install_vibevoice_package():
         return False
 
 
+def clone_ace_step_repo():
+    """Clone ACE-Step repository used by AudioMesh music generation."""
+    if ACESTEP_REPO_DIR.exists():
+        print(f"ACE-Step repository already exists at {ACESTEP_REPO_DIR}")
+        print("Skipping clone. To re-clone, delete the directory first.")
+        return True
+
+    print(f"Cloning ACE-Step repository to {ACESTEP_REPO_DIR}...")
+    try:
+        run_command(
+            ["git", "clone", "--depth", "1", ACESTEP_REPO_URL, str(ACESTEP_REPO_DIR)]
+        )
+        print("✓ ACE-Step repository cloned successfully")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"✗ Failed to clone ACE-Step repository: {e}", file=sys.stderr)
+        return False
+
+
+def install_ace_step_dependencies():
+    """
+    Install ACE-Step dependencies with uv sync.
+
+    We intentionally use uv to match ACE-Step's recommended setup flow.
+    """
+    if not ACESTEP_REPO_DIR.exists():
+        print("✗ ACE-Step repository not found. Run clone first.", file=sys.stderr)
+        return False
+
+    uv_binary = shutil.which("uv")
+    if not uv_binary:
+        print(
+            "✗ `uv` was not found in PATH. Install it first: https://astral.sh/uv/install.sh",
+            file=sys.stderr,
+        )
+        return False
+
+    print("Installing ACE-Step dependencies with uv sync...")
+    try:
+        run_command([uv_binary, "sync"], cwd=str(ACESTEP_REPO_DIR))
+        print("✓ ACE-Step dependencies installed successfully")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"✗ Failed to install ACE-Step dependencies: {e}", file=sys.stderr)
+        return False
+
+
 def download_model():
     """Download the VibeVoice-1.5B model from Hugging Face."""
     if MODEL_DIR.exists() and any(MODEL_DIR.iterdir()):
@@ -108,6 +160,7 @@ def verify_installation():
     checks = {
         "VibeVoice repository": VIBEVOICE_REPO_DIR.exists(),
         "Model directory": MODEL_DIR.exists() and any(MODEL_DIR.iterdir()),
+        "ACE-Step repository": ACESTEP_REPO_DIR.exists(),
     }
     
     all_passed = True
@@ -156,8 +209,18 @@ def main():
     if not download_model():
         success = False
     
-    # Step 4: Verify installation
-    print("\n[4/4] Verifying installation...")
+    # Step 4: Clone ACE-Step repository
+    print("\n[4/6] Cloning ACE-Step repository...")
+    if not clone_ace_step_repo():
+        success = False
+
+    # Step 5: Install ACE-Step dependencies
+    print("\n[5/6] Installing ACE-Step dependencies...")
+    if not install_ace_step_dependencies():
+        success = False
+
+    # Step 6: Verify installation
+    print("\n[6/6] Verifying installation...")
     if not verify_installation():
         success = False
     
@@ -165,8 +228,9 @@ def main():
     if success:
         print("Setup completed successfully!")
         print("\nNext steps:")
-        print("1. Run the test script: python tests/test_voice_generation.py")
-        print("2. Check the outputs/ directory for generated audio files")
+        print("1. Run the API: python run_api.py")
+        print("2. Open the Music page in the WebUI and generate your first track")
+        print("3. Check the outputs/ directory for generated files")
     else:
         print("Setup completed with errors. Please review the messages above.")
         sys.exit(1)
