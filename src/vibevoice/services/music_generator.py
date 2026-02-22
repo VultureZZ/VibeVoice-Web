@@ -163,17 +163,37 @@ class MusicGenerator:
         duration: Optional[float] = None,
         batch_size: int = 1,
     ) -> str:
+        # NOTE:
+        # ACE-Step's sample_mode can strongly rewrite user intent (e.g., language/duration drift).
+        # For AudioMesh "Simple Mode", we keep intent constrained by using normal generation
+        # with LM-assisted refinement and explicit user constraints.
+        enriched_query = query.strip()
+        if not instrumental:
+            lang = (vocal_language or "en").strip().lower()
+            enriched_query = (
+                f"{enriched_query}. Keep vocals and lyrics in {lang}. "
+                "Do not switch language."
+            )
+        if duration and duration > 0:
+            enriched_query = (
+                f"{enriched_query} Target duration: {int(duration)} seconds."
+            )
+
         payload: dict[str, Any] = {
-            "sample_mode": True,
-            "sample_query": query,
+            "prompt": enriched_query,
             "thinking": True,
             "batch_size": max(1, min(batch_size, 4)),
             "instrumental": instrumental,
+            "use_cot_caption": True,
+            # When caller explicitly provides language/duration, do not let CoT rewrite those.
+            "use_cot_language": False if (vocal_language and not instrumental) else True,
+            "use_cot_metas": False if (duration and duration > 0) else True,
         }
-        if vocal_language:
+        if vocal_language and not instrumental:
             payload["vocal_language"] = vocal_language
         if duration and duration > 0:
             payload["duration"] = duration
+
         return await self.generate_music(payload)
 
     async def get_status(self, task_id: str) -> dict[str, Any]:

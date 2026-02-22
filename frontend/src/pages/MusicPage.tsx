@@ -133,6 +133,7 @@ export function MusicPage() {
     () => resultUrls.map((url) => `${settings.apiEndpoint}${url}`),
     [resultUrls, settings.apiEndpoint]
   );
+  const isGenerating = loading || polling || (taskId !== null && taskStatus === 'running');
 
   useEffect(() => {
     const loadHealth = async () => {
@@ -474,7 +475,7 @@ export function MusicPage() {
               variant="primary"
               onClick={handleSimpleGenerate}
               isLoading={loading}
-              disabled={!simpleDescription.trim()}
+              disabled={!simpleDescription.trim() || isGenerating}
               className="w-full"
             >
               Generate
@@ -530,7 +531,7 @@ export function MusicPage() {
               variant="primary"
               onClick={handleCustomGenerate}
               isLoading={loading}
-              disabled={!caption.trim() && !lyrics.trim()}
+              disabled={(!caption.trim() && !lyrics.trim()) || isGenerating}
               className="w-full"
             >
               Generate Music

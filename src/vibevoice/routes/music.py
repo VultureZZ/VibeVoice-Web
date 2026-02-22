@@ -165,10 +165,13 @@ async def generate_lyrics(request: MusicLyricsRequest) -> MusicLyricsResponse:
 async def simple_generate_music(request: MusicSimpleGenerateRequest) -> MusicGenerateResponse:
     """Submit a description-driven music generation task."""
     try:
+        effective_language = request.vocal_language
+        if not request.instrumental and not effective_language:
+            effective_language = "en"
         task_id = await music_generator.create_sample(
             query=request.description,
             instrumental=request.instrumental,
-            vocal_language=request.vocal_language,
+            vocal_language=effective_language,
             duration=request.duration,
             batch_size=request.batch_size,
         )
