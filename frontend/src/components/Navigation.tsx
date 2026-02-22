@@ -11,6 +11,7 @@ export function Navigation() {
     { path: '/generate', label: 'Generate' },
     { path: '/realtime', label: 'Realtime' },
     { path: '/podcast', label: 'Article Podcaster' },
+    { path: '/music', label: 'Music' },
     { path: '/podcasts', label: 'Podcast Library' },
     { path: '/voices', label: 'Voices' },
     { path: '/transcripts', label: 'Transcripts' },

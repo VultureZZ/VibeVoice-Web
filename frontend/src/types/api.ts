@@ -145,6 +145,119 @@ export interface PodcastListResponse {
   total: number;
 }
 
+export interface MusicGenerateRequest {
+  caption?: string;
+  lyrics?: string;
+  bpm?: number;
+  keyscale?: string;
+  timesignature?: string;
+  duration?: number;
+  vocal_language?: string;
+  instrumental?: boolean;
+  thinking?: boolean;
+  inference_steps?: number;
+  batch_size?: number;
+  seed?: number;
+  audio_format?: 'mp3' | 'wav' | 'flac';
+}
+
+export interface MusicGenerateResponse {
+  success: boolean;
+  message: string;
+  task_id: string;
+}
+
+export interface MusicStatusMetadataItem {
+  filename: string;
+  audio_url: string;
+  file_path: string;
+  seed_value?: string;
+  prompt?: string;
+  lyrics?: string;
+  metas?: Record<string, unknown>;
+  dit_model?: string;
+  lm_model?: string;
+}
+
+export interface MusicStatusResponse {
+  success: boolean;
+  message: string;
+  task_id: string;
+  status: 'running' | 'succeeded' | 'failed' | string;
+  audios: string[];
+  metadata: MusicStatusMetadataItem[];
+  error?: string;
+}
+
+export interface MusicLyricsRequest {
+  description: string;
+  genre?: string;
+  mood?: string;
+  language?: string;
+  duration_hint?: string;
+}
+
+export interface MusicLyricsResponse {
+  success: boolean;
+  message: string;
+  lyrics: string;
+  caption: string;
+}
+
+export interface MusicSimpleRequest {
+  description: string;
+  instrumental?: boolean;
+  vocal_language?: string;
+  duration?: number;
+  batch_size?: number;
+}
+
+export interface MusicHealthResponse {
+  available: boolean;
+  running: boolean;
+  service: string;
+  host: string;
+  port: number;
+}
+
+export interface MusicPreset {
+  id: string;
+  name: string;
+  mode: 'simple' | 'custom' | string;
+  values: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface MusicPresetRequest {
+  name: string;
+  mode: 'simple' | 'custom' | string;
+  values: Record<string, unknown>;
+}
+
+export interface MusicPresetListResponse {
+  presets: MusicPreset[];
+  total: number;
+}
+
+export interface MusicHistoryItem {
+  id: string;
+  task_id: string;
+  mode: 'simple' | 'custom' | string;
+  status: 'running' | 'succeeded' | 'failed' | string;
+  request_payload: Record<string, unknown>;
+  audios: string[];
+  metadata: MusicStatusMetadataItem[];
+  error?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface MusicHistoryListResponse {
+  history: MusicHistoryItem[];
+  total: number;
+}
+
 export interface VoiceProfile {
   cadence?: string;
   tone?: string;

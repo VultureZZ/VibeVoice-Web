@@ -196,6 +196,131 @@ class PodcastListResponse(BaseModel):
     total: int = Field(..., description="Total number of items")
 
 
+class MusicGenerateRequest(BaseModel):
+    """Request model for custom ACE-Step music generation."""
+
+    caption: str = Field(default="", description="Music style prompt/caption")
+    lyrics: str = Field(default="", description="Lyrics text")
+    bpm: Optional[int] = Field(default=None, ge=30, le=300, description="Tempo in BPM")
+    keyscale: str = Field(default="", description="Musical key/scale (e.g., C Major)")
+    timesignature: str = Field(default="", description="Time signature (2,3,4,6)")
+    duration: Optional[float] = Field(default=None, ge=10, le=600, description="Target duration in seconds")
+    vocal_language: str = Field(default="en", description="Vocal language code")
+    instrumental: bool = Field(default=False, description="Generate instrumental-only music")
+    thinking: bool = Field(default=True, description="Enable 5Hz LM-assisted reasoning")
+    inference_steps: int = Field(default=8, ge=1, le=200, description="Diffusion inference steps")
+    batch_size: int = Field(default=1, ge=1, le=4, description="Number of variations")
+    seed: int = Field(default=-1, description="Random seed (-1 for random)")
+    audio_format: str = Field(default="mp3", description="Output audio format: mp3/wav/flac")
+
+
+class MusicGenerateResponse(BaseModel):
+    """Response model for submitted music generation tasks."""
+
+    success: bool = Field(..., description="Whether request was accepted")
+    message: str = Field(..., description="Status message")
+    task_id: str = Field(..., description="ACE-Step task identifier")
+
+
+class MusicStatusResponse(BaseModel):
+    """Response model for music generation task status."""
+
+    success: bool = Field(..., description="Whether status query succeeded")
+    message: str = Field(..., description="Status message")
+    task_id: str = Field(..., description="ACE-Step task identifier")
+    status: str = Field(..., description="Task status: running/succeeded/failed")
+    audios: List[str] = Field(default_factory=list, description="Generated audio URLs when complete")
+    metadata: List[Dict] = Field(default_factory=list, description="Generated metadata records")
+    error: Optional[str] = Field(default=None, description="Failure reason when task fails")
+
+
+class MusicLyricsRequest(BaseModel):
+    """Request model for LLM-assisted lyrics generation."""
+
+    description: str = Field(..., description="User idea/description for the song")
+    genre: str = Field(default="Pop", description="Target genre")
+    mood: str = Field(default="Neutral", description="Target mood")
+    language: str = Field(default="English", description="Target lyrics language")
+    duration_hint: Optional[str] = Field(default=None, description="Optional duration hint")
+
+
+class MusicLyricsResponse(BaseModel):
+    """Response model for generated lyrics."""
+
+    success: bool = Field(..., description="Whether lyrics generation was successful")
+    message: str = Field(..., description="Status message")
+    lyrics: str = Field(..., description="Generated lyrics with structure tags")
+    caption: str = Field(default="", description="Suggested style caption/prompt")
+
+
+class MusicSimpleGenerateRequest(BaseModel):
+    """Request model for simple description-driven generation."""
+
+    description: str = Field(..., description="Natural language music description")
+    instrumental: bool = Field(default=False, description="Generate instrumental-only output")
+    vocal_language: Optional[str] = Field(default=None, description="Optional vocal language override")
+    duration: Optional[float] = Field(default=None, ge=10, le=600, description="Optional target duration in seconds")
+    batch_size: int = Field(default=1, ge=1, le=4, description="Number of generated variations")
+
+
+class MusicHealthResponse(BaseModel):
+    """Response model for ACE-Step service health."""
+
+    available: bool = Field(..., description="Whether ACE-Step repo/config is available")
+    running: bool = Field(..., description="Whether ACE-Step API server is currently running")
+    service: str = Field(..., description="Service identifier")
+    host: str = Field(..., description="ACE-Step host")
+    port: int = Field(..., description="ACE-Step port")
+
+
+class MusicPresetRequest(BaseModel):
+    """Request model for saving/updating a music preset."""
+
+    name: str = Field(..., min_length=1, description="Preset display name")
+    mode: str = Field(default="custom", description="Preset mode: simple/custom")
+    values: Dict = Field(default_factory=dict, description="Preset parameter values")
+
+
+class MusicPresetResponse(BaseModel):
+    """Response model for a single music preset."""
+
+    id: str = Field(..., description="Preset identifier")
+    name: str = Field(..., description="Preset display name")
+    mode: str = Field(..., description="Preset mode")
+    values: Dict = Field(default_factory=dict, description="Stored preset values")
+    created_at: Optional[str] = Field(default=None, description="Creation timestamp")
+    updated_at: Optional[str] = Field(default=None, description="Last update timestamp")
+
+
+class MusicPresetListResponse(BaseModel):
+    """Response model for music presets list."""
+
+    presets: List[MusicPresetResponse] = Field(default_factory=list, description="Saved music presets")
+    total: int = Field(..., description="Total number of presets")
+
+
+class MusicHistoryItemResponse(BaseModel):
+    """Response model for a music generation history item."""
+
+    id: str = Field(..., description="History item identifier")
+    task_id: str = Field(..., description="Associated ACE-Step task id")
+    mode: str = Field(..., description="Generation mode: simple/custom")
+    status: str = Field(..., description="Generation status")
+    request_payload: Dict = Field(default_factory=dict, description="Original generation request payload")
+    audios: List[str] = Field(default_factory=list, description="Generated audio URLs")
+    metadata: List[Dict] = Field(default_factory=list, description="Generated metadata entries")
+    error: Optional[str] = Field(default=None, description="Error text if generation failed")
+    created_at: Optional[str] = Field(default=None, description="Creation timestamp")
+    updated_at: Optional[str] = Field(default=None, description="Last update timestamp")
+
+
+class MusicHistoryListResponse(BaseModel):
+    """Response model for music generation history list."""
+
+    history: List[MusicHistoryItemResponse] = Field(default_factory=list, description="History items")
+    total: int = Field(..., description="Total number of returned history items")
+
+
 class VoiceProfile(BaseModel):
     """Structured voice profile with speech pattern characteristics."""
 

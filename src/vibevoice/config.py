@@ -80,6 +80,24 @@ class Config:
     #   REALTIME_SERVER_COMMAND="python /path/to/VibeVoice/demo/vibevoice_realtime_demo.py --port 3000 --model_path microsoft/VibeVoice-Realtime-0.5B"
     REALTIME_SERVER_COMMAND: Optional[str] = os.getenv("REALTIME_SERVER_COMMAND", None)
 
+    # ACE-Step music generation API server (subprocess-managed)
+    ACESTEP_REPO_DIR: Path = Path(os.getenv("ACESTEP_REPO_DIR", "ACE-Step-1.5"))
+    ACESTEP_HOST: str = os.getenv("ACESTEP_HOST", "127.0.0.1")
+    ACESTEP_PORT: int = int(os.getenv("ACESTEP_PORT", "8001"))
+    ACESTEP_DEVICE: str = os.getenv("ACESTEP_DEVICE", "cuda")
+    ACESTEP_CONFIG_PATH: str = os.getenv("ACESTEP_CONFIG_PATH", "acestep-v15-turbo")
+    ACESTEP_LM_MODEL_PATH: str = os.getenv("ACESTEP_LM_MODEL_PATH", "acestep-5Hz-lm-0.6B")
+    ACESTEP_LM_BACKEND: str = os.getenv("ACESTEP_LM_BACKEND", "pt")
+    ACESTEP_STARTUP_TIMEOUT_SECONDS: float = float(
+        os.getenv("ACESTEP_STARTUP_TIMEOUT_SECONDS", "120")
+    )
+    ACESTEP_IDLE_SHUTDOWN_SECONDS: int = int(
+        os.getenv("ACESTEP_IDLE_SHUTDOWN_SECONDS", "120")
+    )
+    # Optional explicit command. Example:
+    #   ACESTEP_SERVER_COMMAND="uv run acestep-api --host 127.0.0.1 --port 8001"
+    ACESTEP_SERVER_COMMAND: Optional[str] = os.getenv("ACESTEP_SERVER_COMMAND", None)
+
     # Server
     PORT: int = int(os.getenv("PORT", "8000"))
     HOST: str = os.getenv("HOST", "0.0.0.0")
@@ -124,6 +142,7 @@ class Config:
         "TRANSCRIPT_WORKER_PYTHON",
         str((PROJECT_ROOT / ".venv-transcripts" / "bin" / "python")),
     )
+    MUSIC_OUTPUT_DIR: Path = Path(os.getenv("MUSIC_OUTPUT_DIR", "outputs/music"))
 
     def __init__(self):
         """Initialize configuration and ensure directories exist."""
@@ -142,6 +161,10 @@ class Config:
             self.TRANSCRIPTS_DIR = PROJECT_ROOT / self.TRANSCRIPTS_DIR
         if not self.REALTIME_VIBEVOICE_REPO_DIR.is_absolute():
             self.REALTIME_VIBEVOICE_REPO_DIR = PROJECT_ROOT / self.REALTIME_VIBEVOICE_REPO_DIR
+        if not self.ACESTEP_REPO_DIR.is_absolute():
+            self.ACESTEP_REPO_DIR = PROJECT_ROOT / self.ACESTEP_REPO_DIR
+        if not self.MUSIC_OUTPUT_DIR.is_absolute():
+            self.MUSIC_OUTPUT_DIR = PROJECT_ROOT / self.MUSIC_OUTPUT_DIR
 
         # If the user didn't explicitly set REALTIME_VIBEVOICE_REPO_DIR, try a sensible default:
         # prefer a microsoft/VibeVoice checkout if present (it contains the realtime demo server).
@@ -160,6 +183,7 @@ class Config:
         self.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         self.PODCASTS_DIR.mkdir(parents=True, exist_ok=True)
         self.TRANSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
+        self.MUSIC_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         (self.TRANSCRIPTS_DIR / "uploads").mkdir(parents=True, exist_ok=True)
         (self.TRANSCRIPTS_DIR / "segments").mkdir(parents=True, exist_ok=True)
         (self.TRANSCRIPTS_DIR / "json").mkdir(parents=True, exist_ok=True)

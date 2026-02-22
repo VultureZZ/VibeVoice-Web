@@ -15,6 +15,18 @@ import {
   PodcastGenerateRequest,
   PodcastGenerateResponse,
   PodcastListResponse,
+  MusicGenerateRequest,
+  MusicGenerateResponse,
+  MusicHealthResponse,
+  MusicLyricsRequest,
+  MusicLyricsResponse,
+  MusicSimpleRequest,
+  MusicStatusResponse,
+  MusicPreset,
+  MusicPresetListResponse,
+  MusicPresetRequest,
+  MusicHistoryItem,
+  MusicHistoryListResponse,
   VoiceProfileResponse,
   VoiceProfileRequest,
   VoiceProfileApplyRequest,
@@ -388,6 +400,112 @@ class ApiClient {
       request
     );
     return response.data;
+  }
+
+  /**
+   * Submit custom ACE-Step music generation task
+   */
+  async generateMusic(request: MusicGenerateRequest): Promise<MusicGenerateResponse> {
+    const response = await this.client.post<MusicGenerateResponse>('/api/v1/music/generate', request);
+    return response.data;
+  }
+
+  /**
+   * Submit simple description-driven music generation task
+   */
+  async simpleGenerateMusic(request: MusicSimpleRequest): Promise<MusicGenerateResponse> {
+    const response = await this.client.post<MusicGenerateResponse>('/api/v1/music/simple-generate', request);
+    return response.data;
+  }
+
+  /**
+   * Poll music generation status
+   */
+  async getMusicStatus(taskId: string): Promise<MusicStatusResponse> {
+    const response = await this.client.get<MusicStatusResponse>(`/api/v1/music/status/${taskId}`);
+    return response.data;
+  }
+
+  /**
+   * Generate lyrics with LLM assistance
+   */
+  async generateLyrics(request: MusicLyricsRequest): Promise<MusicLyricsResponse> {
+    const response = await this.client.post<MusicLyricsResponse>('/api/v1/music/generate-lyrics', request);
+    return response.data;
+  }
+
+  /**
+   * Download generated music file
+   */
+  async downloadMusic(filename: string): Promise<Blob> {
+    const response = await this.client.get(`/api/v1/music/download/${filename}`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  }
+
+  /**
+   * Check ACE-Step music service health
+   */
+  async checkMusicHealth(): Promise<MusicHealthResponse> {
+    const response = await this.client.get<MusicHealthResponse>('/api/v1/music/health');
+    return response.data;
+  }
+
+  /**
+   * List saved music presets
+   */
+  async listMusicPresets(): Promise<MusicPresetListResponse> {
+    const response = await this.client.get<MusicPresetListResponse>('/api/v1/music/presets');
+    return response.data;
+  }
+
+  /**
+   * Create a music preset
+   */
+  async createMusicPreset(request: MusicPresetRequest): Promise<MusicPreset> {
+    const response = await this.client.post<MusicPreset>('/api/v1/music/presets', request);
+    return response.data;
+  }
+
+  /**
+   * Update a music preset
+   */
+  async updateMusicPreset(presetId: string, request: MusicPresetRequest): Promise<MusicPreset> {
+    const response = await this.client.put<MusicPreset>(`/api/v1/music/presets/${presetId}`, request);
+    return response.data;
+  }
+
+  /**
+   * Delete a music preset
+   */
+  async deleteMusicPreset(presetId: string): Promise<void> {
+    await this.client.delete(`/api/v1/music/presets/${presetId}`);
+  }
+
+  /**
+   * List music generation history
+   */
+  async listMusicHistory(limit = 50): Promise<MusicHistoryListResponse> {
+    const response = await this.client.get<MusicHistoryListResponse>('/api/v1/music/history', {
+      params: { limit },
+    });
+    return response.data;
+  }
+
+  /**
+   * Fetch one history item
+   */
+  async getMusicHistoryItem(historyId: string): Promise<MusicHistoryItem> {
+    const response = await this.client.get<MusicHistoryItem>(`/api/v1/music/history/${historyId}`);
+    return response.data;
+  }
+
+  /**
+   * Delete one history item
+   */
+  async deleteMusicHistoryItem(historyId: string): Promise<void> {
+    await this.client.delete(`/api/v1/music/history/${historyId}`);
   }
 
   /**

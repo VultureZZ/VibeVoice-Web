@@ -15,6 +15,18 @@ import {
   PodcastGenerateRequest,
   PodcastGenerateResponse,
   PodcastListResponse,
+  MusicGenerateRequest,
+  MusicGenerateResponse,
+  MusicHealthResponse,
+  MusicLyricsRequest,
+  MusicLyricsResponse,
+  MusicSimpleRequest,
+  MusicStatusResponse,
+  MusicPreset,
+  MusicPresetListResponse,
+  MusicPresetRequest,
+  MusicHistoryItem,
+  MusicHistoryListResponse,
   VoiceProfileResponse,
   VoiceProfileRequest,
   VoiceProfileApplyRequest,
@@ -164,6 +176,93 @@ export function useApi() {
   const generatePodcastAudio = useCallback(
     async (request: PodcastGenerateRequest): Promise<PodcastGenerateResponse | null> => {
       return execute(() => apiClient.generatePodcastAudio(request));
+    },
+    [execute]
+  );
+
+  const generateMusic = useCallback(
+    async (request: MusicGenerateRequest): Promise<MusicGenerateResponse | null> => {
+      return execute(() => apiClient.generateMusic(request));
+    },
+    [execute]
+  );
+
+  const simpleGenerateMusic = useCallback(
+    async (request: MusicSimpleRequest): Promise<MusicGenerateResponse | null> => {
+      return execute(() => apiClient.simpleGenerateMusic(request));
+    },
+    [execute]
+  );
+
+  const getMusicStatus = useCallback(
+    async (taskId: string): Promise<MusicStatusResponse | null> => {
+      return execute(() => apiClient.getMusicStatus(taskId));
+    },
+    [execute]
+  );
+
+  const generateLyrics = useCallback(
+    async (request: MusicLyricsRequest): Promise<MusicLyricsResponse | null> => {
+      return execute(() => apiClient.generateLyrics(request));
+    },
+    [execute]
+  );
+
+  const downloadMusic = useCallback(
+    async (filename: string): Promise<Blob | null> => {
+      return execute(() => apiClient.downloadMusic(filename));
+    },
+    [execute]
+  );
+
+  const checkMusicHealth = useCallback(async (): Promise<MusicHealthResponse | null> => {
+    return execute(() => apiClient.checkMusicHealth());
+  }, [execute]);
+
+  const listMusicPresets = useCallback(async (): Promise<MusicPresetListResponse | null> => {
+    return execute(() => apiClient.listMusicPresets());
+  }, [execute]);
+
+  const createMusicPreset = useCallback(
+    async (request: MusicPresetRequest): Promise<MusicPreset | null> => {
+      return execute(() => apiClient.createMusicPreset(request));
+    },
+    [execute]
+  );
+
+  const updateMusicPreset = useCallback(
+    async (presetId: string, request: MusicPresetRequest): Promise<MusicPreset | null> => {
+      return execute(() => apiClient.updateMusicPreset(presetId, request));
+    },
+    [execute]
+  );
+
+  const deleteMusicPreset = useCallback(
+    async (presetId: string): Promise<boolean> => {
+      const result = await execute(() => apiClient.deleteMusicPreset(presetId));
+      return result !== null;
+    },
+    [execute]
+  );
+
+  const listMusicHistory = useCallback(
+    async (limit = 50): Promise<MusicHistoryListResponse | null> => {
+      return execute(() => apiClient.listMusicHistory(limit));
+    },
+    [execute]
+  );
+
+  const getMusicHistoryItem = useCallback(
+    async (historyId: string): Promise<MusicHistoryItem | null> => {
+      return execute(() => apiClient.getMusicHistoryItem(historyId));
+    },
+    [execute]
+  );
+
+  const deleteMusicHistoryItem = useCallback(
+    async (historyId: string): Promise<boolean> => {
+      const result = await execute(() => apiClient.deleteMusicHistoryItem(historyId));
+      return result !== null;
     },
     [execute]
   );
@@ -341,6 +440,19 @@ export function useApi() {
     generateVoiceProfile,
     generatePodcastScript,
     generatePodcastAudio,
+    generateMusic,
+    simpleGenerateMusic,
+    getMusicStatus,
+    generateLyrics,
+    downloadMusic,
+    checkMusicHealth,
+    listMusicPresets,
+    createMusicPreset,
+    updateMusicPreset,
+    deleteMusicPreset,
+    listMusicHistory,
+    getMusicHistoryItem,
+    deleteMusicHistoryItem,
     downloadPodcastAudio,
     listPodcasts,
     deletePodcast,

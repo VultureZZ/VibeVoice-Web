@@ -11,9 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import config
 from .middleware.auth import APIKeyAuthMiddleware
 from .middleware.rate_limit import RateLimitMiddleware
-from .routes import speech, voices, podcasts, transcripts
+from .routes import speech, voices, podcasts, transcripts, music
 from .routes import realtime_speech
 from .services.realtime_process import realtime_process_manager
+from .services.music_process import music_process_manager
 from .services.transcript_service import transcript_service
 
 # Import podcast router using file-based import
@@ -90,12 +91,14 @@ app.include_router(voices.router)
 app.include_router(transcripts.router)
 app.include_router(podcast_router)
 app.include_router(podcasts.router)
+app.include_router(music.router)
 
 
 @app.on_event("shutdown")
 async def _shutdown() -> None:
     # Best-effort shutdown of the realtime subprocess (if we started it).
     realtime_process_manager.stop()
+    music_process_manager.stop()
     cleanup_task = getattr(app.state, "transcript_cleanup_task", None)
     if cleanup_task:
         cleanup_task.cancel()
