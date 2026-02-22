@@ -696,13 +696,22 @@ export function MusicPage() {
                 </div>
                 {item.audios?.length > 0 && (
                   <div className="space-y-2">
-                    {item.audios.map((relUrl, idx) => (
-                      <AudioPlayer
-                        key={`${item.id}-${idx}`}
-                        src={`${settings.apiEndpoint}${relUrl}`}
-                        filename={relUrl.split('/').pop() || `history-${idx + 1}.mp3`}
-                      />
-                    ))}
+                    {item.audios.map((relUrl, idx) => {
+                      const filename = relUrl.split('/').pop() || `history-${idx + 1}.mp3`;
+                      return (
+                        <div key={`${item.id}-${idx}`} className="space-y-2 border rounded-md p-3">
+                          <AudioPlayer src={`${settings.apiEndpoint}${relUrl}`} filename={filename} />
+                          <button
+                            type="button"
+                            className="text-sm font-medium text-primary-700 underline hover:text-primary-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => handleDownload(relUrl)}
+                            disabled={downloadingFile === filename}
+                          >
+                            {downloadingFile === filename ? 'Downloading...' : 'Download'}
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

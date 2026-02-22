@@ -12,6 +12,7 @@ A FastAPI + React project for generating speech, managing voices, and producing 
 - Multi-speaker voice generation (Qwen3-TTS or VibeVoice)
 - Built-in default voices (Alice, Frank, Mary, Carter, Maya) and custom voice cloning
 - Support for English and other languages (Qwen3-TTS: Chinese, Japanese, Korean, etc.)
+- Music generation with ACE-Step (custom prompts, lyrics-assisted mode, presets, and history)
 - Transcript service for meetings, calls, voice memos, and interviews
 - GPU acceleration (CUDA) recommended
 - FastAPI backend with a web UI (React + TypeScript)
@@ -220,6 +221,22 @@ The frontend lives in `frontend/`. See `frontend/README.md` for setup, developme
 - `GET /api/v1/transcripts/{transcript_id}/report` - Download report (`pdf`, `json`, `markdown`)
 - `GET /api/v1/transcripts` - List transcripts
 - `DELETE /api/v1/transcripts/{transcript_id}` - Delete transcript and files
+
+### Music
+
+- `POST /api/v1/music/generate` - Submit custom music generation task
+- `POST /api/v1/music/simple-generate` - Generate from a description-driven prompt
+- `POST /api/v1/music/generate-lyrics` - Generate lyrics/caption with Ollama assistance
+- `GET /api/v1/music/status/{task_id}` - Poll task status and output files
+- `GET /api/v1/music/download/{filename}` - Download generated audio
+- `GET /api/v1/music/health` - Check ACE-Step runtime readiness
+- `GET /api/v1/music/presets` - List saved presets
+- `POST /api/v1/music/presets` - Create preset
+- `PUT /api/v1/music/presets/{preset_id}` - Update preset
+- `DELETE /api/v1/music/presets/{preset_id}` - Delete preset
+- `GET /api/v1/music/history` - List generation history
+- `GET /api/v1/music/history/{history_id}` - Get one history item
+- `DELETE /api/v1/music/history/{history_id}` - Delete history item
 
 ### Transcript Worker Environment (recommended)
 

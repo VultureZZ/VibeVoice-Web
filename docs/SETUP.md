@@ -10,7 +10,8 @@ The default TTS backend is **Qwen3-TTS** (set `TTS_BACKEND=qwen3`). You can use 
 2. [Initial Setup (Qwen3-TTS)](#initial-setup-qwen3-tts)
 3. [Legacy VibeVoice Setup](#legacy-vibevoice-setup)
 4. [Verification](#verification)
-5. [Troubleshooting](#troubleshooting)
+5. [Feature Setup: Music and Transcription](#feature-setup-music-and-transcription)
+6. [Troubleshooting](#troubleshooting)
 
 ## Prerequisites
 
@@ -270,6 +271,94 @@ The React + TypeScript web UI lives in `frontend/`.
     - `keywords` (optional, comma-separated)
     - `audio_file` (required)
     - `clip_ranges` (required JSON array like `[{"start_seconds": 0.0, "end_seconds": 4.2}, ...]`)
+
+## Feature Setup: Music and Transcription
+
+### Music Setup (ACE-Step)
+
+Music generation endpoints (`/api/v1/music/*`) require an ACE-Step checkout and runtime.
+
+Recommended one-time setup from the repo root:
+
+```bash
+python scripts/setup_vibevoice.py
+```
+
+This provisions legacy VibeVoice assets and ACE-Step dependencies used by the Music feature.
+
+Set or verify these environment variables (for example in `.env`):
+
+```bash
+ACESTEP_REPO_DIR=ACE-Step-1.5
+ACESTEP_HOST=127.0.0.1
+ACESTEP_PORT=8001
+ACESTEP_DEVICE=cuda
+ACESTEP_CONFIG_PATH=acestep-v15-turbo
+ACESTEP_LM_MODEL_PATH=acestep-5Hz-lm-0.6B
+ACESTEP_LM_BACKEND=pt
+ACESTEP_STARTUP_TIMEOUT_SECONDS=120
+ACESTEP_IDLE_SHUTDOWN_SECONDS=120
+ACESTEP_SERVER_COMMAND=
+MUSIC_OUTPUT_DIR=outputs/music
+```
+
+Optional (used by lyrics generation and prompt refinement):
+
+```bash
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2
+```
+
+Quick verification:
+- Start backend and call `GET /api/v1/music/health`.
+- If the UI/API reports `ACE-Step Not Configured`, check `ACESTEP_REPO_DIR` and rerun setup.
+
+### Transcription Setup (Dedicated Worker Environment)
+
+Transcript processing can run in a separate Python environment to avoid dependency conflicts with TTS backends.
+
+Create and install transcript worker dependencies:
+
+```bash
+python -m venv .venv-transcripts
+source .venv-transcripts/bin/activate
+pip install -r requirements-transcripts.txt
+```
+
+Configure transcript runtime mode:
+
+```bash
+TRANSCRIPT_PROCESSOR_MODE=subprocess
+TRANSCRIPT_WORKER_PYTHON=.venv-transcripts/bin/python
+```
+
+Core transcript configuration:
+
+```bash
+TRANSCRIPT_WHISPER_MODEL=large-v3
+TRANSCRIPT_MAX_UPLOAD_MB=500
+TRANSCRIPT_SUPPORTED_FORMATS=mp3,wav,m4a,mp4,webm,ogg,flac
+TRANSCRIPT_SPEAKER_MATCH_THRESHOLD=0.75
+TRANSCRIPT_MAX_CONCURRENT_JOBS=2
+TRANSCRIPT_RETENTION_HOURS=72
+TRANSCRIPT_EXTRACT_SPEAKER_AUDIO=true
+TRANSCRIPT_MIN_SEGMENT_DURATION_SECONDS=3.0
+```
+
+Required tokens/keys by feature:
+
+```bash
+HF_TOKEN=
+LLM_PROVIDER=anthropic
+LLM_MODEL=claude-opus-4-6
+ANTHROPIC_API_KEY=
+OPENAI_API_KEY=
+```
+
+Quick verification:
+- Upload audio using `POST /api/v1/transcripts/upload`.
+- Poll `GET /api/v1/transcripts/{transcript_id}/status` until complete.
+- If jobs fail immediately in `subprocess` mode, verify `.venv-transcripts` exists and `TRANSCRIPT_WORKER_PYTHON` points to a valid Python executable.
 
 ## Optional: Realtime TTS (VibeVoice-Realtime-0.5B)
 

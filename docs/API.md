@@ -132,6 +132,98 @@ Voice profiles are style metadata (cadence/tone/etc.) used by Ollama-assisted fe
   - Apply a full profile payload (works for default voices too).
   - Body (JSON): `{ cadence?, tone?, vocabulary_style?, sentence_structure?, unique_phrases?, keywords?, profile_text? }`
 
+### Transcripts
+
+- `POST /api/v1/transcripts/upload` (multipart form, returns `202 Accepted`)
+  - Fields:
+    - `audio_file` (required)
+    - `title` (optional)
+    - `language` (optional, default `en`)
+    - `recording_type` (optional, default `meeting`)
+  - Returns queued transcript metadata including `transcript_id` and initial processing status.
+
+- `GET /api/v1/transcripts/{transcript_id}/status`
+  - Returns: `{ transcript_id, status, progress_pct, current_stage, duration_seconds, speakers_detected, error }`
+
+- `GET /api/v1/transcripts/{transcript_id}`
+  - Returns the full transcript record (segments, speakers, analysis, and metadata when available).
+
+- `PATCH /api/v1/transcripts/{transcript_id}/speakers`
+  - Body (JSON): `{ speakers: [{ id, label }], proceed_to_analysis?: boolean }`
+  - Notes:
+    - Updates speaker labels by speaker `id`.
+    - If `proceed_to_analysis=true`, analysis is triggered after labels are saved.
+
+- `GET /api/v1/transcripts/{transcript_id}/speakers/{speaker_id}/audio`
+  - Returns extracted speaker audio (`audio/wav`) when speaker segment extraction is available.
+
+- `POST /api/v1/transcripts/{transcript_id}/speakers/{speaker_id}/add-to-library` (returns `201 Created`)
+  - Body (JSON): `{ voice_name?: string, description?: string }`
+  - Creates a custom voice in the voice library from the extracted speaker audio.
+
+- `GET /api/v1/transcripts/{transcript_id}/report?format=pdf|json|markdown`
+  - Returns generated report file (`application/pdf`, `application/json`, or `text/markdown`).
+
+- `GET /api/v1/transcripts?limit=20&offset=0&status=<optional>&recording_type=<optional>`
+  - Returns paginated transcript list: `{ transcripts, total, limit, offset }`.
+
+- `DELETE /api/v1/transcripts/{transcript_id}`
+  - Deletes transcript metadata and associated files.
+
+### Music
+
+- `POST /api/v1/music/generate`
+  - Body (JSON): `MusicGenerateRequest` fields including `caption`, `lyrics`, `bpm`, `keyscale`, `timesignature`, `duration`, `vocal_language`, `instrumental`, `thinking`, `inference_steps`, `batch_size`, `seed`, `audio_format`.
+  - Returns: `{ success, message, task_id }`
+  - Notes:
+    - Submits a custom ACE-Step generation task.
+    - Returns immediately; poll status endpoint for completion.
+
+- `POST /api/v1/music/simple-generate`
+  - Body (JSON): `MusicSimpleGenerateRequest` fields including `description`, `input_mode`, `instrumental`, `vocal_language`, optional overrides (`exact_caption`, `exact_lyrics`, `exact_bpm`, `exact_keyscale`, `exact_timesignature`), `duration`, and `batch_size`.
+  - Returns: `{ success, message, task_id }`
+
+- `POST /api/v1/music/generate-lyrics`
+  - Body (JSON): `{ description, genre?, mood?, language?, duration_hint? }`
+  - Returns: `{ success, message, lyrics, caption }`
+  - Notes:
+    - Uses Ollama-backed prompting to draft lyrics and a generation caption.
+
+- `GET /api/v1/music/status/{task_id}`
+  - Returns: `{ success, message, task_id, status, audios, metadata, error? }`
+  - Notes:
+    - `audios` contains generated output paths/URLs when ready.
+    - Status polling also updates server-side music history metadata.
+
+- `GET /api/v1/music/download/{filename}`
+  - Returns generated audio file by filename (`audio/mpeg`, `audio/wav`, or `audio/flac` depending on extension).
+
+- `GET /api/v1/music/health`
+  - Returns ACE-Step service readiness and runtime state.
+
+- `GET /api/v1/music/presets`
+  - Returns: `{ presets, total }`
+
+- `POST /api/v1/music/presets`
+  - Body (JSON): `{ name, mode, values }`
+  - Returns created preset.
+
+- `PUT /api/v1/music/presets/{preset_id}`
+  - Body (JSON): `{ name, mode, values }`
+  - Updates existing preset.
+
+- `DELETE /api/v1/music/presets/{preset_id}`
+  - Deletes a saved preset.
+
+- `GET /api/v1/music/history?limit=50`
+  - Returns: `{ history, total }`
+
+- `GET /api/v1/music/history/{history_id}`
+  - Returns one history item.
+
+- `DELETE /api/v1/music/history/{history_id}`
+  - Deletes one history item.
+
 ### Podcast generation
 
 - `POST /api/v1/podcast/generate-script`
