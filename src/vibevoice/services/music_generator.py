@@ -191,6 +191,20 @@ class MusicGenerator:
         }
         if vocal_language and not instrumental:
             payload["vocal_language"] = vocal_language
+        if not instrumental:
+            # Provide minimal structured lyrics to strongly bias toward vocal generation.
+            # Without lyrics, ACE-Step may still produce instrumental tracks in simple mode.
+            payload["lyrics"] = (
+                "[Verse 1]\n"
+                f"{query.strip()}\n"
+                "[Chorus]\n"
+                "Rowing with my homies, we keep moving with the flow.\n"
+                "[Verse 2]\n"
+                "On the river with the crew, we grind and let it show.\n"
+                "[Chorus]\n"
+                "Rowing with my homies, we keep moving with the flow."
+            )
+            payload["use_format"] = True
         if duration and duration > 0:
             payload["duration"] = duration
 
