@@ -179,6 +179,15 @@ Voice profiles are style metadata (cadence/tone/etc.) used by Ollama-assisted fe
     - Submits a custom ACE-Step generation task.
     - Returns immediately; poll status endpoint for completion.
 
+- `POST /api/v1/music/cover-generate`
+  - Body (`multipart/form-data`):
+    - Required file: `reference_audio` (audio file to mimic structure from)
+    - Optional fields: `prompt`, `lyrics`, `duration`, `audio_cover_strength` (0.0-1.0), `vocal_language`, `instrumental`, `thinking`, `inference_steps`, `batch_size`, `seed`, `audio_format`
+  - Returns: `{ success, message, task_id }`
+  - Notes:
+    - Submits ACE-Step cover mode generation with `task_type=cover`.
+    - Uses reference audio as the structural source and applies prompt/lyrics modifications.
+
 - `POST /api/v1/music/simple-generate`
   - Body (JSON): `MusicSimpleGenerateRequest` fields including `description`, `input_mode`, `instrumental`, `vocal_language`, optional overrides (`exact_caption`, `exact_lyrics`, `exact_bpm`, `exact_keyscale`, `exact_timesignature`), `duration`, and `batch_size`.
   - Returns: `{ success, message, task_id }`

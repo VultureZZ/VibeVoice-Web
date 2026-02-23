@@ -15,6 +15,7 @@ import {
   PodcastGenerateRequest,
   PodcastGenerateResponse,
   PodcastListResponse,
+  MusicCoverGenerateParams,
   MusicGenerateRequest,
   MusicGenerateResponse,
   MusicHealthResponse,
@@ -407,6 +408,21 @@ class ApiClient {
    */
   async generateMusic(request: MusicGenerateRequest): Promise<MusicGenerateResponse> {
     const response = await this.client.post<MusicGenerateResponse>('/api/v1/music/generate', request);
+    return response.data;
+  }
+
+  /**
+   * Submit ACE-Step cover-mode generation task with reference audio
+   */
+  async generateMusicCover(referenceAudio: File, params: MusicCoverGenerateParams): Promise<MusicGenerateResponse> {
+    const formData = new FormData();
+    formData.append('reference_audio', referenceAudio);
+    Object.entries(params).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      formData.append(key, String(value));
+    });
+
+    const response = await this.client.post<MusicGenerateResponse>('/api/v1/music/cover-generate', formData);
     return response.data;
   }
 

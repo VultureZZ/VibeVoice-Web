@@ -143,6 +143,7 @@ class Config:
         str((PROJECT_ROOT / ".venv-transcripts" / "bin" / "python")),
     )
     MUSIC_OUTPUT_DIR: Path = Path(os.getenv("MUSIC_OUTPUT_DIR", "outputs/music"))
+    MUSIC_REFERENCE_DIR: Path = Path(os.getenv("MUSIC_REFERENCE_DIR", "outputs/music/reference"))
 
     def __init__(self):
         """Initialize configuration and ensure directories exist."""
@@ -165,6 +166,8 @@ class Config:
             self.ACESTEP_REPO_DIR = PROJECT_ROOT / self.ACESTEP_REPO_DIR
         if not self.MUSIC_OUTPUT_DIR.is_absolute():
             self.MUSIC_OUTPUT_DIR = PROJECT_ROOT / self.MUSIC_OUTPUT_DIR
+        if not self.MUSIC_REFERENCE_DIR.is_absolute():
+            self.MUSIC_REFERENCE_DIR = PROJECT_ROOT / self.MUSIC_REFERENCE_DIR
 
         # If the user didn't explicitly set REALTIME_VIBEVOICE_REPO_DIR, try a sensible default:
         # prefer a microsoft/VibeVoice checkout if present (it contains the realtime demo server).
@@ -184,6 +187,7 @@ class Config:
         self.PODCASTS_DIR.mkdir(parents=True, exist_ok=True)
         self.TRANSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
         self.MUSIC_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        self.MUSIC_REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
         (self.TRANSCRIPTS_DIR / "uploads").mkdir(parents=True, exist_ok=True)
         (self.TRANSCRIPTS_DIR / "segments").mkdir(parents=True, exist_ok=True)
         (self.TRANSCRIPTS_DIR / "json").mkdir(parents=True, exist_ok=True)

@@ -214,6 +214,22 @@ class MusicGenerateRequest(BaseModel):
     audio_format: str = Field(default="mp3", description="Output audio format: mp3/wav/flac")
 
 
+class MusicCoverGenerateRequest(BaseModel):
+    """Request model for ACE-Step cover-mode generation."""
+
+    prompt: str = Field(default="", description="Cover mode prompt/caption")
+    lyrics: str = Field(default="", description="Optional lyrics text")
+    duration: Optional[float] = Field(default=None, ge=10, le=600, description="Target duration in seconds")
+    audio_cover_strength: float = Field(default=0.6, ge=0.0, le=1.0, description="Cover guidance strength")
+    vocal_language: Optional[str] = Field(default=None, description="Optional vocal language code")
+    instrumental: bool = Field(default=False, description="Generate instrumental-only music")
+    thinking: bool = Field(default=True, description="Enable 5Hz LM-assisted reasoning")
+    inference_steps: int = Field(default=8, ge=1, le=200, description="Diffusion inference steps")
+    batch_size: int = Field(default=1, ge=1, le=4, description="Number of variations")
+    seed: int = Field(default=-1, description="Random seed (-1 for random)")
+    audio_format: str = Field(default="mp3", description="Output audio format: mp3/wav/flac")
+
+
 class MusicGenerateResponse(BaseModel):
     """Response model for submitted music generation tasks."""
 

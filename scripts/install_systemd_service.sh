@@ -5,7 +5,7 @@ usage() {
   cat <<'EOF'
 Install AudioMesh as a systemd service (Linux).
 
-This writes system services under /etc/systemd/system and (optionally) an env file under /etc/vibevoice/.
+This writes system services under /etc/systemd/system and (optionally) an env file under /etc/audiomesh/.
 Run this script from the repo (it will use the current repo path as WorkingDirectory).
 
 Usage:
@@ -17,13 +17,13 @@ Options:
                         "dev" runs Vite dev server (HMR; not recommended for production)
 
 What it installs:
-  - /etc/systemd/system/vibevoice-api.service
-  - /etc/systemd/system/vibevoice-web.service   (only if --with-web)
-  - /etc/vibevoice/vibevoice.env                (created if missing)
+  - /etc/systemd/system/audiomesh-api.service
+  - /etc/systemd/system/audiomesh-web.service   (only if --with-web)
+  - /etc/audiomesh/audiomesh.env                (created if missing)
 
 After install:
-  systemctl status vibevoice-api
-  journalctl -u vibevoice-api -f
+  systemctl status audiomesh-api
+  journalctl -u audiomesh-api -f
 EOF
 }
 
@@ -84,8 +84,8 @@ run_as_run_user() {
   sudo -u "${RUN_USER}" -H bash -lc "$1"
 }
 
-ENV_DIR="/etc/vibevoice"
-ENV_FILE="${ENV_DIR}/vibevoice.env"
+ENV_DIR="/etc/audiomesh"
+ENV_FILE="${ENV_DIR}/audiomesh.env"
 
 mkdir -p "${ENV_DIR}"
 if [[ ! -f "${ENV_FILE}" ]]; then
@@ -120,9 +120,9 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 # REALTIME_STARTUP_TIMEOUT_SECONDS=60
 # REALTIME_SERVER_COMMAND=
 #
-# Web UI service (only used if vibevoice-web.service is enabled)
-# VIBEVOICE_WEB_HOST=0.0.0.0
-# VIBEVOICE_WEB_PORT=3001
+# Web UI service (only used if audiomesh-web.service is enabled)
+# AUDIOMESH_WEB_HOST=0.0.0.0
+# AUDIOMESH_WEB_PORT=3001
 #
 # Vite host allow-list (recommended when accessing the UI via a real hostname)
 # Example:
@@ -134,7 +134,7 @@ EOF
   echo "Created ${ENV_FILE}"
 fi
 
-API_UNIT="/etc/systemd/system/vibevoice-api.service"
+API_UNIT="/etc/systemd/system/audiomesh-api.service"
 cat >"${API_UNIT}" <<EOF
 [Unit]
 Description=AudioMesh API (FastAPI)
@@ -174,18 +174,18 @@ if [[ "${WITH_WEB}" -eq 1 ]]; then
     run_as_run_user "cd \"${REPO_DIR}/frontend\" && npm run build"
   fi
 
-  WEB_UNIT="/etc/systemd/system/vibevoice-web.service"
+  WEB_UNIT="/etc/systemd/system/audiomesh-web.service"
   if [[ "${WEB_MODE}" == "preview" ]]; then
-    WEB_CMD='npm run preview -- --host "${VIBEVOICE_WEB_HOST:-0.0.0.0}" --port "${VIBEVOICE_WEB_PORT:-3001}"'
+    WEB_CMD='npm run preview -- --host "${AUDIOMESH_WEB_HOST:-0.0.0.0}" --port "${AUDIOMESH_WEB_PORT:-3001}"'
   else
-    WEB_CMD='npm run dev -- --host "${VIBEVOICE_WEB_HOST:-0.0.0.0}" --port "${VIBEVOICE_WEB_PORT:-3001}"'
+    WEB_CMD='npm run dev -- --host "${AUDIOMESH_WEB_HOST:-0.0.0.0}" --port "${AUDIOMESH_WEB_PORT:-3001}"'
   fi
 
   cat >"${WEB_UNIT}" <<EOF
 [Unit]
 Description=AudioMesh Web UI (Vite ${WEB_MODE})
-After=network.target vibevoice-api.service
-Wants=vibevoice-api.service
+After=network.target audiomesh-api.service
+Wants=audiomesh-api.service
 
 [Service]
 Type=simple
@@ -205,17 +205,17 @@ EOF
 fi
 
 systemctl daemon-reload
-systemctl enable --now vibevoice-api.service
+systemctl enable --now audiomesh-api.service
 
 if [[ "${WITH_WEB}" -eq 1 ]]; then
-  systemctl enable --now vibevoice-web.service
+  systemctl enable --now audiomesh-web.service
 fi
 
 echo ""
 echo "Done. Useful commands:"
-echo "  systemctl status vibevoice-api"
-echo "  journalctl -u vibevoice-api -f"
+echo "  systemctl status audiomesh-api"
+echo "  journalctl -u audiomesh-api -f"
 if [[ "${WITH_WEB}" -eq 1 ]]; then
-  echo "  systemctl status vibevoice-web"
-  echo "  journalctl -u vibevoice-web -f"
+  echo "  systemctl status audiomesh-web"
+  echo "  journalctl -u audiomesh-web -f"
 fi

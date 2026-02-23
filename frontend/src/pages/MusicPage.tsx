@@ -75,6 +75,7 @@ export function MusicPage() {
   const { settings } = useSettings();
   const {
     generateMusic,
+    generateMusicCover,
     simpleGenerateMusic,
     getMusicStatus,
     generateLyrics,
@@ -122,6 +123,9 @@ export function MusicPage() {
   const [seed, setSeed] = useState('-1');
   const [audioFormat, setAudioFormat] = useState<'mp3' | 'wav' | 'flac'>('mp3');
   const [batchSize, setBatchSize] = useState('1');
+  const [coverMode, setCoverMode] = useState(false);
+  const [coverReferenceFile, setCoverReferenceFile] = useState<File | null>(null);
+  const [audioCoverStrength, setAudioCoverStrength] = useState('0.6');
 
   const [healthRunning, setHealthRunning] = useState(false);
   const [healthAvailable, setHealthAvailable] = useState(false);
@@ -247,21 +251,42 @@ export function MusicPage() {
 
   const handleCustomGenerate = async () => {
     resetTaskState();
-    const response = await generateMusic({
-      caption: caption.trim(),
-      lyrics: lyrics.trim(),
-      bpm: bpm.trim() ? Number(bpm) : undefined,
-      keyscale: keyScale,
-      timesignature: timeSignature,
-      duration: duration.trim() ? Number(duration) : undefined,
-      vocal_language: instrumental ? undefined : vocalLanguage,
-      instrumental,
-      thinking,
-      inference_steps: Number(inferenceSteps),
-      batch_size: Number(batchSize),
-      seed: Number(seed),
-      audio_format: audioFormat,
-    });
+    let response = null;
+    if (coverMode) {
+      if (!coverReferenceFile) {
+        setSuccessMessage('Cover mode requires a reference audio file.');
+        return;
+      }
+      response = await generateMusicCover(coverReferenceFile, {
+        prompt: caption.trim(),
+        lyrics: lyrics.trim(),
+        duration: duration.trim() ? Number(duration) : undefined,
+        audio_cover_strength: Number(audioCoverStrength),
+        vocal_language: instrumental ? undefined : vocalLanguage,
+        instrumental,
+        thinking,
+        inference_steps: Number(inferenceSteps),
+        batch_size: Number(batchSize),
+        seed: Number(seed),
+        audio_format: audioFormat,
+      });
+    } else {
+      response = await generateMusic({
+        caption: caption.trim(),
+        lyrics: lyrics.trim(),
+        bpm: bpm.trim() ? Number(bpm) : undefined,
+        keyscale: keyScale,
+        timesignature: timeSignature,
+        duration: duration.trim() ? Number(duration) : undefined,
+        vocal_language: instrumental ? undefined : vocalLanguage,
+        instrumental,
+        thinking,
+        inference_steps: Number(inferenceSteps),
+        batch_size: Number(batchSize),
+        seed: Number(seed),
+        audio_format: audioFormat,
+      });
+    }
     if (response?.task_id) {
       setTaskId(response.task_id);
       setTaskStatus('running');
@@ -302,7 +327,7 @@ export function MusicPage() {
   };
 
   const applyCustomValues = (values: Record<string, unknown>) => {
-    setCaption(String(values.caption ?? ''));
+    setCaption(String(values.caption ?? values.prompt ?? ''));
     setLyrics(String(values.lyrics ?? ''));
     setBpm(values.bpm == null ? '' : String(values.bpm));
     setKeyScale(String(values.keyscale ?? ''));
@@ -315,6 +340,9 @@ export function MusicPage() {
     setSeed(String(values.seed ?? '-1'));
     setAudioFormat((values.audio_format as 'mp3' | 'wav' | 'flac') ?? 'mp3');
     setBatchSize(String(values.batch_size ?? '1'));
+    setCoverMode(Boolean(values.cover_mode ?? (values.audio_cover_strength != null)));
+    setAudioCoverStrength(String(values.audio_cover_strength ?? '0.6'));
+    setCoverReferenceFile(null);
     setActiveTab('custom');
   };
 
@@ -361,6 +389,8 @@ export function MusicPage() {
             batch_size: Number(batchSize),
             seed: Number(seed),
             audio_format: audioFormat,
+            cover_mode: coverMode,
+            audio_cover_strength: coverMode ? Number(audioCoverStrength) : undefined,
           };
 
     const existing = presets.find((p) => p.id === selectedPresetId);
@@ -604,10 +634,69 @@ export function MusicPage() {
               {showAdvanced ? 'Hide' : 'Show'} Advanced Settings
             </Button>
             {showAdvanced && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
-                <Input label="Inference Steps" value={inferenceSteps} onChange={(e) => setInferenceSteps(e.target.value)} />
-                <Input label="Seed (-1 random)" value={seed} onChange={(e) => setSeed(e.target.value)} />
-                <Select label="Audio Format" options={AUDIO_FORMAT_OPTIONS} value={audioFormat} onChange={(e) => setAudioFormat(e.target.value as 'mp3' | 'wav' | 'flac')} />
+              <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+                <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={coverMode}
+                    onChange={(e) => {
+                      setCoverMode(e.target.checked);
+                      if (!e.target.checked) {
+                        setCoverReferenceFile(null);
+                      }
+                    }}
+                  />
+                  Cover Mode (Reference Audio)
+                </label>
+
+                {coverMode && (
+                  <div className="space-y-3 border rounded-md p-3 bg-white">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Reference Audio</label>
+                      <input
+                        type="file"
+                        accept="audio/*"
+                        onChange={(e) => setCoverReferenceFile(e.target.files?.[0] || null)}
+                        className="mt-1 block w-full text-sm text-gray-700"
+                      />
+                      {coverReferenceFile && (
+                        <div className="mt-1 flex items-center justify-between gap-2 text-xs text-gray-600">
+                          <span>{coverReferenceFile.name}</span>
+                          <button
+                            type="button"
+                            className="text-primary-700 underline hover:text-primary-800"
+                            onClick={() => setCoverReferenceFile(null)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Cover Strength: {Number(audioCoverStrength).toFixed(2)}
+                      </label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={audioCoverStrength}
+                        onChange={(e) => setAudioCoverStrength(e.target.value)}
+                        className="mt-1 w-full"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        0.8-1.0 tight structure copy, 0.4-0.6 groove + freedom, 0.0-0.2 loose style hint.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Input label="Inference Steps" value={inferenceSteps} onChange={(e) => setInferenceSteps(e.target.value)} />
+                  <Input label="Seed (-1 random)" value={seed} onChange={(e) => setSeed(e.target.value)} />
+                  <Select label="Audio Format" options={AUDIO_FORMAT_OPTIONS} value={audioFormat} onChange={(e) => setAudioFormat(e.target.value as 'mp3' | 'wav' | 'flac')} />
+                </div>
               </div>
             )}
 
@@ -615,7 +704,7 @@ export function MusicPage() {
               variant="primary"
               onClick={handleCustomGenerate}
               isLoading={loading}
-              disabled={(!caption.trim() && !lyrics.trim()) || isGenerating}
+              disabled={(!caption.trim() && !lyrics.trim()) || isGenerating || (coverMode && !coverReferenceFile)}
               className="w-full"
             >
               Generate Music

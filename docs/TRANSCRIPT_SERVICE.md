@@ -1,28 +1,28 @@
-# VibeVoice — Meeting Intelligence Module
+# AudioMesh — Meeting Intelligence Module
 ## Project Outline for Cursor Implementation
 
 **Module Name:** `mesh-meetings`
 **Version:** 1.0.0
-**Parent Project:** VibeVoice API & WebUI
-**Purpose:** Extend VibeVoice with AI-powered meeting/conversation processing — transcribe uploaded audio, identify and profile speakers, generate summaries, and extract action items.
+**Parent Project:** AudioMesh API & WebUI
+**Purpose:** Extend AudioMesh with AI-powered meeting/conversation processing — transcribe uploaded audio, identify and profile speakers, generate summaries, and extract action items.
 
 ---
 
 ## 1. Overview
 
-The Meeting Intelligence Module adds a new functional layer to the existing VibeVoice platform. Where VibeVoice synthesizes voice *from* text, this module works in reverse — it ingests recorded audio (meetings, calls, interviews, conversations) and produces structured intelligence: who spoke, what was said, what was decided, and what needs to happen next.
+The Meeting Intelligence Module adds a new functional layer to the existing AudioMesh platform. Where AudioMesh synthesizes voice *from* text, this module works in reverse — it ingests recorded audio (meetings, calls, interviews, conversations) and produces structured intelligence: who spoke, what was said, what was decided, and what needs to happen next.
 
 ### Core Value Proposition
 - Upload any audio recording (meeting, call, podcast interview, voice memo)
 - Automatic speech-to-text with speaker diarization (who said what)
-- Match detected speakers against the existing VibeVoice voice library
+- Match detected speakers against the existing AudioMesh voice library
 - Label unknown speakers via an interactive UI
 - AI-generated meeting summary, action items, key decisions, and open questions
 - Auto-extract speaker audio segments and offer to add them to the voice library
 - Export reports as PDF or structured JSON
 
-### Integration Points with Existing VibeVoice System
-- **Voice Library**: Detected speaker embeddings compared against stored VibeVoice voice profiles for auto-identification
+### Integration Points with Existing AudioMesh System
+- **Voice Library**: Detected speaker embeddings compared against stored AudioMesh voice profiles for auto-identification
 - **Voice Creation**: Extracted speaker audio segments can be sent directly to the existing voice creation pipeline
 - **API**: New `/api/v1/meetings/*` routes added alongside existing `/api/v1/generate` routes
 - **WebUI**: New "Meetings" tab in the existing React frontend
@@ -42,7 +42,7 @@ pydub>=0.25.0                # Audio segment extraction and manipulation
 anthropic>=0.25.0            # LLM analysis (Claude API) — or use local LLM
 reportlab>=4.0.0             # PDF report generation
 ffmpeg-python>=0.2.0         # Audio format conversion
-torch>=2.0.0                 # Already required by VibeVoice
+torch>=2.0.0                 # Already required by AudioMesh
 torchaudio>=2.0.0            # Audio processing utilities
 ```
 
@@ -57,7 +57,7 @@ openai/whisper-large-v3       # Best accuracy, ~3GB VRAM
 # OR
 openai/whisper-medium         # Faster, less accurate, ~1.5GB VRAM
 
-# Speaker Embeddings (for matching against VibeVoice library)
+# Speaker Embeddings (for matching against AudioMesh library)
 speechbrain/spkrec-ecapa-voxceleb
 ```
 
@@ -77,7 +77,7 @@ meetings:
   supported_formats: ["mp3", "wav", "m4a", "mp4", "webm", "ogg", "flac"]
 
   # Speaker matching threshold (cosine similarity, 0-1)
-  # Higher = more strict matching against VibeVoice library
+  # Higher = more strict matching against AudioMesh library
   speaker_match_threshold: 0.75
 
   # LLM provider for analysis: "anthropic", "openai", or "local"
@@ -97,10 +97,10 @@ meetings:
 
 ---
 
-## 3. Project Structure (Additions to Existing VibeVoice)
+## 3. Project Structure (Additions to Existing AudioMesh)
 
 ```
-vibevoice-api/
+audiomesh-api/
 ├── src/
 │   ├── api/
 │   │   ├── routers/
@@ -188,7 +188,7 @@ class SpeakerSegment(BaseModel):
 class Speaker(BaseModel):
     id: str                           # "SPEAKER_00"
     label: Optional[str] = None       # User-assigned name: "John Smith"
-    voice_library_match: Optional[str] = None  # Matched VibeVoice voice ID
+    voice_library_match: Optional[str] = None  # Matched AudioMesh voice ID
     match_confidence: Optional[float] = None
     talk_time_seconds: float
     segment_count: int
@@ -353,7 +353,7 @@ Stream the extracted audio for a specific speaker (useful for voice library enro
 ---
 
 #### `POST /api/v1/meetings/{meeting_id}/speakers/{speaker_id}/add-to-library`
-Add a detected speaker's audio to the VibeVoice voice library.
+Add a detected speaker's audio to the AudioMesh voice library.
 
 **Request Body:**
 ```json
@@ -524,7 +524,7 @@ async def assign_speakers(aligned_transcript: dict, diarization: Annotation) -> 
 
 ```python
 # Uses SpeechBrain ECAPA-TDNN embeddings to match detected speakers
-# against existing VibeVoice voice library profiles
+# against existing AudioMesh voice library profiles
 # Key methods:
 async def extract_embedding(audio_path: str, speaker_id: str, diarization: Annotation) -> Tensor
 async def match_against_library(embedding: Tensor) -> Optional[tuple[str, float]]
@@ -532,7 +532,7 @@ async def match_against_library(embedding: Tensor) -> Optional[tuple[str, float]
 async def match_all(speaker_ids: list, audio_path: str, diarization: Annotation) -> list[dict]
 
 # Integration:
-# - VibeVoice voice creation should ALSO store speaker embedding
+# - AudioMesh voice creation should ALSO store speaker embedding
 #   so future meetings can auto-identify known voices
 # - Threshold configurable: meetings.speaker_match_threshold
 ```
@@ -549,7 +549,7 @@ async def extract_speaker(audio_path: str, speaker_id: str, segments: list) -> s
 # Notes:
 # - Concatenates all non-overlapping segments for each speaker
 # - Minimum segment duration filter (config: min_segment_duration_seconds)
-# - Output format: WAV 24kHz (compatible with VibeVoice voice library)
+# - Output format: WAV 24kHz (compatible with AudioMesh voice library)
 # - These files can be directly passed to existing voice creation API
 ```
 
@@ -691,7 +691,7 @@ Speakers Tab:
 
 ### Phase 2 — Speaker Intelligence (Week 2-3)
 - [ ] Implement `speaker_matcher.py` with SpeechBrain embeddings
-- [ ] Modify VibeVoice voice creation to store speaker embeddings
+- [ ] Modify AudioMesh voice creation to store speaker embeddings
 - [ ] Implement `audio_extractor.py`
 - [ ] `GET /{id}` full result endpoint
 - [ ] `PATCH /{id}/speakers` label endpoint
@@ -719,7 +719,7 @@ Speakers Tab:
 - [ ] Error handling and retry logic throughout pipeline
 - [ ] Rate limiting on upload endpoint
 - [ ] Progress estimation (per audio duration)
-- [ ] API authentication (if not already in VibeVoice)
+- [ ] API authentication (if not already in AudioMesh)
 - [ ] Docker compose update to include meeting dependencies
 - [ ] README documentation for new module
 
@@ -825,13 +825,13 @@ For recordings over 60 minutes:
   2. Synthesize chunk summaries into final analysis
 
 ### Speaker Embedding Storage
-When a new voice is added to the VibeVoice library (existing pipeline), also compute and store a SpeechBrain ECAPA embedding in the voice metadata. This enables future meeting speaker auto-identification without any UI labeling.
+When a new voice is added to the AudioMesh library (existing pipeline), also compute and store a SpeechBrain ECAPA embedding in the voice metadata. This enables future meeting speaker auto-identification without any UI labeling.
 
 ### Audio Extraction Quality
 Extracted speaker audio segments should:
 - Be concatenated from all segments (not just longest)
 - Have short silences inserted between concatenated segments
-- Be at 24kHz WAV (matching VibeVoice voice library requirements)
+- Be at 24kHz WAV (matching AudioMesh voice library requirements)
 - Filter out segments shorter than `min_segment_duration_seconds`
 
 ---
@@ -848,4 +848,4 @@ Extracted speaker audio segments should:
 
 ---
 
-*Document Version: 1.0 | Module: mesh-meetings | Parent: VibeVoice API & WebUI*
+*Document Version: 1.0 | Module: mesh-meetings | Parent: AudioMesh API & WebUI*

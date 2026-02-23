@@ -161,6 +161,20 @@ export interface MusicGenerateRequest {
   audio_format?: 'mp3' | 'wav' | 'flac';
 }
 
+export interface MusicCoverGenerateParams {
+  prompt?: string;
+  lyrics?: string;
+  duration?: number;
+  audio_cover_strength?: number;
+  vocal_language?: string;
+  instrumental?: boolean;
+  thinking?: boolean;
+  inference_steps?: number;
+  batch_size?: number;
+  seed?: number;
+  audio_format?: 'mp3' | 'wav' | 'flac';
+}
+
 export interface MusicGenerateResponse {
   success: boolean;
   message: string;

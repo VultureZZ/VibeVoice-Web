@@ -67,7 +67,7 @@ Default backend is Qwen3-TTS. No separate repo clone is required.
 
 ```bash
 git clone <your-repo-url>
-cd VibeVoice-Web
+cd AudioMesh
 ```
 
 ### Step 2: Create Virtual Environment
@@ -129,7 +129,7 @@ VibeVoice Setup Script
 ============================================================
 
 [1/4] Cloning VibeVoice repository...
-Cloning VibeVoice repository to /path/to/VibeVoice-Web/VibeVoice...
+Cloning VibeVoice repository to /path/to/AudioMesh/VibeVoice...
 ✓ Repository cloned successfully
 
 [2/4] Installing VibeVoice package...
@@ -557,14 +557,14 @@ sudo ./scripts/install_systemd_service.sh
 ```
 
 This creates:
-- `vibevoice-api.service` (enabled + started)
-- `/etc/vibevoice/vibevoice.env` (created if missing)
+- `audiomesh-api.service` (enabled + started)
+- `/etc/audiomesh/audiomesh.env` (created if missing)
 
 Useful commands:
 
 ```bash
-systemctl status vibevoice-api
-journalctl -u vibevoice-api -f
+systemctl status audiomesh-api
+journalctl -u audiomesh-api -f
 ```
 
 ### 2) Optional: install the Web UI service
@@ -586,17 +586,17 @@ The UI service will listen on:
 
 ### 3) Configure ports and settings
 
-Edit `/etc/vibevoice/vibevoice.env` and restart services:
+Edit `/etc/audiomesh/audiomesh.env` and restart services:
 
 ```bash
-sudo nano /etc/vibevoice/vibevoice.env
-sudo systemctl restart vibevoice-api
-sudo systemctl restart vibevoice-web
+sudo nano /etc/audiomesh/audiomesh.env
+sudo systemctl restart audiomesh-api
+sudo systemctl restart audiomesh-web
 ```
 
 Notes:
 - The API defaults to `0.0.0.0:8000` (set `HOST` and `PORT` to change).
-- The UI defaults to `0.0.0.0:3001` (set `VIBEVOICE_WEB_HOST` and `VIBEVOICE_WEB_PORT` to change).
+- The UI defaults to `0.0.0.0:3001` (set `AUDIOMESH_WEB_HOST` and `AUDIOMESH_WEB_PORT` to change).
 
 ### Common issue: EACCES when rebuilding the frontend
 

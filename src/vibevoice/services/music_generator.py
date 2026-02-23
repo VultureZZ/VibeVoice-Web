@@ -155,6 +155,49 @@ class MusicGenerator:
             raise RuntimeError("ACE-Step did not return a task_id")
         return task_id
 
+    async def generate_cover(
+        self,
+        *,
+        src_audio_path: Path,
+        prompt: str = "",
+        lyrics: str = "",
+        duration: Optional[float] = None,
+        audio_cover_strength: float = 0.6,
+        vocal_language: Optional[str] = None,
+        instrumental: bool = False,
+        thinking: bool = True,
+        inference_steps: int = 8,
+        batch_size: int = 1,
+        seed: int = -1,
+        audio_format: str = "mp3",
+    ) -> str:
+        if not src_audio_path.exists():
+            raise ValueError(f"Reference audio file not found: {src_audio_path}")
+
+        normalized_strength = max(0.0, min(float(audio_cover_strength), 1.0))
+        payload: dict[str, Any] = {
+            "task_type": "cover",
+            "src_audio_path": str(src_audio_path.resolve()),
+            "audio_cover_strength": normalized_strength,
+            "prompt": self._clean_text(prompt),
+            "lyrics": self._clean_text(lyrics),
+            "duration": duration,
+            "vocal_language": self._clean_text(vocal_language),
+            "instrumental": instrumental,
+            "thinking": thinking,
+            "inference_steps": inference_steps,
+            "batch_size": max(1, min(batch_size, 4)),
+            "seed": seed,
+            "audio_format": audio_format,
+        }
+
+        if instrumental:
+            payload.pop("lyrics", None)
+            payload.pop("vocal_language", None)
+
+        clean_payload = {k: v for k, v in payload.items() if v not in (None, "")}
+        return await self.generate_music(clean_payload)
+
     @staticmethod
     def _clean_text(value: Optional[str]) -> str:
         return (value or "").strip()

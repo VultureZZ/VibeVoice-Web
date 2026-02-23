@@ -32,7 +32,7 @@ A FastAPI + React project for generating speech, managing voices, and producing 
 
 ```bash
 git clone <your-repo-url>
-cd VibeVoice-Web
+cd AudioMesh
 ```
 
 ### 2. Create a virtual environment
@@ -95,8 +95,22 @@ AudioMesh/
 │   └── SETUP.md             # Detailed setup guide
 ├── outputs/                  # Generated audio files
 ├── models/                   # Downloaded models
-└── VibeVoice/               # Cloned VibeVoice repository
+└── VibeVoice/               # Cloned upstream VibeVoice repository (legacy backend)
 ```
+
+## Models Utilized
+
+| Area | Models / components |
+| ---- | ------------------- |
+| **TTS (default)** | Qwen3-TTS: `Qwen/Qwen3-TTS-12Hz-1.7B-Base`, `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice`, `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign` (`QWEN_TTS_*`). |
+| **TTS (legacy)** | VibeVoice: `microsoft/VibeVoice-1.5B` (`TTS_BACKEND=vibevoice`, `MODEL_PATH`, `VIBEVOICE_REPO_DIR`). |
+| **Realtime TTS** | `microsoft/VibeVoice-Realtime-0.5B` (`REALTIME_VIBEVOICE_REPO_DIR`, `REALTIME_MODEL_ID`). |
+| **Music** | ACE-Step runtime (`ACESTEP_CONFIG_PATH=acestep-v15-turbo`, `ACESTEP_LM_MODEL_PATH=acestep-5Hz-lm-0.6B`). Optional Ollama prompt refinement (`OLLAMA_*`, default `llama3.2`). |
+| **Transcripts** | Whisper (`TRANSCRIPT_WHISPER_MODEL`, default `large-v3`) with speaker analysis tooling, plus configurable LLM analysis (`LLM_PROVIDER`, `LLM_MODEL`). |
+| **Podcast / lyrics** | Ollama for podcast script and lyric/caption assistance (`OLLAMA_BASE_URL`, `OLLAMA_MODEL`). |
+| **Voice profiles** | Ollama-assisted profile analysis and keyword enrichment (`OLLAMA_*`). |
+
+For full setup and API details, see `docs/SETUP.md` and `docs/API.md`.
 
 ## Usage
 
@@ -289,6 +303,8 @@ This project structure is designed to support:
 
 - [VibeVoice GitHub](https://github.com/vibevoice-community/VibeVoice) (legacy backend)
 - [VibeVoice Model on Hugging Face](https://huggingface.co/microsoft/VibeVoice-1.5B)
+- [VibeVoice Realtime Model on Hugging Face](https://huggingface.co/microsoft/VibeVoice-Realtime-0.5B)
+- [Qwen3-TTS GitHub](https://github.com/QwenLM/Qwen3-TTS)
 - [Beginner's Guide](https://www.kdnuggets.com/beginners-guide-to-vibevoice)
 
 ## License
@@ -299,4 +315,4 @@ AudioMesh integrates with third-party software and models (for example the upstr
 
 ## Disclaimer
 
-VibeVoice is intended for research and development purposes. Please use responsibly and in compliance with all applicable laws and regulations. Always disclose the use of AI when sharing AI-generated content.
+AudioMesh is intended for research and development purposes. Please use responsibly and in compliance with all applicable laws and regulations. Always disclose the use of AI when sharing AI-generated content.

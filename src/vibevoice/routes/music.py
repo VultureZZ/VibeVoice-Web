@@ -4,13 +4,16 @@ Music generation endpoints backed by ACE-Step.
 
 import logging
 from pathlib import Path
+from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
+from pydantic import ValidationError
 
 from ..config import config
 from ..models.schemas import (
     ErrorResponse,
+    MusicCoverGenerateRequest,
     MusicGenerateRequest,
     MusicGenerateResponse,
     MusicHealthResponse,
@@ -30,6 +33,42 @@ from ..services.music_generator import music_generator
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/music", tags=["music"])
+
+ALLOWED_AUDIO_CONTENT_PREFIX = "audio/"
+ALLOWED_AUDIO_SUFFIXES = {".mp3", ".wav", ".flac", ".m4a", ".ogg", ".webm", ".aac"}
+MAX_REFERENCE_AUDIO_SIZE_BYTES = 100 * 1024 * 1024  # 100MB
+
+
+async def _store_cover_reference_audio(reference_audio: UploadFile) -> Path:
+    if not reference_audio.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Reference audio file is required")
+
+    suffix = Path(reference_audio.filename).suffix.lower()
+    if suffix not in ALLOWED_AUDIO_SUFFIXES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported audio file type. Use mp3, wav, flac, m4a, ogg, webm, or aac.",
+        )
+
+    content_type = (reference_audio.content_type or "").lower()
+    if content_type and not content_type.startswith(ALLOWED_AUDIO_CONTENT_PREFIX):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid content type for audio upload: {content_type}",
+        )
+
+    content = await reference_audio.read()
+    if not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Reference audio file is empty")
+    if len(content) > MAX_REFERENCE_AUDIO_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reference audio file exceeds 100MB limit",
+        )
+
+    out_path = config.MUSIC_REFERENCE_DIR / f"cover_ref_{uuid4().hex}{suffix}"
+    out_path.write_bytes(content)
+    return out_path.resolve()
 
 
 @router.post(
@@ -76,13 +115,102 @@ async def generate_music(
             message="Music generation task submitted",
             task_id=task_id,
         )
-    except ValueError as exc:
+    except (ValueError, ValidationError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("Music generation submission failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Music generation request failed: {exc}",
+        ) from exc
+
+
+@router.post(
+    "/cover-generate",
+    response_model=MusicGenerateResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+async def generate_cover_music(
+    http_request: Request,
+    reference_audio: UploadFile = File(...),
+    prompt: str = Form(default=""),
+    lyrics: str = Form(default=""),
+    duration: float | None = Form(default=None),
+    audio_cover_strength: float = Form(default=0.6),
+    vocal_language: str | None = Form(default=None),
+    instrumental: bool = Form(default=False),
+    thinking: bool = Form(default=True),
+    inference_steps: int = Form(default=8),
+    batch_size: int = Form(default=1),
+    seed: int = Form(default=-1),
+    audio_format: str = Form(default="mp3"),
+) -> MusicGenerateResponse:
+    """Submit an ACE-Step cover generation task using a reference audio upload."""
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    logger.info("Music cover generation request from %s", client_ip)
+
+    try:
+        request_model = MusicCoverGenerateRequest(
+            prompt=prompt,
+            lyrics=lyrics,
+            duration=duration,
+            audio_cover_strength=audio_cover_strength,
+            vocal_language=vocal_language,
+            instrumental=instrumental,
+            thinking=thinking,
+            inference_steps=inference_steps,
+            batch_size=batch_size,
+            seed=seed,
+            audio_format=audio_format,
+        )
+        src_audio_path = await _store_cover_reference_audio(reference_audio)
+        task_id = await music_generator.generate_cover(
+            src_audio_path=src_audio_path,
+            prompt=request_model.prompt,
+            lyrics=request_model.lyrics,
+            duration=request_model.duration,
+            audio_cover_strength=request_model.audio_cover_strength,
+            vocal_language=request_model.vocal_language,
+            instrumental=request_model.instrumental,
+            thinking=request_model.thinking,
+            inference_steps=request_model.inference_steps,
+            batch_size=request_model.batch_size,
+            seed=request_model.seed,
+            audio_format=request_model.audio_format,
+        )
+        music_storage.create_history_entry(
+            task_id=task_id,
+            mode="cover",
+            request_payload={
+                "prompt": request_model.prompt,
+                "lyrics": request_model.lyrics,
+                "duration": request_model.duration,
+                "audio_cover_strength": request_model.audio_cover_strength,
+                "vocal_language": request_model.vocal_language,
+                "instrumental": request_model.instrumental,
+                "thinking": request_model.thinking,
+                "inference_steps": request_model.inference_steps,
+                "batch_size": request_model.batch_size,
+                "seed": request_model.seed,
+                "audio_format": request_model.audio_format,
+                "reference_audio_filename": reference_audio.filename,
+            },
+        )
+        return MusicGenerateResponse(
+            success=True,
+            message="Music cover generation task submitted",
+            task_id=task_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Music cover generation submission failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Music cover generation request failed: {exc}",
         ) from exc
 
 

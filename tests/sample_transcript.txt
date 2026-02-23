@@ -1,4 +1,4 @@
-Speaker 1: Have you heard about VibeVoice?
+Speaker 1: Have you heard about AudioMesh?
 Speaker 2: Yes, it's Microsoft's open-source text-to-speech model.
 Speaker 1: I'm excited to test it out. It can generate natural, expressive speech.
 Speaker 2: Absolutely, and it supports multiple speakers in conversations.
