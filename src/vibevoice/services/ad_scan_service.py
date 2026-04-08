@@ -16,7 +16,7 @@ from pydub import AudioSegment
 
 from ..config import config
 from ..models.schemas import AdSegmentItem
-from ..services.ad_scan_segment_utils import is_commercial_ad_segment
+from ..services.ad_scan_segment_utils import filter_dominant_show_segments, is_commercial_ad_segment
 from ..services.ad_scan_transcriber import transcribe_for_ad_scan
 from ..services.ollama_client import ollama_client
 
@@ -211,6 +211,12 @@ class AdScanService:
                 job_id,
                 len(ad_raw),
                 llm_s,
+            )
+            ad_raw = filter_dominant_show_segments(ad_raw, duration_sec, job_id=job_id)
+            logger.info(
+                "[ad-scan] job=%s after_dominant_show_filter segments=%d",
+                job_id,
+                len(ad_raw),
             )
             ad_items: list[AdSegmentItem] = []
             pydantic_rejects = 0

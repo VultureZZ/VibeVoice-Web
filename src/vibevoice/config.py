@@ -155,6 +155,11 @@ class Config:
     AD_SCAN_WHISPER_COMPUTE_TYPE: str = os.getenv("AD_SCAN_WHISPER_COMPUTE_TYPE", "int8")
     # Max characters per log blob for ad-scan debug (0 = no truncation).
     AD_SCAN_LOG_MAX_CHARS: int = int(os.getenv("AD_SCAN_LOG_MAX_CHARS", "50000"))
+    # If a single label's merged time covers at least this fraction of the episode, treat it as main show
+    # content (e.g. network name spoken throughout) and exclude it from ads.
+    AD_SCAN_DOMINANT_LABEL_MIN_FRACTION: float = float(
+        os.getenv("AD_SCAN_DOMINANT_LABEL_MIN_FRACTION", "0.45")
+    )
 
     def __init__(self):
         """Initialize configuration and ensure directories exist."""

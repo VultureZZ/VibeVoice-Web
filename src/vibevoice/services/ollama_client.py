@@ -140,11 +140,14 @@ class OllamaClient:
             + json.dumps(payload, ensure_ascii=False)
         )
 
-        system = """You mark where paid advertisements and sponsor reads occur in a timestamped transcript.
+        system = """You mark discrete paid advertisements and sponsor reads in a timestamped transcript.
 Respond using the required JSON schema only: object with key "ad_segments" (array).
 Each element: start_seconds, end_seconds, label (short brand or product name), confidence (0-1).
-Do NOT include regular news reporting, story segments, interviews, or main episode discussion—only commercials, sponsor messages, promos, and reads.
-Merge adjacent ad lines into one interval. Times must be within [0, total_duration_seconds]. If no ads, use "ad_segments": []."""
+
+CRITICAL: The podcast's own show title, network name, or channel (e.g. a name repeated throughout most of the episode as normal speech) is NOT an advertisement. Do not tag continuous main discussion or news under that name as an ad—only separate sponsor spots, promos, and third-party product reads.
+
+Do NOT include regular news reporting, story segments, interviews, or non-sponsored main discussion.
+Merge adjacent lines for the same sponsor into one interval. Times must be within [0, total_duration_seconds]. If no discrete ads, use "ad_segments": []."""
 
         request_body: Dict[str, Any] = {
             "model": model,

@@ -337,9 +337,9 @@ export function AdScannerPage() {
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-medium text-gray-900">Timeline</h2>
             <p className="text-sm text-gray-600 mt-1">
-              Blue: main episode content. Orange: sponsor/ad blocks we treat as commercials. Segments labeled as news or
-              editorial (e.g. &quot;News Segment&quot;) are shown as blue even if the model listed them in the raw results.
-              Hover for times and confidence; click a segment to seek.
+              Blue: main episode content. Orange: discrete sponsor/ad blocks. The server drops a label that covers most
+              of the episode (e.g. the show network name spoken throughout) and editorial labels like &quot;News
+              Segment&quot; so they are not counted as ads. Hover for times and confidence; click a segment to seek.
             </p>
             <div className="mt-4 flex h-10 w-full rounded overflow-hidden border border-gray-200">
               {timeline.map((part, i) => {
