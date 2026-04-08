@@ -252,6 +252,17 @@ The frontend lives in `frontend/`. See `frontend/README.md` for setup, developme
 - `GET /api/v1/music/history/{history_id}` - Get one history item
 - `DELETE /api/v1/music/history/{history_id}` - Delete history item
 
+### Audio tools
+
+- `POST /api/v1/audio-tools/podcast/scan-ads` - Upload podcast audio; queue ad detection (`202`)
+- `GET /api/v1/audio-tools/podcast/scan-ads/{job_id}/status` - Poll ad scan job
+- `POST /api/v1/audio-tools/podcast/export` - Export clean or ads-only MP3 from a completed scan
+- `GET /api/v1/audio-tools/podcast/download/{filename}` - Download exported MP3
+- `POST /api/v1/audio-tools/isolate-speakers` - Upload audio; queue speaker isolation / clip extraction (`202`)
+- `GET /api/v1/audio-tools/isolate-speakers/{job_id}/status` - Poll isolation job; includes per-speaker clips when complete
+- `GET /api/v1/audio-tools/isolate-speakers/clip/{job_id}/{filename}` - Stream or download one isolation clip
+- `POST /api/v1/audio-tools/isolate-speakers/create-voice` - Create a custom voice from one isolation clip
+
 ### Transcript Worker Environment (recommended)
 
 To avoid dependency conflicts between TTS backends and transcript libraries, run transcript processing in a separate Python environment:

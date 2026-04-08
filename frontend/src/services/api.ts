@@ -728,6 +728,14 @@ class ApiClient {
     return response.data;
   }
 
+  async downloadSpeakerIsolationClip(jobId: string, filename: string): Promise<Blob> {
+    const response = await this.client.get(
+      `/api/v1/audio-tools/isolate-speakers/clip/${encodeURIComponent(jobId)}/${encodeURIComponent(filename)}`,
+      { responseType: 'blob' }
+    );
+    return response.data;
+  }
+
   async uploadForSpeakerIsolation(
     audioFile: File,
     onUploadProgress?: (percent: number) => void

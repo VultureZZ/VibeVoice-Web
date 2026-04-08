@@ -233,6 +233,47 @@ Voice profiles are style metadata (cadence/tone/etc.) used by Ollama-assisted fe
 - `DELETE /api/v1/music/history/{history_id}`
   - Deletes one history item.
 
+### Audio tools
+
+Podcast ad scanning (Whisper + LLM), MP3 export, and speaker-isolation preview clips. Working files live under `AUDIO_TOOLS_DIR` (default `outputs/audio_tools`).
+
+- `POST /api/v1/audio-tools/podcast/scan-ads` (multipart form, returns `202 Accepted`)
+  - Fields:
+    - `audio_file` (required)
+  - Returns: `{ job_id, status, progress_pct }`
+  - Queues transcription and ad-segment detection; poll status until `complete`.
+
+- `GET /api/v1/audio-tools/podcast/scan-ads/{job_id}/status`
+  - Returns: `{ job_id, status, progress_pct, current_stage?, ad_segments?, duration_seconds?, error? }`
+  - Status values: `queued | transcribing | analyzing | complete | failed`
+  - When `complete`, `ad_segments` lists detected segments (`start_seconds`, `end_seconds`, `label`, `confidence`).
+
+- `POST /api/v1/audio-tools/podcast/export`
+  - Body (JSON): `{ job_id, export_mode }` where `export_mode` is `clean` (remove ads) or `ads_only` (ads audio only)
+  - Returns: `{ download_url, filename, duration_seconds, file_size_bytes }`
+  - `download_url` is a relative path; fetch with the same auth as other API routes.
+
+- `GET /api/v1/audio-tools/podcast/download/{filename}`
+  - Returns exported MP3 (`audio/mpeg`). Filename must match the safe basename pattern (e.g. `*.mp3`).
+
+- `POST /api/v1/audio-tools/isolate-speakers` (multipart form, returns `202 Accepted`)
+  - Fields:
+    - `audio_file` (required)
+  - Returns: `{ job_id, status, progress_pct }`
+  - Runs diarization and extracts short preview clips per speaker (see Voice Isolator UI).
+
+- `GET /api/v1/audio-tools/isolate-speakers/{job_id}/status`
+  - Returns: `{ job_id, status, progress_pct, current_stage?, speakers?, duration_seconds?, error? }`
+  - Status values: `queued | diarizing | extracting | complete | failed`
+  - When `complete`, `speakers` includes `clips` with `clip_id`, `filename`, timing fields, and `download_url` (relative).
+
+- `GET /api/v1/audio-tools/isolate-speakers/clip/{job_id}/{filename}`
+  - Returns isolation clip audio (`audio/mpeg`, inline). Used for preview/download of a single clip.
+
+- `POST /api/v1/audio-tools/isolate-speakers/create-voice` (returns `201 Created`)
+  - Body (JSON): `{ job_id, clip_id, voice_name, voice_description? }`
+  - Creates a custom voice in the library from one isolation clip (same pipeline as multipart voice creation).
+
 ### Podcast generation
 
 - `POST /api/v1/podcast/generate-script`
@@ -401,6 +442,31 @@ curl -sS -X POST "http://localhost:8000/api/v1/podcast/generate-production" \
 ```bash
 curl -sS "http://localhost:8000/api/v1/podcast/status/<task_id>" \
   -H "X-API-Key: ${API_KEY}"
+```
+
+### Audio tools (ad scan → export)
+
+```bash
+curl -sS -X POST "http://localhost:8000/api/v1/audio-tools/podcast/scan-ads" \
+  -H "X-API-Key: ${API_KEY}" \
+  -F 'audio_file=@/path/to/episode.mp3'
+```
+
+Poll until `status` is `complete`, then export:
+
+```bash
+curl -sS -X POST "http://localhost:8000/api/v1/audio-tools/podcast/export" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: ${API_KEY}" \
+  -d '{"job_id":"<job_id>","export_mode":"clean"}'
+```
+
+Download the MP3 using `filename` from the response:
+
+```bash
+curl -L "http://localhost:8000/api/v1/audio-tools/podcast/download/<filename>.mp3" \
+  -H "X-API-Key: ${API_KEY}" \
+  --output clean.mp3
 ```
 
 ## Runtime dependencies

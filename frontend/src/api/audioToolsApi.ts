@@ -47,6 +47,10 @@ export function downloadAudioToolsExport(filename: string): Promise<Blob> {
   return apiClient.downloadAudioToolsExport(filename);
 }
 
+export function downloadSpeakerIsolationClip(jobId: string, filename: string): Promise<Blob> {
+  return apiClient.downloadSpeakerIsolationClip(jobId, filename);
+}
+
 export function uploadForSpeakerIsolation(
   file: File,
   onUploadProgress?: (percent: number) => void
