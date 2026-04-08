@@ -140,9 +140,10 @@ class OllamaClient:
             + json.dumps(payload, ensure_ascii=False)
         )
 
-        system = """You mark where ads and sponsor reads occur in a timestamped transcript.
+        system = """You mark where paid advertisements and sponsor reads occur in a timestamped transcript.
 Respond using the required JSON schema only: object with key "ad_segments" (array).
-Each element: start_seconds, end_seconds, label (short), confidence (0-1).
+Each element: start_seconds, end_seconds, label (short brand or product name), confidence (0-1).
+Do NOT include regular news reporting, story segments, interviews, or main episode discussion—only commercials, sponsor messages, promos, and reads.
 Merge adjacent ad lines into one interval. Times must be within [0, total_duration_seconds]. If no ads, use "ad_segments": []."""
 
         request_body: Dict[str, Any] = {

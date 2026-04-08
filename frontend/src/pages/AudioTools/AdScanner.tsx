@@ -6,6 +6,7 @@ import {
   scanPodcastAds,
 } from '../../api/audioToolsApi';
 import type { AdSegmentItem, PodcastAdScanStatusResponse } from '../../types/api';
+import { filterCommercialAdSegments } from '../../utils/adScanSegments';
 import { Alert, ToastContainer } from '../../components/Alert';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 
@@ -155,12 +156,16 @@ export function AdScannerPage() {
     };
   }, [jobId, pushToast]);
 
+  const commercialAds = useMemo(
+    () => filterCommercialAdSegments(status?.ad_segments ?? []),
+    [status?.ad_segments]
+  );
+
   const timeline = useMemo(() => {
     const d = status?.duration_seconds ?? durationEstimate ?? 0;
-    const ads = status?.ad_segments ?? [];
     if (!d || status?.status !== 'complete') return [];
-    return buildTimeline(d, ads);
-  }, [status, durationEstimate]);
+    return buildTimeline(d, commercialAds);
+  }, [status, durationEstimate, commercialAds]);
 
   const totalDuration = status?.duration_seconds ?? durationEstimate ?? 0;
 
@@ -332,8 +337,9 @@ export function AdScannerPage() {
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-medium text-gray-900">Timeline</h2>
             <p className="text-sm text-gray-600 mt-1">
-              Blue: main content. Orange: detected ads. Hover for times and confidence. Click a segment to seek the
-              player.
+              Blue: main episode content. Orange: sponsor/ad blocks we treat as commercials. Segments labeled as news or
+              editorial (e.g. &quot;News Segment&quot;) are shown as blue even if the model listed them in the raw results.
+              Hover for times and confidence; click a segment to seek.
             </p>
             <div className="mt-4 flex h-10 w-full rounded overflow-hidden border border-gray-200">
               {timeline.map((part, i) => {
@@ -387,7 +393,7 @@ export function AdScannerPage() {
               <div className="flex flex-col gap-2">
                 <button
                   type="button"
-                  disabled={exportingAds || !jobId || !(status.ad_segments && status.ad_segments.length)}
+                  disabled={exportingAds || !jobId || commercialAds.length === 0}
                   onClick={() => void runExport('ads_only')}
                   className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-orange-500 text-orange-700 text-sm font-medium hover:bg-orange-50 disabled:opacity-50"
                 >
@@ -408,6 +414,13 @@ export function AdScannerPage() {
             {status.ad_segments && status.ad_segments.length === 0 && (
               <p className="mt-3 text-sm text-gray-500">No ad segments were detected; ads-only export is disabled.</p>
             )}
+            {status.ad_segments &&
+              status.ad_segments.length > 0 &&
+              commercialAds.length === 0 && (
+                <p className="mt-3 text-sm text-gray-500">
+                  No commercial sponsor segments after filtering editorial labels; ads-only export is disabled.
+                </p>
+              )}
           </div>
         </div>
       )}

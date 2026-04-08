@@ -16,6 +16,7 @@ from pydub import AudioSegment
 
 from ..config import config
 from ..models.schemas import AdSegmentItem
+from ..services.ad_scan_segment_utils import is_commercial_ad_segment
 from ..services.ad_scan_transcriber import transcribe_for_ad_scan
 from ..services.ollama_client import ollama_client
 
@@ -299,7 +300,7 @@ class AdScanService:
         ads = [
             (float(a["start_seconds"]), float(a["end_seconds"]))
             for a in (job.get("ad_segments") or [])
-            if isinstance(a, dict)
+            if isinstance(a, dict) and is_commercial_ad_segment(a)
         ]
         if export_mode == "ads_only" and not ads:
             raise ValueError("No ad segments detected; ads-only export is not available.")
