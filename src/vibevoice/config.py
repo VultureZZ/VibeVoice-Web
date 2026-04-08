@@ -94,6 +94,11 @@ class Config:
     ACESTEP_IDLE_SHUTDOWN_SECONDS: int = int(
         os.getenv("ACESTEP_IDLE_SHUTDOWN_SECONDS", "120")
     )
+    # Before starting ACE-Step or podcast music cues, wait until this much VRAM (MiB) is free
+    # on the ACE-Step CUDA device. Set GPU_VRAM_WAIT_TIMEOUT_SECONDS=0 to wait indefinitely.
+    ACESTEP_MIN_FREE_VRAM_MIB: int = int(os.getenv("ACESTEP_MIN_FREE_VRAM_MIB", "10240"))
+    GPU_VRAM_WAIT_TIMEOUT_SECONDS: float = float(os.getenv("GPU_VRAM_WAIT_TIMEOUT_SECONDS", "600"))
+    GPU_VRAM_POLL_INTERVAL_SECONDS: float = float(os.getenv("GPU_VRAM_POLL_INTERVAL_SECONDS", "2.0"))
     # Optional explicit command. Example:
     #   ACESTEP_SERVER_COMMAND="uv run acestep-api --host 127.0.0.1 --port 8001"
     ACESTEP_SERVER_COMMAND: Optional[str] = os.getenv("ACESTEP_SERVER_COMMAND", None)

@@ -24,14 +24,48 @@ from ..models.schemas import (
     PodcastScriptResponse,
 )
 from ..config import config
+from ..gpu_memory import (
+    cuda_device_index_from_string,
+    release_torch_cuda_memory,
+    wait_for_cuda_memory,
+)
 from ..models.podcast_storage import podcast_storage
 from ..services.audio_compositor import CuePlacement, audio_compositor
 from ..services.podcast_generator import podcast_generator
 from ..services.podcast_music_service import podcast_music_service
 from ..services.podcast_timing_service import podcast_timing_service
+from ..services.voice_generator import voice_generator
 from ..services.voice_manager import voice_manager
 
 logger = logging.getLogger(__name__)
+
+
+def _release_tts_and_wait_for_acestep_vram(music_cues_enabled: bool) -> None:
+    """
+    Drop Qwen3-TTS weights after the voice track, then optionally wait until enough VRAM is
+    free for ACE-Step (same host GPU as other CUDA workloads).
+    """
+    voice_generator.release_gpu_memory_after_speech()
+    release_torch_cuda_memory()
+    if not music_cues_enabled:
+        return
+    idx = cuda_device_index_from_string(config.ACESTEP_DEVICE)
+    if idx is None:
+        return
+    mib = config.ACESTEP_MIN_FREE_VRAM_MIB
+    min_bytes = mib * 1024 * 1024
+    ok = wait_for_cuda_memory(
+        min_bytes,
+        device_index=idx,
+        timeout_seconds=config.GPU_VRAM_WAIT_TIMEOUT_SECONDS,
+        poll_interval_seconds=config.GPU_VRAM_POLL_INTERVAL_SECONDS,
+    )
+    if not ok:
+        raise RuntimeError(
+            f"GPU did not reach ~{mib} MiB free within "
+            f"{config.GPU_VRAM_WAIT_TIMEOUT_SECONDS}s; free other CUDA workloads or set "
+            "GPU_VRAM_WAIT_TIMEOUT_SECONDS=0 to wait indefinitely."
+        )
 
 router = APIRouter(prefix="/api/v1/podcast", tags=["podcast"])
 
@@ -170,6 +204,15 @@ async def _run_production_task(task_id: str, request: PodcastProductionRequest) 
 
         dialogue_timing = await podcast_timing_service.build_dialogue_timing(request.script, voice_path)
         script_segments = _merge_dialogue_timing(script_segments, dialogue_timing)
+
+        health = podcast_music_service.health_check()
+        music_available = bool(health.get("available"))
+        enabled = set(request.enabled_cues or [])
+        will_run_music_cues = music_available and bool(
+            enabled.intersection({"intro", "outro", "transitions", "bed"})
+        )
+        await asyncio.to_thread(_release_tts_and_wait_for_acestep_vram, will_run_music_cues)
+
         _set_production_task(
             task_id,
             script_segments=script_segments,
@@ -178,12 +221,9 @@ async def _run_production_task(task_id: str, request: PodcastProductionRequest) 
             stage_progress=stage_progress,
         )
 
-        enabled = set(request.enabled_cues or [])
         stage_progress["generating_music_cues"] = "running"
 
         cue_paths: Dict[str, str] = {}
-        health = podcast_music_service.health_check()
-        music_available = bool(health.get("available"))
         if not music_available:
             warnings.append("ACE-Step not configured. Continuing with voice-only output.")
             stage_progress["generating_music_cues"] = "skipped"
@@ -203,17 +243,20 @@ async def _run_production_task(task_id: str, request: PodcastProductionRequest) 
                     warnings.append(f"Failed generating {cue_name} cue: {exc}")
                 _set_production_task(task_id, cue_status=cue_status, warnings=warnings)
 
-            cue_jobs: List[asyncio.Task] = []
-            if "intro" in enabled:
-                cue_jobs.append(asyncio.create_task(_generate_named_cue("intro")))
-            if "outro" in enabled:
-                cue_jobs.append(asyncio.create_task(_generate_named_cue("outro")))
-            if "transitions" in enabled:
-                cue_jobs.append(asyncio.create_task(_generate_named_cue("transition")))
-            if "bed" in enabled:
-                cue_jobs.append(asyncio.create_task(_generate_named_cue("bed")))
-            if cue_jobs:
-                await asyncio.gather(*cue_jobs)
+            # Run cues one at a time so ACE-Step and the GPU are not overloaded in parallel.
+            cue_order = [
+                ("intro", "intro"),
+                ("bed", "bed"),
+                ("transitions", "transition"),
+                ("outro", "outro"),
+            ]
+            ran_any = False
+            for flag, cue_name in cue_order:
+                if flag not in enabled:
+                    continue
+                await _generate_named_cue(cue_name)
+                ran_any = True
+            if ran_any:
                 stage_progress["generating_music_cues"] = "completed"
             else:
                 stage_progress["generating_music_cues"] = "skipped"

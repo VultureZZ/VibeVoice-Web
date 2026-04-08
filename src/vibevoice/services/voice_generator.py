@@ -263,6 +263,23 @@ class VoiceGenerator:
 
         return "\n".join(formatted_lines)
 
+    def release_gpu_memory_after_speech(self) -> None:
+        """
+        Unload in-process TTS weights and release CUDA caches so another workload (e.g.
+        ACE-Step in a subprocess) can use the GPU.
+        """
+        if self._use_legacy:
+            return
+        backend = self._backend
+        if backend is None:
+            return
+        unload = getattr(backend, "unload_models_immediately", None)
+        if callable(unload):
+            unload()
+        from ..gpu_memory import release_torch_cuda_memory
+
+        release_torch_cuda_memory()
+
 
 # Global voice generator instance
 voice_generator = VoiceGenerator()

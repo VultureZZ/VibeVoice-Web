@@ -22,6 +22,10 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from ..config import config
+from ..gpu_memory import (
+    cuda_device_index_from_string,
+    wait_for_cuda_memory,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +119,9 @@ class MusicProcessManager:
         env["ACESTEP_LM_MODEL_PATH"] = cfg.lm_model_path
         env["ACESTEP_LM_BACKEND"] = cfg.lm_backend
         env["ACESTEP_DEVICE"] = cfg.device
+        # Reduce fragmentation when ACE-Step loads large weights (PyTorch docs).
+        if "PYTORCH_ALLOC_CONF" not in env:
+            env["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
         return env
 
     def _cancel_idle_timer_locked(self) -> None:
@@ -160,6 +167,25 @@ class MusicProcessManager:
             cmd = shlex.split(cfg.server_command)
         else:
             cmd = self._build_default_command(cfg)
+
+        idx = cuda_device_index_from_string(cfg.device)
+        if idx is not None:
+            mib = getattr(config, "ACESTEP_MIN_FREE_VRAM_MIB", 10240)
+            min_bytes = mib * 1024 * 1024
+            timeout = float(getattr(config, "GPU_VRAM_WAIT_TIMEOUT_SECONDS", 600.0))
+            poll = float(getattr(config, "GPU_VRAM_POLL_INTERVAL_SECONDS", 2.0))
+            ok = wait_for_cuda_memory(
+                min_bytes,
+                device_index=idx,
+                timeout_seconds=timeout,
+                poll_interval_seconds=poll,
+            )
+            if not ok:
+                raise RuntimeError(
+                    f"Insufficient free GPU memory to start ACE-Step: need about {mib} MiB on "
+                    f"cuda:{idx}. Stop other GPU processes or set ACESTEP_MIN_FREE_VRAM_MIB / "
+                    "GPU_VRAM_WAIT_TIMEOUT_SECONDS."
+                )
 
         logger.info(
             "Starting ACE-Step API subprocess. cwd=%s host=%s port=%s cmd=%s",
