@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Optional
@@ -21,6 +22,22 @@ from ..services.ollama_client import ollama_client
 logger = logging.getLogger(__name__)
 
 _AD_SCAN_FORMATS = frozenset({"mp3", "wav", "m4a"})
+
+
+def _log_ad_scan_blob(prefix: str, text: str) -> None:
+    """Log a possibly large string; truncate using AD_SCAN_LOG_MAX_CHARS when > 0."""
+    max_c = getattr(config, "AD_SCAN_LOG_MAX_CHARS", 50000)
+    if max_c <= 0 or len(text) <= max_c:
+        logger.info("%s\n%s", prefix, text)
+        return
+    omitted = len(text) - max_c
+    logger.info(
+        "%s (truncated: %d chars total, %d omitted)\n%s",
+        prefix,
+        len(text),
+        omitted,
+        text[:max_c],
+    )
 
 
 def _ext(name: str) -> str:
@@ -127,7 +144,14 @@ class AdScanService:
             job["duration_seconds"] = duration_sec
 
             backend = (config.AD_SCAN_TRANSCRIBE_BACKEND or "faster_whisper").strip().lower()
-            logger.info("Ad scan job %s: transcription backend=%s", job_id, backend)
+            t0 = time.perf_counter()
+            logger.info(
+                "[ad-scan] job=%s begin_transcription backend=%s whisper_model=%s audio=%s",
+                job_id,
+                backend,
+                config.TRANSCRIPT_WHISPER_MODEL,
+                audio_path,
+            )
             if backend in ("whisperx", "whisper_x"):
                 from ..core.transcripts.transcriber import transcript_transcriber
 
@@ -139,26 +163,79 @@ class AdScanService:
                     f"Invalid AD_SCAN_TRANSCRIBE_BACKEND={backend!r}. "
                     "Use 'faster_whisper' or 'whisperx'."
                 )
+            transcribe_s = time.perf_counter() - t0
             raw_segments = transcript.get("segments") or []
+            _log_ad_scan_blob(
+                f"[ad-scan] job={job_id} whisper_raw_segments_json (pre-normalize, count={len(raw_segments)})",
+                json.dumps(raw_segments, ensure_ascii=False, indent=2),
+            )
             segments_payload = self._normalize_whisper_segments(raw_segments, duration_sec)
+            lang = transcript.get("language")
+            plain_text = " ".join(
+                (s.get("text") or "").strip() for s in segments_payload if (s.get("text") or "").strip()
+            )
+            segments_json = json.dumps(segments_payload, ensure_ascii=False, indent=2)
+
+            logger.info(
+                "[ad-scan] job=%s transcription_done duration_sec=%.3f transcribe_wall_s=%.2f "
+                "segments_count=%d language=%s plain_text_chars=%d",
+                job_id,
+                duration_sec,
+                transcribe_s,
+                len(segments_payload),
+                lang,
+                len(plain_text),
+            )
+            _log_ad_scan_blob(f"[ad-scan] job={job_id} transcription_plain_text", plain_text)
+            _log_ad_scan_blob(
+                f"[ad-scan] job={job_id} transcription_segments_json (for LLM, normalized)",
+                segments_json,
+            )
 
             job["status"] = "analyzing"
             job["progress_pct"] = 55
             job["current_stage"] = "Analyzing for ads..."
 
+            t_llm = time.perf_counter()
             ad_raw = await asyncio.to_thread(
                 ollama_client.identify_podcast_ad_segments,
                 segments_payload,
                 duration_sec,
+                None,
+                job_id,
+            )
+            llm_s = time.perf_counter() - t_llm
+            logger.info(
+                "[ad-scan] job=%s ollama_returned raw_segments=%d wall_s=%.2f",
+                job_id,
+                len(ad_raw),
+                llm_s,
             )
             ad_items: list[AdSegmentItem] = []
+            pydantic_rejects = 0
             for item in ad_raw:
                 try:
                     ad_items.append(AdSegmentItem.model_validate(item))
-                except Exception:
-                    continue
+                except Exception as ex:
+                    pydantic_rejects += 1
+                    logger.debug(
+                        "[ad-scan] job=%s pydantic_reject item=%r err=%s",
+                        job_id,
+                        item,
+                        ex,
+                    )
+            if pydantic_rejects:
+                logger.warning(
+                    "[ad-scan] job=%s pydantic_rejected_segments=%d (see DEBUG for rows)",
+                    job_id,
+                    pydantic_rejects,
+                )
 
             job["ad_segments"] = [a.model_dump() for a in ad_items]
+            _log_ad_scan_blob(
+                f"[ad-scan] job={job_id} final_ad_segments (stored on job)",
+                json.dumps(job["ad_segments"], ensure_ascii=False, indent=2),
+            )
             result_path = self._job_dir(job_id) / "result.json"
             result_path.write_text(
                 json.dumps(

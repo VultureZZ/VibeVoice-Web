@@ -153,6 +153,8 @@ class Config:
     AD_SCAN_TRANSCRIBE_BACKEND: str = os.getenv("AD_SCAN_TRANSCRIBE_BACKEND", "faster_whisper").strip().lower()
     AD_SCAN_WHISPER_DEVICE: str = os.getenv("AD_SCAN_WHISPER_DEVICE", "auto")
     AD_SCAN_WHISPER_COMPUTE_TYPE: str = os.getenv("AD_SCAN_WHISPER_COMPUTE_TYPE", "int8")
+    # Max characters per log blob for ad-scan debug (0 = no truncation).
+    AD_SCAN_LOG_MAX_CHARS: int = int(os.getenv("AD_SCAN_LOG_MAX_CHARS", "50000"))
 
     def __init__(self):
         """Initialize configuration and ensure directories exist."""

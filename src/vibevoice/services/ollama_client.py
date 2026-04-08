@@ -4,6 +4,7 @@ Ollama client service for LLM script generation.
 import logging
 import json
 import re
+import time
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -11,6 +12,22 @@ import httpx
 from ..config import config
 
 logger = logging.getLogger(__name__)
+
+
+def _ad_scan_log_blob(prefix: str, text: str) -> None:
+    max_c = int(getattr(config, "AD_SCAN_LOG_MAX_CHARS", 50000) or 0)
+    if max_c <= 0 or len(text) <= max_c:
+        logger.info("%s\n%s", prefix, text)
+        return
+    omitted = len(text) - max_c
+    logger.info(
+        "%s (truncated: %d chars total, %d omitted)\n%s",
+        prefix,
+        len(text),
+        omitted,
+        text[:max_c],
+    )
+
 
 # JSON Schema for Ollama structured outputs (/api/chat `format`); prevents prose summaries.
 _AD_DETECTION_RESPONSE_SCHEMA: Dict[str, Any] = {
@@ -102,6 +119,7 @@ class OllamaClient:
         segments_payload: List[Dict[str, Any]],
         total_duration_seconds: float,
         custom_model: Optional[str] = None,
+        job_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Ask the LLM to label advertisement/sponsor intervals from timestamped transcript segments.
@@ -109,6 +127,7 @@ class OllamaClient:
         Returns:
             List of dicts with keys: start_seconds, end_seconds, label, confidence
         """
+        jid = job_id or "-"
         model = custom_model or self.model
         payload = {
             "total_duration_seconds": round(total_duration_seconds, 3),
@@ -140,7 +159,20 @@ Merge adjacent ad lines into one interval. Times must be within [0, total_durati
             },
         }
 
+        logger.info(
+            "[ad-scan] job=%s ollama_ad_request base_url=%s model=%s "
+            "transcript_segments_in_payload=%d user_message_chars=%d",
+            jid,
+            self.base_url,
+            model,
+            len(segments_payload),
+            len(user_text),
+        )
+        _ad_scan_log_blob(f"[ad-scan] job={jid} ollama_system_prompt", system)
+        _ad_scan_log_blob(f"[ad-scan] job={jid} ollama_user_message (JSON payload + task prefix)", user_text)
+
         try:
+            t0 = time.perf_counter()
             response = self.client.post(
                 f"{self.base_url}/api/chat",
                 json=request_body,
@@ -148,7 +180,9 @@ Merge adjacent ad lines into one interval. Times must be within [0, total_durati
             if response.status_code == 400:
                 # Older Ollama without schema support: fall back to JSON mode (object, not prose).
                 logger.warning(
-                    "Ollama rejected structured format; retrying with format=json. Upgrade Ollama for best results."
+                    "[ad-scan] job=%s Ollama rejected structured format; retrying with format=json. "
+                    "Upgrade Ollama for best results.",
+                    jid,
                 )
                 request_body.pop("format", None)
                 request_body["format"] = "json"
@@ -157,13 +191,36 @@ Merge adjacent ad lines into one interval. Times must be within [0, total_durati
                     json=request_body,
                 )
             response.raise_for_status()
+            http_s = time.perf_counter() - t0
             result = response.json()
             message = result.get("message") or {}
             raw = (message.get("content") or "").strip()
+            logger.info(
+                "[ad-scan] job=%s ollama_ad_response http_wall_s=%.3f "
+                "prompt_eval_count=%s eval_count=%s total_duration_ns=%s done_reason=%s",
+                jid,
+                http_s,
+                result.get("prompt_eval_count"),
+                result.get("eval_count"),
+                result.get("total_duration"),
+                result.get("done_reason"),
+            )
+            _ad_scan_log_blob(f"[ad-scan] job={jid} ollama_message_content_raw", raw or "(empty)")
             if not raw:
                 raise RuntimeError("Ollama returned empty response for ad detection")
             parsed_list = self._parse_ad_segments_json(raw)
-            return self._validate_ad_segment_dicts(parsed_list, total_duration_seconds)
+            validated = self._validate_ad_segment_dicts(parsed_list, total_duration_seconds)
+            logger.info(
+                "[ad-scan] job=%s ollama_parsed_list_len=%d validated_ad_intervals=%d",
+                jid,
+                len(parsed_list),
+                len(validated),
+            )
+            _ad_scan_log_blob(
+                f"[ad-scan] job={jid} ollama_validated_ad_segments (after time/clamp filter)",
+                json.dumps(validated, ensure_ascii=False, indent=2),
+            )
+            return validated
         except httpx.HTTPError as e:
             raise RuntimeError(f"Ollama ad detection request failed: {e}") from e
         except Exception as e:
