@@ -3,10 +3,11 @@ Music cue generation service for podcast production mode.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from pathlib import Path
-from typing import Dict, Literal, Optional
+from typing import Dict, Literal
 
 from .music_generator import music_generator
 
@@ -40,7 +41,7 @@ class PodcastMusicService:
             return self._PROMPT_PRESETS[("transition", "any")]
         return self._PROMPT_PRESETS.get((cue_type, style)) or self._PROMPT_PRESETS[(cue_type, "casual")]
 
-    def generate_cue(
+    async def generate_cue(
         self,
         cue_type: CueType,
         style: StyleType,
@@ -56,20 +57,28 @@ class PodcastMusicService:
         """
         prompt = self.resolve_prompt(cue_type, style)
         logger.info("Generating podcast cue: cue_type=%s, style=%s", cue_type, style)
-        task_id = music_generator.generate_music(
+        task_id = await music_generator.generate_music(
             {
                 "caption": prompt,
                 "lyrics": "",
-                "duration": 12 if cue_type == "intro" else 10 if cue_type == "outro" else 3 if cue_type == "transition" else 45,
+                "duration": 12
+                if cue_type == "intro"
+                else 10
+                if cue_type == "outro"
+                else 3
+                if cue_type == "transition"
+                else 45,
                 "instrumental": True,
                 "thinking": False,
                 "batch_size": 1,
                 "audio_format": "wav",
             }
         )
-        return self.wait_for_task(task_id, timeout_seconds=timeout_seconds, poll_interval_seconds=poll_interval_seconds)
+        return await self.wait_for_task(
+            task_id, timeout_seconds=timeout_seconds, poll_interval_seconds=poll_interval_seconds
+        )
 
-    def wait_for_task(
+    async def wait_for_task(
         self,
         task_id: str,
         *,
@@ -82,7 +91,7 @@ class PodcastMusicService:
             if elapsed > timeout_seconds:
                 raise TimeoutError(f"Timed out waiting for cue task {task_id}")
 
-            status = music_generator.get_status(task_id)
+            status = await music_generator.get_status(task_id)
             state = status.get("status")
             if state == "succeeded":
                 metadata = status.get("metadata") or []
@@ -98,7 +107,7 @@ class PodcastMusicService:
             if state == "failed":
                 raise RuntimeError(status.get("error") or f"Cue task {task_id} failed")
 
-            time.sleep(poll_interval_seconds)
+            await asyncio.sleep(poll_interval_seconds)
 
     def health_check(self) -> Dict:
         """Proxy music system health for production orchestration."""
@@ -106,4 +115,3 @@ class PodcastMusicService:
 
 
 podcast_music_service = PodcastMusicService()
-

@@ -182,7 +182,7 @@ async def _run_production_task(task_id: str, request: PodcastProductionRequest) 
         stage_progress["generating_music_cues"] = "running"
 
         cue_paths: Dict[str, str] = {}
-        health = await asyncio.to_thread(podcast_music_service.health_check)
+        health = podcast_music_service.health_check()
         music_available = bool(health.get("available"))
         if not music_available:
             warnings.append("ACE-Step not configured. Continuing with voice-only output.")
@@ -193,8 +193,7 @@ async def _run_production_task(task_id: str, request: PodcastProductionRequest) 
                 cue_status[cue_name] = "running"
                 _set_production_task(task_id, cue_status=cue_status, stage_progress=stage_progress)
                 try:
-                    cue_paths[cue_name] = await asyncio.to_thread(
-                        podcast_music_service.generate_cue,
+                    cue_paths[cue_name] = await podcast_music_service.generate_cue(
                         cue_name,
                         request.style,
                     )

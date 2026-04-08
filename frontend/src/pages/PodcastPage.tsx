@@ -78,6 +78,8 @@ export function PodcastPage() {
   const [productionTaskStatus, setProductionTaskStatus] = useState<string | null>(null);
   const [productionStageProgress, setProductionStageProgress] = useState<Record<string, string>>({});
   const [productionCueStatus, setProductionCueStatus] = useState<Record<string, string>>({});
+  const isProductionTaskActive =
+    !!productionTaskId && !!productionTaskStatus && ['queued', 'running'].includes(productionTaskStatus);
 
   const speakerOptions = voices.map((voice) => ({
     value: voice.name,
@@ -454,6 +456,8 @@ export function PodcastPage() {
             onClick={handleGenerateScript}
             isLoading={loading}
             disabled={
+              loading ||
+              isProductionTaskActive ||
               !url.trim() ||
               selectedVoices.length === 0 ||
               selectedVoices.length > 4 ||
@@ -498,7 +502,7 @@ export function PodcastPage() {
             variant="primary"
             onClick={handleGenerateAudio}
             isLoading={loading}
-            disabled={!script.trim() || selectedVoices.length === 0}
+            disabled={loading || isProductionTaskActive || !script.trim() || selectedVoices.length === 0}
             className="w-full"
           >
             {productionMode ? 'Generate Production Audio' : 'Generate Audio'}
