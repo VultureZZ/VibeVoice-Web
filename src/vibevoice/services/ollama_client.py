@@ -5,7 +5,7 @@ import logging
 import json
 import re
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
@@ -63,6 +63,21 @@ def _sanitize_profile_for_prompt(profile: Dict) -> Dict:
     return {k: v for k, v in profile.items() if k not in _PROFILE_PROMPT_OMIT_KEYS}
 
 
+_CUE_MARKER_BRACKET = re.compile(r"^\s*\[CUE:", re.IGNORECASE)
+
+
+def _remove_placeholder_brackets(script: str) -> str:
+    """Strip bracketed placeholders (e.g. stage directions) but keep [CUE: ...] production tokens."""
+
+    def repl(m: re.Match) -> str:
+        inner = m.group(1)
+        if inner.strip().upper().startswith("CUE:"):
+            return m.group(0)
+        return ""
+
+    return re.sub(r"\s*\[([^\]]+)\]", repl, script)
+
+
 def _join_unique_phrases(phrases: List[str], max_chars: int = 600) -> str:
     """Join phrase list for the prompt, staying within a character budget."""
     if not phrases:
@@ -82,6 +97,153 @@ def _join_unique_phrases(phrases: List[str], max_chars: int = 600) -> str:
         parts.append(str(p))
         total += len(chunk)
     return ", ".join(parts)
+
+
+# Piecewise-linear word-count bands aligned with discrete presets (5 / 10 / 15 / 30 min).
+_DURATION_WORD_ANCHORS: List[Tuple[float, int, int]] = [
+    (5.0, 500, 700),
+    (10.0, 1000, 1400),
+    (15.0, 1500, 2100),
+    (30.0, 3000, 4200),
+]
+
+_DISCRETE_DURATION_TO_RANGE: Dict[str, str] = {
+    "5 min": "500-700",
+    "10 min": "1000-1400",
+    "15 min": "1500-2100",
+    "30 min": "3000-4200",
+}
+
+
+def _word_range_from_minutes(minutes: float) -> str:
+    """Map a target length in minutes to a low-high word count string for the prompt."""
+    m = max(0.25, float(minutes))
+    anchors = _DURATION_WORD_ANCHORS
+    m0, lo0, hi0 = anchors[0]
+    if m <= m0:
+        scale = m / m0 if m0 else 1.0
+        lo = int(max(80, lo0 * scale))
+        hi = int(max(120, hi0 * scale))
+        return f"{lo}-{hi}"
+
+    m_last, lo_last, hi_last = anchors[-1]
+    if m >= m_last:
+        scale = m / m_last
+        lo = int(lo_last * scale)
+        hi = int(hi_last * scale)
+        return f"{lo}-{hi}"
+
+    for i in range(len(anchors) - 1):
+        ma, lo_a, hi_a = anchors[i]
+        mb, lo_b, hi_b = anchors[i + 1]
+        if ma <= m <= mb:
+            t = (m - ma) / (mb - ma) if mb != ma else 0.0
+            lo = int(lo_a + t * (lo_b - lo_a))
+            hi = int(hi_a + t * (hi_b - hi_a))
+            return f"{lo}-{hi}"
+
+    return "1000-1400"
+
+
+def _format_duration_label_minutes(minutes: float) -> str:
+    rounded = round(float(minutes) * 10.0) / 10.0
+    if abs(rounded - round(rounded)) < 1e-9:
+        return f"~{int(round(rounded))} minutes"
+    return f"~{rounded:g} minutes"
+
+
+def resolve_script_duration_for_prompt(
+    duration: Optional[str],
+    approximate_duration_minutes: Optional[float],
+) -> tuple[str, str]:
+    """
+    Compute word-count band and human-readable duration line for the script prompt.
+
+    If approximate_duration_minutes is set, it takes precedence for the word target.
+    Otherwise uses discrete labels in _DISCRETE_DURATION_TO_RANGE, then tries to parse "N min" strings.
+
+    Returns:
+        (word_range_str, duration_label) e.g. ("1000-1400", "~12 minutes")
+    """
+    if approximate_duration_minutes is not None:
+        m = float(approximate_duration_minutes)
+        return _word_range_from_minutes(m), _format_duration_label_minutes(m)
+
+    ds = (duration or "").strip()
+    if ds in _DISCRETE_DURATION_TO_RANGE:
+        return _DISCRETE_DURATION_TO_RANGE[ds], ds
+
+    match = re.search(r"(\d+(?:\.\d+)?)\s*(?:min|minutes?)\b", ds, re.IGNORECASE)
+    if match:
+        m = float(match.group(1))
+        return _word_range_from_minutes(m), _format_duration_label_minutes(m)
+
+    if ds:
+        return "1000-1400", ds
+
+    return "1000-1400", "~10 minutes"
+
+
+def _midpoint_word_target(word_range_str: str) -> int:
+    """Midpoint integer from a 'lo-hi' word range string for structure budgeting in prompts."""
+    s = (word_range_str or "").strip()
+    m = re.match(r"^(\d+)\s*-\s*(\d+)$", s)
+    if m:
+        lo, hi = int(m.group(1)), int(m.group(2))
+        return max(1, (lo + hi) // 2)
+    m2 = re.search(r"\d+", s)
+    if m2:
+        return max(1, int(m2.group()))
+    return 1200
+
+
+def estimated_duration_seconds_for_segmentation(
+    script: str,
+    duration: Optional[str] = None,
+    approximate_duration_minutes: Optional[float] = None,
+) -> float:
+    """
+    Align segmentation metadata with script-generation duration targeting (Step 1).
+    When ``approximate_duration_minutes`` is set, it matches script generation exactly.
+    Otherwise uses the same word-range resolution as script prompts (or script word count when substantial).
+    """
+    if approximate_duration_minutes is not None:
+        return max(30.0, float(approximate_duration_minutes) * 60.0)
+    word_range_str, _ = resolve_script_duration_for_prompt(duration, None)
+    midpoint = _midpoint_word_target(word_range_str)
+    from_script_words = len(script.split())
+    if from_script_words > 80:
+        return max(30.0, (from_script_words / 140.0) * 60.0)
+    return max(30.0, (midpoint / 140.0) * 60.0)
+
+
+def infer_num_voices_from_script(script: str) -> int:
+    """Largest Speaker N label in the script, or 1 if none."""
+    found: List[int] = []
+    for m in re.finditer(r"(?i)^Speaker\s+(\d+)\s*:", script, re.MULTILINE):
+        found.append(int(m.group(1)))
+    return max(found) if found else 1
+
+
+def _structure_word_budgets(total_words: int) -> tuple[int, int, int, int]:
+    """Intro, body, analysis, close word counts that sum to total_words."""
+    t = max(100, int(total_words))
+    intro = max(50, round(t * 0.10))
+    close = max(40, round(t * 0.10))
+    analysis = max(80, round(t * 0.25))
+    body = t - intro - close - analysis
+    while body < 100 and analysis > 80:
+        analysis -= 1
+        body += 1
+    while body < 100 and intro > 50:
+        intro -= 1
+        body += 1
+    while body < 100 and close > 40:
+        close -= 1
+        body += 1
+    if body < 100:
+        body = max(100, t - intro - close - analysis)
+    return intro, body, analysis, close
 
 
 class OllamaClient:
@@ -431,11 +593,13 @@ Respond using the required JSON schema only."""
         self,
         article_text: str,
         genre: str,
-        duration: str,
+        duration: Optional[str],
         num_voices: int,
         custom_model: Optional[str] = None,
         voice_profiles: Optional[Dict[str, Dict]] = None,
         voice_names: Optional[List[str]] = None,
+        narrator_speaker_index: Optional[int] = None,
+        approximate_duration_minutes: Optional[float] = None,
     ) -> str:
         """
         Generate podcast script from article using Ollama.
@@ -443,11 +607,15 @@ Respond using the required JSON schema only."""
         Args:
             article_text: Scraped article content
             genre: Podcast genre (Comedy, Serious, News, etc.)
-            duration: Target duration (e.g., "5 min", "30 min")
+            duration: Target duration label (e.g. "10 min") when not using approximate_duration_minutes
             num_voices: Number of voices/speakers (1-4)
             custom_model: Optional custom model name (overrides default)
             voice_profiles: Optional dict mapping voice names to profile data
             voice_names: Optional list of voice names in order (maps to Speaker 1, 2, etc.)
+            narrator_speaker_index: If set (1..num_voices), that Speaker is the episode narrator;
+                others are co-hosts, experts, or reactors as appropriate.
+            approximate_duration_minutes: Optional target episode length in minutes; drives word-count
+                targets and overrides discrete ``duration`` when set.
 
         Returns:
             Generated podcast script with speaker labels
@@ -464,7 +632,16 @@ Respond using the required JSON schema only."""
             article_text = article_text[:max_article_length] + "\n[... article truncated ...]"
 
         # Build prompt for script generation
-        prompt = self._build_prompt(article_text, genre, duration, num_voices, voice_profiles, voice_names)
+        prompt = self._build_prompt(
+            article_text,
+            genre,
+            duration,
+            num_voices,
+            voice_profiles,
+            voice_names,
+            narrator_speaker_index=narrator_speaker_index,
+            approximate_duration_minutes=approximate_duration_minutes,
+        )
 
         logger.info(f"Generating script with Ollama (model: {model}, genre: {genre}, duration: {duration})")
 
@@ -508,6 +685,11 @@ Respond using the required JSON schema only."""
         self,
         script: str,
         custom_model: Optional[str] = None,
+        *,
+        estimated_duration_seconds: Optional[float] = None,
+        num_voices: Optional[int] = None,
+        genre: Optional[str] = None,
+        genre_style: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Generate structured production cue segments from a podcast script.
@@ -515,12 +697,22 @@ Respond using the required JSON schema only."""
         Args:
             script: Speaker-labeled script text
             custom_model: Optional model override
+            estimated_duration_seconds: Target length hint (defaults from script / duration metadata)
+            num_voices: Speaker count (defaults from Speaker N labels in script)
+            genre: Production genre label for the segmentation prompt
+            genre_style: Tone/style line (often derived from production ``style`` or genre)
 
         Returns:
             List of segment dictionaries
         """
         model = custom_model or self.model
-        prompt = self._build_segmentation_prompt(script)
+        est = estimated_duration_seconds
+        if est is None:
+            est = estimated_duration_seconds_for_segmentation(script, None, None)
+        nv = num_voices if num_voices is not None else infer_num_voices_from_script(script)
+        g = (genre or "").strip() or "General"
+        gs = (genre_style or "").strip() or g
+        prompt = self._build_segmentation_prompt(script, est, nv, g, gs)
         try:
             response = self.client.post(
                 f"{self.base_url}/api/generate",
@@ -550,31 +742,95 @@ Respond using the required JSON schema only."""
             logger.error(error_msg)
             raise RuntimeError(error_msg) from e
 
-    def _build_segmentation_prompt(self, script: str) -> str:
-        return f"""You are a production assistant for podcast post-processing.
+    def _build_segmentation_prompt(
+        self,
+        script: str,
+        estimated_duration_seconds: float,
+        num_voices: int,
+        genre: str,
+        genre_style: str,
+    ) -> str:
+        return f"""You are a podcast post-production engineer. Your job is to parse a finished podcast script and emit a strict production JSON array that an audio pipeline will consume directly. Precision and schema adherence are non-negotiable — any malformed output breaks the pipeline.
 
-Convert the script into a strict JSON array of segments with cue injection points.
-
-Allowed segment_type values:
-- intro_music
-- dialogue
-- transition_sting
-- music_bed
-- outro_music
-
-Rules:
-1. Output ONLY JSON, no markdown fences or commentary.
-2. For dialogue segments, include:
-   - speaker (e.g., "Speaker 1")
-   - text
-   - start_time_hint (number, seconds from 0; monotonic non-decreasing)
-3. Non-dialogue segments should still include start_time_hint.
-4. Include intro_music near start (0-2s), outro_music near ending, transition_sting at major topic shifts, and optional music_bed markers.
-5. Keep dialogue text faithful to the script.
-
-SCRIPT:
+--- INPUT SCRIPT ---
 {script}
-"""
+
+--- PRODUCTION METADATA (from Step 1) ---
+Total estimated duration: {estimated_duration_seconds:.1f} seconds
+Number of speakers: {num_voices}
+Genre: {genre}
+Tone: {genre_style}
+
+--- OUTPUT REQUIREMENTS ---
+
+Output ONLY a raw JSON array. No markdown fences. No commentary. No trailing text. Begin your response with [ and end with ].
+
+--- SEGMENT SCHEMA ---
+
+Each segment object must include ALL of the following fields:
+
+{{
+  "segment_id": <integer>,
+  "segment_type": <string>,
+  "speaker": <string or null>,
+  "text": <string or null>,
+  "start_time_hint": <number>,
+  "duration_hint": <number>,
+  "energy_level": <string>,
+  "notes": <string or null>
+}}
+
+--- ALLOWED SEGMENT TYPES ---
+
+| Type              | When to use                                                                 | Typical duration     |
+|-------------------|-----------------------------------------------------------------------------|----------------------|
+| intro_music       | Opening music before first spoken word. Always first segment.               | 3–6s                 |
+| dialogue          | Any spoken segment by a named speaker. Split at speaker turns.              | 5–90s per turn       |
+| transition_sting  | Short audio sting between major story blocks. Max 4 per episode.            | 1–3s                 |
+| music_bed_in      | Marker for background score to begin (analysis sections). Not audible alone.| 0s (marker only)     |
+| music_bed_out     | Marker for background score to end. Paired with every music_bed_in.        | 0s (marker only)     |
+| outro_music       | Closing music after final spoken word. Always last segment.                 | 5–10s                |
+
+--- TIMING RULES ---
+
+1. start_time_hint must be monotonically non-decreasing across the array (equal is allowed for zero-duration markers)
+2. Estimate dialogue duration at 140 words per minute: duration_hint = (word_count / 140) × 60
+3. intro_music and outro_music durations are fixed: 5.0s and 8.0s respectively unless overridden by production metadata
+4. transition_sting is always 2.0s
+5. music_bed_in / music_bed_out markers carry duration_hint: 0.0 and do NOT advance start_time_hint
+6. Do not create a transition_sting at every speaker change — only at major story block boundaries as marked by [CUE: TRANSITION_STING] in the script
+
+--- ENERGY LEVEL ASSIGNMENT ---
+
+- intro_music: high
+- First dialogue segment (hook): high
+- Story body segments: medium
+- Analysis/deep-dive segments: low → medium
+- Final close: medium
+- outro_music: low
+- transition_sting: use energy level of the segment that follows it
+- music_bed_in / music_bed_out: match surrounding dialogue energy
+
+--- DIALOGUE SPLITTING RULES ---
+
+1. Split dialogue at every speaker change — one dialogue object per speaker turn
+2. Preserve the verbatim text from the script — do not paraphrase, summarize, or trim
+3. If a single speaker turn exceeds 90 seconds (≈210 words), split into consecutive dialogue segments with the same speaker and add note: "long turn — split for production"
+4. Music cue markers ([CUE: ...]) in the script become their own segment objects and are removed from adjacent dialogue text
+
+--- VALIDATION CHECKLIST (apply before outputting) ---
+
+[ ] Array starts with segment_type: "intro_music"
+[ ] Array ends with segment_type: "outro_music"
+[ ] All start_time_hints are non-decreasing
+[ ] Every music_bed_in has a paired music_bed_out later in the array
+[ ] No more than 4 transition_sting segments total
+[ ] All dialogue segments have non-null speaker and text fields
+[ ] All non-dialogue segments have null speaker and null text fields
+[ ] No [CUE: ...] tokens appear inside any text field
+[ ] segment_id values are sequential integers starting at 1
+
+Output the JSON array now:"""
 
     def _parse_segment_json(self, raw: str) -> Any:
         cleaned = raw.strip()
@@ -584,7 +840,24 @@ SCRIPT:
         return json.loads(cleaned)
 
     def _validate_segments(self, parsed: Any) -> List[Dict[str, Any]]:
-        allowed_types = {"intro_music", "dialogue", "transition_sting", "music_bed", "outro_music"}
+        cue_in_text = re.compile(r"\[CUE:\s*[^\]]+\]", re.IGNORECASE)
+
+        def _parse_opt_float(val: Any, default: Optional[float] = None) -> Optional[float]:
+            if val is None:
+                return default
+            try:
+                return float(val)
+            except (TypeError, ValueError):
+                return default
+
+        allowed_types = {
+            "intro_music",
+            "dialogue",
+            "transition_sting",
+            "music_bed_in",
+            "music_bed_out",
+            "outro_music",
+        }
         if not isinstance(parsed, list):
             raise RuntimeError("Segment response must be a JSON array")
 
@@ -593,9 +866,11 @@ SCRIPT:
         for item in parsed:
             if not isinstance(item, dict):
                 continue
-            segment_type = str(item.get("segment_type") or "").strip()
+            raw_type = str(item.get("segment_type") or "").strip()
+            segment_type = "music_bed_in" if raw_type == "music_bed" else raw_type
             if segment_type not in allowed_types:
                 continue
+
             start_time_hint_raw = item.get("start_time_hint", 0.0)
             try:
                 start_time_hint = max(float(start_time_hint_raw), 0.0)
@@ -605,18 +880,42 @@ SCRIPT:
                 start_time_hint = last_time
             last_time = start_time_hint
 
+            duration_hint = _parse_opt_float(item.get("duration_hint"))
+            energy_level = item.get("energy_level")
+            energy_str = str(energy_level).strip() if energy_level is not None else None
+            notes_val = item.get("notes")
+            notes_str: Optional[str]
+            if notes_val is None or notes_val == "":
+                notes_str = None
+            else:
+                notes_str = str(notes_val).strip() or None
+
             segment: Dict[str, Any] = {
                 "segment_type": segment_type,
                 "start_time_hint": start_time_hint,
+                "duration_hint": duration_hint,
+                "energy_level": energy_str,
+                "notes": notes_str,
             }
+
             if segment_type == "dialogue":
                 speaker = str(item.get("speaker") or "").strip()
                 text = str(item.get("text") or "").strip()
+                if cue_in_text.search(text):
+                    text = cue_in_text.sub("", text).strip()
                 if not speaker or not text:
                     continue
                 segment["speaker"] = speaker
                 segment["text"] = text
+            else:
+                segment["speaker"] = None
+                segment["text"] = None
+
             normalized.append(segment)
+
+        for idx, seg in enumerate(normalized, start=1):
+            seg["segment_id"] = idx
+
         if not normalized:
             raise RuntimeError("No valid segments returned by Ollama")
         return normalized
@@ -625,10 +924,12 @@ SCRIPT:
         self,
         article_text: str,
         genre: str,
-        duration: str,
+        duration: Optional[str],
         num_voices: int,
         voice_profiles: Optional[Dict[str, Dict]] = None,
         voice_names: Optional[List[str]] = None,
+        narrator_speaker_index: Optional[int] = None,
+        approximate_duration_minutes: Optional[float] = None,
     ) -> str:
         """
         Build prompt for Ollama script generation.
@@ -636,22 +937,22 @@ SCRIPT:
         Args:
             article_text: Article content
             genre: Podcast genre
-            duration: Target duration
+            duration: Target duration label (optional if approximate_duration_minutes is set)
             num_voices: Number of voices
             voice_profiles: Optional dict mapping voice names to profile data
             voice_names: Optional list of voice names in order
+            narrator_speaker_index: Optional 1-based index of which speaker is the narrator
+            approximate_duration_minutes: Optional minutes target for word-count band
 
         Returns:
             Formatted prompt string
         """
-        # Map duration to approximate word count (without "words" suffix)
-        duration_map = {
-            "5 min": "500-700",
-            "10 min": "1000-1400",
-            "15 min": "1500-2100",
-            "30 min": "3000-4200",
-        }
-        word_target = duration_map.get(duration, "1000-1400")
+        word_target, duration_label = resolve_script_duration_for_prompt(duration, approximate_duration_minutes)
+        midpoint = _midpoint_word_target(word_target)
+        ert = midpoint / 140.0
+        estimated_read_time = f"{ert:.1f}".rstrip("0").rstrip(".") if ert else "0"
+        intro_word_count, body_word_count, analysis_word_count, close_word_count = _structure_word_budgets(midpoint)
+        max_segment_words = min(150, max(80, midpoint // 7))
 
         # Genre-specific instructions
         genre_instructions = {
@@ -715,81 +1016,112 @@ SCRIPT:
                     f"match rhythm, word choice, and manner of speaking described above.\n"
                 )
             if any_speaker_profile:
-                voice_profiles_section = "\n\n**VOICE PROFILES:**\n" + "".join(profile_lines)
+                voice_profiles_section = "".join(profile_lines)
                 voice_adherence_block = """
-6. **Voice profile adherence**
-   - Apply the **VOICE PROFILES** section to the matching Speaker number: that speaker's lines must reflect their profile (tone, cadence, structure, vocabulary, and signature phrases when natural).
-   - Genre and podcast specifications set format and framing; speaker profiles set how each person talks. Do not ignore a speaker's profile in favor of generic dialogue.
+7. **VOICE PROFILE ADHERENCE**
+   - Apply the **VOICE PROFILES** section above to the matching Speaker number; lines must reflect each profile (tone, cadence, structure, vocabulary, and signature phrases when natural).
+   - Genre and production specifications set format; profiles set how each person talks. Do not substitute generic dialogue for a defined profile.
 
 """
+        if not voice_profiles_section.strip():
+            voice_profiles_section = (
+                "(No voice profiles supplied — use balanced, broadcast-appropriate delivery for each speaker label.)"
+            )
 
-        # Build conditional speaker differentiation section
-        speaker_differentiation = ""
-        if num_voices == 1:
-            speaker_differentiation = "   - Speaker 1: Solo host, presents all information and guides the narrative"
-        elif num_voices == 2:
-            speaker_differentiation = """   - Speaker 1: Primary host, guides the conversation, asks questions
-   - Speaker 2: Co-host/expert, provides insights and elaboration"""
-        else:
-            # num_voices > 2
-            speaker_differentiation = """   - Speaker 1: Primary host, guides the conversation, asks questions
-   - Speaker 2: Co-host/expert, provides insights and elaboration
-   - Additional speakers: Contribute unique perspectives or counterpoints"""
+        narrator_line = ""
+        if narrator_speaker_index is not None:
+            n = narrator_speaker_index
+            vnames = voice_names or []
+            narrator_voice = ""
+            if 1 <= n <= len(vnames):
+                narrator_voice = str(vnames[n - 1]).strip()
+            nv = f' (voice name: "{narrator_voice}")' if narrator_voice else ""
+            narrator_line = f"\n- Narrator: Speaker {n}{nv} — carries the main through-line of the episode."
 
-        prompt = f"""You are an expert podcast script writer specializing in creating natural, engaging dialogue for text-to-speech synthesis.
+        prompt = f"""You are an expert podcast script writer specializing in producing broadcast-quality, audio-native dialogue. Your scripts are written for human ears, not human eyes — every word choice, sentence rhythm, and transition must work when spoken aloud.
+
+--- VOICE PROFILES ---
 {voice_profiles_section}
 
-**ARTICLE TO ADAPT:**
+--- SOURCE MATERIAL ---
 {article_text}
 
-**PODCAST SPECIFICATIONS:**
+--- PRODUCTION SPECIFICATIONS ---
 - Genre: {genre}
 - Tone/Style: {genre_style}
-- Target word count: {word_target} words (~{duration})
-- Speakers: {num_voices}
+- Target word count: {word_target} words ({duration_label})
+- Number of speakers: {num_voices}{narrator_line}
+- Estimated read time: {estimated_read_time} minutes at 140 WPM
 
-**OUTPUT FORMAT:**
-Use exactly this format with no additional markup:
+--- SCRIPT FORMAT ---
+Use ONLY this format. No markdown, no stage directions in prose, no header labels:
 
 {chr(10).join(speaker_examples)}
 
-**SCRIPT REQUIREMENTS:**
+Each speaker turn must be on its own line, prefixed with the speaker label and a colon.
+Blank lines between speaker turns only — no other blank lines.
+Do NOT include stage directions, scene headers, act labels, or any non-dialogue text.
 
-1. **Natural Speech Patterns**
-   - Use contractions (don't, we're, that's)
-   - Include verbal fillers sparingly (well, you know, I mean)
-   - Add brief reactions (Exactly, Right, Interesting)
-   - Vary sentence length—mix short punchy lines with longer explanations
+--- AUDIO WRITING RULES ---
 
-2. **Speaker Differentiation**
-{speaker_differentiation}
+1. NATURAL SPEECH PATTERNS
+   - Use contractions consistently (don't, we're, that's, I'd, you'll)
+   - Sentence length should vary: mix short punchy statements with longer explanatory ones
+   - Avoid sentences over 30 words — they lose listeners
+   - Use appositives and mid-sentence pauses naturally: "The crater — named after Wiseman's late wife — sits on the near-side boundary"
+   - Never start consecutive sentences with the same word
+   - Avoid passive voice; keep subject-verb order tight
 
-3. **Structure**
-   - Opening hook (grab attention in first 2-3 exchanges)
-   - Brief intro of topic
-   - Main content covering key article points
-   - Smooth transitions between subtopics
-   - Memorable conclusion with takeaway
+2. PACING AND ENERGY
+   - Open with a strong hook in the first 15 words of dialogue
+   - Each major story transition should reset energy — don't let momentum flatline
+   - Use rhetorical questions sparingly to re-engage listeners at the 1/3 and 2/3 marks
+   - Include at least one "moment of weight" per major story: a pause beat where significance lands
+   - Lighter, faster exchanges for transitions between stories; slower, more deliberate delivery signals for complex analysis
 
-4. **TTS Optimization**
-   - Avoid abbreviations (write "versus" not "vs.")
-   - Spell out numbers under 10
-   - Use em-dashes for natural pauses
-   - Avoid complex punctuation that may confuse TTS
+3. SPEAKER DYNAMICS
+   - No speaker should dominate more than 60% of any 2-minute segment
+   - Build in natural interruptions, completions, or agreements ("Exactly." / "Right, and what's interesting is—") to signal interplay
+   - Each speaker must have a consistent verbal identity maintained throughout:
+     * Speaker 1 (anchor): sets context, asks the critical question, summarizes takeaways
+     * Speaker 2 (analyst/co-host): adds texture, nuance, and "what this means" framing
+     * Narrator (if present): only for scene-setting prose passages — kept brief, maximum 3 sentences
+   - Avoid "talking head" blocks — no single speaker should hold the floor for more than ~100 words
 
-5. **Pacing**
-   - Balance information density with breathing room
-   - Include moments of agreement/reaction between substantive points
-   - Aim for 130-150 words per minute of target duration
-{voice_adherence_block}**DO NOT:**
-- Include stage directions or notes in parentheses or brackets
-- Use placeholders like [Host Name], [Co-host Name], [Name], etc. - write actual dialogue only
-- Use asterisks or other formatting
-- Add sound effect cues
-- Add or imply background music, theme music, intro/outro music, ambiance, jingles, or any non-speech audio
-- Include timestamps
-- Include any bracketed placeholders or notes
-- Start with greeting-style introductions (e.g., "Welcome to...", "Hello and welcome...", "Thanks for joining us...") or any "show intro" language
+4. CONTENT FIDELITY
+   - Every factual claim must originate from the provided source material
+   - Include specific details: names, numbers, dates, locations, direct quotes where available
+   - Do NOT add speculation, opinion, or context not present in the articles
+   - Paraphrase quotes into conversational speech — quoted text that reads as written prose sounds unnatural when spoken
+   - Prioritize the most newsworthy facts; don't bury the lede
+
+5. STRUCTURE (applied to {duration_label} format)
+   - INTRO (first {intro_word_count} words): Hook + scope teaser. No lengthy preamble. Get to the first story within 20 words.
+   - BODY (~{body_word_count} words): Cover stories by importance. Use verbal signposts: "But here's where it gets interesting..." / "Connecting back to what we covered earlier..." / "And this is the part that surprised me..."
+   - EXTENDED ANALYSIS (~{analysis_word_count} words): Deeper dive on the lead story or a cross-story theme. Slower pace, more considered language.
+   - CLOSE (final {close_word_count} words): Thematic recap — 2-3 sentences max per key story. End on a forward-looking note. No "thanks for listening" filler.
+
+6. MUSIC CUE MARKERS (embed inline as single-line comments)
+   Insert these exact tokens on their own line where audio production cues should occur:
+   [CUE: INTRO_MUSIC]         ← before first spoken word
+   [CUE: TRANSITION_STING]    ← at major story shifts (limit to 3-4 per episode)
+   [CUE: MUSIC_BED_IN]        ← where background score should swell (analysis section)
+   [CUE: MUSIC_BED_OUT]       ← where background score should fade
+   [CUE: OUTRO_MUSIC]         ← after final spoken word
+
+{voice_adherence_block}
+--- DO NOT ---
+- Do not write "(pause)" or "(beat)" — build pauses into sentence structure with em dashes and ellipses
+- Do not write sound effect instructions
+- Do not add "Host:", "Guest:", or role labels — use only the speaker name/label
+- Do not include any text that isn't meant to be spoken or is a music cue marker
+- Do not repeat the episode title or date mid-script
+- Do not let any story segment exceed {max_segment_words} words without a speaker exchange
+
+--- QUALITY CHECK (apply before outputting) ---
+Read the first and last line of your script. The first must contain a hook. The last must be a complete, resolved statement — not a trailing question.
+Scan for any sentence over 30 words and break it.
+Confirm {num_voices} distinct voices are present with roughly balanced turns.
 
 Generate the complete podcast script now:"""
 
@@ -817,11 +1149,7 @@ Generate the complete podcast script now:"""
                 lines = lines[:-1]
             script = "\n".join(lines)
 
-        # Remove placeholders in brackets (e.g., [Host Name], [Co-host Name], [Name], etc.)
-        # Pattern matches brackets with text inside, but preserves speaker labels like "Speaker 1:"
-        # Remove placeholder and any space before it if followed by punctuation
-        placeholder_pattern = r'\s*\[[^\]]+\]'
-        script = re.sub(placeholder_pattern, '', script)
+        script = _remove_placeholder_brackets(script)
 
         # Ensure proper speaker labels
         lines = script.split("\n")
@@ -829,6 +1157,10 @@ Generate the complete podcast script now:"""
         for line in lines:
             line = line.strip()
             if not line:
+                continue
+
+            if _CUE_MARKER_BRACKET.match(line):
+                cleaned_lines.append(line)
                 continue
 
             # Check if line starts with a speaker label

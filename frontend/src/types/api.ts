@@ -96,7 +96,10 @@ export interface PodcastScriptRequest {
   url: string;
   voices: string[];
   genre: string;
-  duration: string;
+  /** Discrete preset, e.g. "10 min". Optional if approximate_duration_minutes is set. */
+  duration?: string;
+  /** Target episode length in minutes; drives script length (takes precedence over duration when set). */
+  approximate_duration_minutes?: number;
   ollama_url?: string;
   ollama_model?: string;
 }
@@ -136,6 +139,8 @@ export type PodcastSegmentType =
   | 'dialogue'
   | 'transition_sting'
   | 'music_bed'
+  | 'music_bed_in'
+  | 'music_bed_out'
   | 'outro_music';
 
 export interface PodcastDialogueSegment {
@@ -145,11 +150,15 @@ export interface PodcastDialogueSegment {
 }
 
 export interface PodcastSegment {
+  segment_id?: number;
   segment_type: PodcastSegmentType;
-  speaker?: string;
-  text?: string;
+  speaker?: string | null;
+  text?: string | null;
   start_time_hint?: number;
+  duration_hint?: number;
   duration_ms?: number;
+  energy_level?: string | null;
+  notes?: string | null;
 }
 
 export interface PodcastProductionRequest extends PodcastGenerateRequest {

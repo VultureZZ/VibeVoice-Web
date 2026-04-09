@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 
 from ..models.schemas import (
     ErrorResponse,
+    PodcastArticleScriptRequest,
     PodcastGenerateRequest,
     PodcastGenerateResponse,
     PodcastProductionRequest,
@@ -32,7 +33,7 @@ from ..gpu_memory import (
 )
 from ..models.podcast_storage import podcast_storage
 from ..services.audio_compositor import CuePlacement, audio_compositor
-from ..services.podcast_generator import podcast_generator
+from ..services.podcast_generator import podcast_generator, production_style_to_genre_style
 from ..services.podcast_music_service import podcast_music_service
 from ..services.podcast_timing_service import podcast_timing_service
 from ..services.voice_generator import voice_generator
@@ -182,12 +183,18 @@ async def _run_production_task(task_id: str, request: PodcastProductionRequest) 
             warnings=warnings,
         )
 
-        script_segments = await asyncio.to_thread(
-            podcast_generator.generate_script_segments,
-            request.script,
-            request.ollama_url,
-            request.ollama_model,
-        )
+        def _segment_script() -> List[Dict]:
+            return podcast_generator.generate_script_segments(
+                request.script,
+                request.ollama_url,
+                request.ollama_model,
+                num_voices=len(request.voices),
+                genre=request.genre,
+                genre_style=production_style_to_genre_style(request.style) or request.genre or "General",
+                duration=request.duration,
+            )
+
+        script_segments = await asyncio.to_thread(_segment_script)
         stage_progress["generating_script"] = "completed"
         _set_production_task(
             task_id,
@@ -388,6 +395,7 @@ async def generate_podcast_script(
     logger.info(f"URL: {request.url}")
     logger.info(f"Genre: {request.genre}")
     logger.info(f"Duration: {request.duration}")
+    logger.info(f"Approximate duration (minutes): {request.approximate_duration_minutes}")
     logger.info(f"Voices: {request.voices}")
     logger.info(f"Number of voices: {len(request.voices)}")
     if request.ollama_url:
@@ -408,11 +416,17 @@ async def generate_podcast_script(
             voices=request.voices,
             ollama_url=request.ollama_url,
             ollama_model=request.ollama_model,
+            approximate_duration_minutes=request.approximate_duration_minutes,
         )
         script_segments = podcast_generator.generate_script_segments(
             script,
             ollama_url=request.ollama_url,
             ollama_model=request.ollama_model,
+            num_voices=len(request.voices),
+            genre=request.genre,
+            genre_style=request.genre,
+            duration=request.duration,
+            approximate_duration_minutes=request.approximate_duration_minutes,
         )
 
         logger.info("")
@@ -443,6 +457,102 @@ async def generate_podcast_script(
         ) from e
     except Exception as e:
         logger.exception(f"Unexpected error during script generation: {e}")
+        logger.info("=" * 80)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error: {str(e)}",
+        ) from e
+
+
+@router.post(
+    "/generate-script-from-article",
+    response_model=PodcastScriptResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+async def generate_podcast_script_from_article(
+    request: PodcastArticleScriptRequest, http_request: Request
+) -> PodcastScriptResponse:
+    """
+    Generate a podcast script from raw article text, using the same voice-profile-aware pipeline as URL-based generation.
+
+    ``narrator_speaker_index`` selects which logical speaker (Speaker 1..N) carries narration; it must not exceed
+    the number of entries in ``voices``.
+    """
+    client_ip = http_request.client.host if http_request.client else "unknown"
+
+    logger.info("=" * 80)
+    logger.info("Podcast Script Generation (from article body) Request Received")
+    logger.info("=" * 80)
+    logger.info("Client IP: %s", client_ip)
+    logger.info("Title: %s", request.title or "(none)")
+    logger.info("Genre: %s", request.genre)
+    logger.info("Duration: %s", request.duration)
+    logger.info("Approximate duration (minutes): %s", request.approximate_duration_minutes)
+    logger.info("Voices: %s", request.voices)
+    logger.info("Narrator speaker index: %s", request.narrator_speaker_index)
+    if request.ollama_url:
+        logger.info("Custom Ollama URL: %s", request.ollama_url)
+    if request.ollama_model:
+        logger.info("Custom Ollama Model: %s", request.ollama_model)
+    logger.info("")
+
+    try:
+        warnings = voice_manager.get_bgm_risk_warnings(request.voices)
+
+        logger.info("Generating podcast script from article body...")
+        script = podcast_generator.generate_script_from_article(
+            article_text=request.article_text,
+            genre=request.genre,
+            duration=request.duration,
+            voices=request.voices,
+            narrator_speaker_index=request.narrator_speaker_index,
+            article_title=request.title,
+            ollama_url=request.ollama_url,
+            ollama_model=request.ollama_model,
+            approximate_duration_minutes=request.approximate_duration_minutes,
+        )
+        script_segments = podcast_generator.generate_script_segments(
+            script,
+            ollama_url=request.ollama_url,
+            ollama_model=request.ollama_model,
+            num_voices=len(request.voices),
+            genre=request.genre,
+            genre_style=request.genre,
+            duration=request.duration,
+            approximate_duration_minutes=request.approximate_duration_minutes,
+        )
+
+        logger.info("")
+        logger.info("Script Generation (from article) Completed Successfully")
+        logger.info("  Script length: %d characters", len(script))
+        logger.info("=" * 80)
+
+        return PodcastScriptResponse(
+            success=True,
+            message="Podcast script generated successfully",
+            script=script,
+            script_segments=script_segments,
+            warnings=warnings,
+        )
+
+    except ValueError as e:
+        logger.error("Validation error: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except RuntimeError as e:
+        logger.error("Runtime error during script generation: %s", e)
+        logger.info("=" * 80)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Script generation failed: {str(e)}",
+        ) from e
+    except Exception as e:
+        logger.exception("Unexpected error during script generation: %s", e)
         logger.info("=" * 80)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -491,7 +601,12 @@ async def generate_podcast_audio(
             script=request.script,
             voices=request.voices,
         )
-        script_segments = podcast_generator.generate_script_segments(request.script)
+        script_segments = podcast_generator.generate_script_segments(
+            request.script,
+            genre=request.genre,
+            genre_style=request.genre,
+            duration=request.duration,
+        )
 
         output_file = Path(output_path)
         logger.info("")

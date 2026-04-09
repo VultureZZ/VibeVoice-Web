@@ -4,7 +4,7 @@ Pydantic models for request/response validation.
 from datetime import datetime
 from typing import Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class SpeechSettings(BaseModel):
@@ -131,15 +131,71 @@ class ErrorResponse(BaseModel):
     detail: Optional[str] = Field(None, description="Detailed error information")
 
 
-class PodcastScriptRequest(BaseModel):
+class PodcastScriptDurationInputs(BaseModel):
+    """Shared duration targeting for podcast script generation."""
+
+    duration: Optional[str] = Field(
+        None,
+        description="Discrete target duration label: '5 min', '10 min', '15 min', or '30 min'. Optional if approximate_duration_minutes is set.",
+    )
+    approximate_duration_minutes: Optional[float] = Field(
+        None,
+        ge=0.25,
+        le=180.0,
+        description="Approximate target episode length in minutes; drives script word-count targets (takes precedence over duration when set).",
+    )
+
+    @model_validator(mode="after")
+    def _duration_or_minutes(self) -> "PodcastScriptDurationInputs":
+        has_d = self.duration is not None and str(self.duration).strip() != ""
+        has_m = self.approximate_duration_minutes is not None
+        if not has_d and not has_m:
+            raise ValueError(
+                "Provide either duration (e.g. '10 min') or approximate_duration_minutes (e.g. 12.5)"
+            )
+        return self
+
+
+class PodcastScriptRequest(PodcastScriptDurationInputs):
     """Request model for generating podcast script from URL."""
 
     url: str = Field(..., description="URL of the article to convert to podcast")
     voices: List[str] = Field(..., min_length=1, max_length=4, description="List of voice names (1-4 voices)")
     genre: str = Field(..., description="Podcast genre (Comedy, Serious, News, Educational, Storytelling, Interview, Documentary)")
-    duration: str = Field(..., description="Target duration (5 min, 10 min, 15 min, 30 min)")
     ollama_url: Optional[str] = Field(None, description="Optional custom Ollama server URL")
     ollama_model: Optional[str] = Field(None, description="Optional custom Ollama model name")
+
+
+class PodcastArticleScriptRequest(PodcastScriptDurationInputs):
+    """Request model for generating a podcast script from raw article text supplied by the client."""
+
+    article_text: str = Field(..., min_length=1, description="Raw article body (plain text or lightly formatted)")
+    title: Optional[str] = Field(None, description="Optional headline shown to the model for context")
+    voices: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=4,
+        description="Voice names in speaker order: index 0 is Speaker 1, etc.",
+    )
+    narrator_speaker_index: int = Field(
+        ...,
+        ge=1,
+        le=4,
+        description="Which speaker is the narrator: 1 = first entry in `voices`, 2 = second, up to the number of voices",
+    )
+    genre: str = Field(..., description="Podcast genre (Comedy, Serious, News, Educational, Storytelling, Interview, Documentary)")
+    ollama_url: Optional[str] = Field(None, description="Optional custom Ollama server URL")
+    ollama_model: Optional[str] = Field(None, description="Optional custom Ollama model name")
+
+    @model_validator(mode="after")
+    def narrator_index_matches_voice_count(self) -> "PodcastArticleScriptRequest":
+        n = len(self.voices)
+        if self.narrator_speaker_index > n:
+            raise ValueError(
+                f"narrator_speaker_index ({self.narrator_speaker_index}) must be between 1 and {n} "
+                f"(the number of voices)"
+            )
+        return self
 
 
 class DialogueSegment(BaseModel):
@@ -153,10 +209,19 @@ class DialogueSegment(BaseModel):
 class PodcastSegment(BaseModel):
     """Structured script segment for production mode cue placement."""
 
-    segment_type: Literal["intro_music", "dialogue", "transition_sting", "music_bed", "outro_music"] = Field(
+    segment_type: Literal[
+        "intro_music",
+        "dialogue",
+        "transition_sting",
+        "music_bed",
+        "music_bed_in",
+        "music_bed_out",
+        "outro_music",
+    ] = Field(
         ...,
         description="Segment type for music/voice orchestration",
     )
+    segment_id: Optional[int] = Field(None, description="1-based index in the production segment list")
     speaker: Optional[str] = Field(None, description="Speaker label for dialogue segments")
     text: Optional[str] = Field(None, description="Dialogue content for dialogue segments")
     start_time_hint: Optional[float] = Field(
@@ -164,6 +229,13 @@ class PodcastSegment(BaseModel):
         ge=0.0,
         description="Approximate segment start time in seconds from voice track start",
     )
+    duration_hint: Optional[float] = Field(
+        None,
+        ge=0.0,
+        description="Estimated segment duration in seconds (0 for marker-only cues)",
+    )
+    energy_level: Optional[str] = Field(None, description="Production energy label (e.g. high, medium, low)")
+    notes: Optional[str] = Field(None, description="Optional production notes from segmentation")
 
 
 class PodcastScriptResponse(BaseModel):

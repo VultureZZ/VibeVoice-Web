@@ -277,8 +277,17 @@ Podcast ad scanning (Whisper + LLM), MP3 export, and speaker-isolation preview c
 ### Podcast generation
 
 - `POST /api/v1/podcast/generate-script`
-  - Body (JSON): `{ url, voices: string[], genre, duration, ollama_url?, ollama_model? }`
+  - Body (JSON): `{ url, voices: string[], genre, duration?, approximate_duration_minutes?, ollama_url?, ollama_model? }`
+  - **Duration:** Provide **`duration`** (e.g. `"10 min"`) **or** **`approximate_duration_minutes`** (e.g. `12.5`). The approximate minutes value drives word-count targeting and **takes precedence** when both are sent. Discrete labels map to bands: `5 min`, `10 min`, `15 min`, `30 min`; arbitrary lengths use piecewise-linear word targets between those anchors.
   - Returns: `{ success, message, script?, script_segments?, warnings? }`
+
+- `POST /api/v1/podcast/generate-script-from-article`
+  - Body (JSON): `{ article_text, title?, voices: string[], narrator_speaker_index, genre, duration?, approximate_duration_minutes?, ollama_url?, ollama_model? }`
+  - Same script pipeline as `generate-script` (Ollama + stored voice profiles by voice name), but **you supply the article body** instead of a URL to scrape.
+  - **`voices`**: Order maps to `Speaker 1`, `Speaker 2`, etc., and must match the voices you pass to `/podcast/generate` for TTS.
+  - **`narrator_speaker_index`**: `1` = first name in `voices` is the narrator, `2` = second, and so on. Must be between `1` and `len(voices)` inclusive. The model is instructed to give that speaker the main through-line; others provide reactions, expertise, or commentary.
+  - **`title`**: Optional headline; when set, it is prefixed to the article text sent to the model for context.
+  - Returns: `{ success, message, script?, script_segments?, warnings? }` (same shape as `generate-script`).
 
 - `POST /api/v1/podcast/generate`
   - Body (JSON): `{ script, voices: string[], settings?, title?, source_url?, genre?, duration?, save_to_library? }`
@@ -399,6 +408,38 @@ curl -sS -X POST "http://localhost:8000/api/v1/podcast/generate-script" \
     "voices": ["Alice", "Frank"],
     "genre": "News",
     "duration": "10 min"
+  }'
+```
+
+Same endpoint with an approximate length in minutes (overrides discrete `duration` for word-count targeting if both are sent):
+
+```bash
+curl -sS -X POST "http://localhost:8000/api/v1/podcast/generate-script" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: ${API_KEY}" \
+  -d '{
+    "url": "https://example.com/article",
+    "voices": ["Alice", "Frank"],
+    "genre": "News",
+    "approximate_duration_minutes": 8
+  }'
+```
+
+### Generate podcast script from raw article text (with narrator)
+
+Use when your app already has article HTML or text extracted elsewhere. Voice names should match registered voices so stored profiles apply.
+
+```bash
+curl -sS -X POST "http://localhost:8000/api/v1/podcast/generate-script-from-article" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: ${API_KEY}" \
+  -d '{
+    "article_text": "The company announced Q3 results. Revenue grew 12% year over year...",
+    "title": "Q3 Earnings Summary",
+    "voices": ["Alice", "Frank"],
+    "narrator_speaker_index": 1,
+    "genre": "News",
+    "approximate_duration_minutes": 12.5
   }'
 ```
 
