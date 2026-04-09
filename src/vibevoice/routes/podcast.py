@@ -33,7 +33,7 @@ from ..gpu_memory import (
 )
 from ..models.podcast_storage import podcast_storage
 from ..services.audio_compositor import CuePlacement, audio_compositor
-from ..services.podcast_generator import podcast_generator, production_style_to_genre_style
+from ..services.podcast_generator import podcast_generator, production_style_to_genre_style, strip_production_cue_markers
 from ..services.podcast_music_service import podcast_music_service
 from ..services.podcast_timing_service import podcast_timing_service
 from ..services.voice_generator import voice_generator
@@ -205,14 +205,15 @@ async def _run_production_task(task_id: str, request: PodcastProductionRequest) 
         )
 
         stage_progress["generating_voice_track"] = "running"
+        tts_script = strip_production_cue_markers(request.script)
         voice_path = await asyncio.to_thread(
             podcast_generator.generate_audio,
-            request.script,
+            tts_script,
             request.voices,
         )
         stage_progress["generating_voice_track"] = "completed"
 
-        dialogue_timing = await podcast_timing_service.build_dialogue_timing(request.script, voice_path)
+        dialogue_timing = await podcast_timing_service.build_dialogue_timing(tts_script, voice_path)
         script_segments = _merge_dialogue_timing(script_segments, dialogue_timing)
 
         health = podcast_music_service.health_check()

@@ -57,6 +57,33 @@ def production_style_to_genre_style(style: Optional[str]) -> Optional[str]:
     }.get(style, style)
 
 
+_PRODUCTION_CUE_LINE_ONLY = re.compile(r"^\s*\[CUE:\s*[^\]]+\]\s*$", re.IGNORECASE)
+_INLINE_PRODUCTION_CUE = re.compile(r"\s*\[CUE:\s*[^\]]+\]\s*", re.IGNORECASE)
+
+
+def strip_production_cue_markers(script: str) -> str:
+    """
+    Remove ``[CUE: ...]`` production tokens before TTS.
+
+    Standalone cue lines are dropped. Inline cues are stripped from speaker lines.
+    Segmentation should run on the original script (with cues); voice rendering uses this output.
+    """
+    if not script or not script.strip():
+        return script
+    out: List[str] = []
+    for raw in script.split("\n"):
+        line = raw.strip()
+        if not line:
+            continue
+        if _PRODUCTION_CUE_LINE_ONLY.match(line):
+            continue
+        cleaned = _INLINE_PRODUCTION_CUE.sub(" ", line).strip()
+        cleaned = re.sub(r" +", " ", cleaned)
+        if cleaned:
+            out.append(cleaned)
+    return "\n".join(out).strip()
+
+
 def _validate_script_duration_inputs(duration: Optional[str], approximate_duration_minutes: Optional[float]) -> None:
     has_d = duration is not None and str(duration).strip() != ""
     has_m = approximate_duration_minutes is not None
@@ -275,6 +302,10 @@ class PodcastGenerator:
             raise ValueError("At least one voice is required")
         if len(voices) > 4:
             raise ValueError("Maximum 4 voices allowed")
+
+        script = strip_production_cue_markers(script)
+        if not script or not script.strip():
+            raise ValueError("Script cannot be empty after removing production cue markers")
 
         logger.info(f"Generating audio from script: {len(script)} characters, {len(voices)} voices")
 
