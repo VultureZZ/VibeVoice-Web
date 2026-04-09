@@ -408,18 +408,20 @@ async def generate_podcast_script(
     try:
         warnings = voice_manager.get_bgm_risk_warnings(request.voices)
 
-        # Generate script
+        # Generate script (CPU/network-heavy; must not block the asyncio event loop)
         logger.info("Generating podcast script...")
-        script = podcast_generator.generate_script(
-            url=request.url,
-            genre=request.genre,
-            duration=request.duration,
-            voices=request.voices,
-            ollama_url=request.ollama_url,
-            ollama_model=request.ollama_model,
-            approximate_duration_minutes=request.approximate_duration_minutes,
+        script = await asyncio.to_thread(
+            podcast_generator.generate_script,
+            request.url,
+            request.genre,
+            request.duration,
+            request.voices,
+            request.ollama_url,
+            request.ollama_model,
+            request.approximate_duration_minutes,
         )
-        script_segments = podcast_generator.generate_script_segments(
+        script_segments = await asyncio.to_thread(
+            podcast_generator.generate_script_segments,
             script,
             ollama_url=request.ollama_url,
             ollama_model=request.ollama_model,
@@ -504,18 +506,20 @@ async def generate_podcast_script_from_article(
         warnings = voice_manager.get_bgm_risk_warnings(request.voices)
 
         logger.info("Generating podcast script from article body...")
-        script = podcast_generator.generate_script_from_article(
-            article_text=request.article_text,
-            genre=request.genre,
-            duration=request.duration,
-            voices=request.voices,
-            narrator_speaker_index=request.narrator_speaker_index,
-            article_title=request.title,
-            ollama_url=request.ollama_url,
-            ollama_model=request.ollama_model,
-            approximate_duration_minutes=request.approximate_duration_minutes,
+        script = await asyncio.to_thread(
+            podcast_generator.generate_script_from_article,
+            request.article_text,
+            request.genre,
+            request.duration,
+            request.voices,
+            request.narrator_speaker_index,
+            request.title,
+            request.ollama_url,
+            request.ollama_model,
+            request.approximate_duration_minutes,
         )
-        script_segments = podcast_generator.generate_script_segments(
+        script_segments = await asyncio.to_thread(
+            podcast_generator.generate_script_segments,
             script,
             ollama_url=request.ollama_url,
             ollama_model=request.ollama_model,
@@ -596,13 +600,15 @@ async def generate_podcast_audio(
     try:
         warnings = voice_manager.get_bgm_risk_warnings(request.voices)
 
-        # Generate audio
+        # Generate audio (TTS/GPU-heavy; must not block the asyncio event loop)
         logger.info("Generating podcast audio...")
-        output_path = podcast_generator.generate_audio(
-            script=request.script,
-            voices=request.voices,
+        output_path = await asyncio.to_thread(
+            podcast_generator.generate_audio,
+            request.script,
+            request.voices,
         )
-        script_segments = podcast_generator.generate_script_segments(
+        script_segments = await asyncio.to_thread(
+            podcast_generator.generate_script_segments,
             request.script,
             genre=request.genre,
             genre_style=request.genre,
