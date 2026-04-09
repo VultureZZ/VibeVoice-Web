@@ -11,6 +11,7 @@ import {
   getIssueDisplayLabels,
 } from '../utils/format';
 import { Button } from './Button';
+import { VoiceSampleButton } from './VoiceSampleButton';
 
 interface VoiceCardProps {
   voice: VoiceResponse;
@@ -20,6 +21,8 @@ interface VoiceCardProps {
   onViewProfile?: (voiceId: string) => void;
   isDeleting?: boolean;
   hasProfile?: boolean;
+  /** Resolve stored profile into a style string for sample playback (optional). */
+  fetchProfileInstruction?: (voiceId: string) => Promise<string | undefined>;
 }
 
 export function VoiceCard({
@@ -30,6 +33,7 @@ export function VoiceCard({
   onViewProfile,
   isDeleting,
   hasProfile,
+  fetchProfileInstruction,
 }: VoiceCardProps) {
   const isCustom =
     voice.type === 'custom' || voice.type === 'voice_design';
@@ -67,6 +71,7 @@ export function VoiceCard({
                 <span className="ml-1 text-sm font-normal text-gray-600">{suffix}</span>
               ) : null}
             </h3>
+            <VoiceSampleButton voice={voice} fetchProfileInstruction={fetchProfileInstruction} />
             <span
               className={`px-2 py-0.5 text-xs font-medium rounded ${
                 isCustom ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'

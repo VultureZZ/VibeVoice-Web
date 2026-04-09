@@ -365,11 +365,27 @@ class Qwen3Backend(TTSBackend):
                 raise ValueError(
                     "Custom voice segment requires ref_audio_path or voice_clone_prompt"
                 )
-            wavs, sr = model.generate_voice_clone(
-                text=text.strip(),
-                language=qwen_lang,
-                voice_clone_prompt=prompt,
-            )
+            # Optional style/delivery instruction (e.g. voice profile). Older qwen-tts builds may not accept it.
+            if style_instruct:
+                try:
+                    wavs, sr = model.generate_voice_clone(
+                        text=text.strip(),
+                        language=qwen_lang,
+                        voice_clone_prompt=prompt,
+                        instruct=style_instruct,
+                    )
+                except TypeError:
+                    wavs, sr = model.generate_voice_clone(
+                        text=text.strip(),
+                        language=qwen_lang,
+                        voice_clone_prompt=prompt,
+                    )
+            else:
+                wavs, sr = model.generate_voice_clone(
+                    text=text.strip(),
+                    language=qwen_lang,
+                    voice_clone_prompt=prompt,
+                )
             return wavs[0], sr
 
     def generate(

@@ -2,7 +2,7 @@
  * Voice management interface
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useApi } from '../hooks/useApi';
 import { useVoices } from '../hooks/useVoices';
 import { useSettings } from '../hooks/useSettings';
@@ -16,6 +16,8 @@ import { Alert } from '../components/Alert';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { Select } from '../components/Select';
 import { SUPPORTED_LANGUAGES } from '../utils/languages';
+import { buildProfileStyleInstruction } from '../utils/voiceSample';
+import { apiClient } from '../services/api';
 
 export function VoicesPage() {
   const { voices, loading: voicesLoading, refresh } = useVoices();
@@ -172,6 +174,15 @@ export function VoicesPage() {
     setProfileModalVoiceId(voiceId);
   };
 
+  const fetchProfileInstruction = useCallback(async (voiceId: string) => {
+    try {
+      const response = await apiClient.getVoiceProfile(voiceId);
+      return buildProfileStyleInstruction(response?.profile ?? undefined);
+    } catch {
+      return undefined;
+    }
+  }, []);
+
   const handleApplyProfileFromAudio = async (voiceId: string, profile: import('../types/api').VoiceProfileApplyRequest) => {
     const resp = await applyVoiceProfile(voiceId, profile);
     if (resp && resp.success) {
@@ -279,6 +290,7 @@ export function VoicesPage() {
                       onViewProfile={handleViewProfile}
                       isDeleting={deletingId === voice.id}
                       hasProfile={voiceProfiles[voice.id]}
+                      fetchProfileInstruction={fetchProfileInstruction}
                     />
                   ))}
                 </div>
@@ -292,7 +304,12 @@ export function VoicesPage() {
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {defaultVoices.map((voice) => (
-                    <VoiceCard key={voice.id} voice={voice} apiBaseUrl={settings.apiEndpoint} />
+                    <VoiceCard
+                      key={voice.id}
+                      voice={voice}
+                      apiBaseUrl={settings.apiEndpoint}
+                      fetchProfileInstruction={fetchProfileInstruction}
+                    />
                   ))}
                 </div>
               </div>
