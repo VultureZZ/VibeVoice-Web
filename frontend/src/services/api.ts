@@ -48,6 +48,9 @@ import {
   PodcastAdExportResponse,
   SpeakerIsolationSubmitResponse,
   SpeakerIsolationStatusResponse,
+  AceStepModelCatalogResponse,
+  AceStepRuntimeSettingsRequest,
+  AceStepRuntimeSettingsResponse,
 } from '../types/api';
 import { AppSettings } from '../types/settings';
 
@@ -551,6 +554,35 @@ class ApiClient {
    */
   async checkMusicHealth(): Promise<MusicHealthResponse> {
     const response = await this.client.get<MusicHealthResponse>('/api/v1/music/health');
+    return response.data;
+  }
+
+  /**
+   * Get current backend ACE-Step runtime settings
+   */
+  async getAceStepSettings(): Promise<AceStepRuntimeSettingsResponse> {
+    const response = await this.client.get<AceStepRuntimeSettingsResponse>('/api/v1/settings/acestep');
+    return response.data;
+  }
+
+  /**
+   * Update backend ACE-Step runtime settings
+   */
+  async updateAceStepSettings(
+    request: AceStepRuntimeSettingsRequest
+  ): Promise<AceStepRuntimeSettingsResponse> {
+    const response = await this.client.put<AceStepRuntimeSettingsResponse>(
+      '/api/v1/settings/acestep',
+      request
+    );
+    return response.data;
+  }
+
+  /**
+   * Get supported backend ACE-Step model catalog
+   */
+  async getAceStepModelCatalog(): Promise<AceStepModelCatalogResponse> {
+    const response = await this.client.get<AceStepModelCatalogResponse>('/api/v1/settings/acestep/models');
     return response.data;
   }
 

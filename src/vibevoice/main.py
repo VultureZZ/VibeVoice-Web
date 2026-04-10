@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import config
 from .middleware.auth import APIKeyAuthMiddleware
 from .middleware.rate_limit import RateLimitMiddleware
-from .routes import speech, voices, podcasts, transcripts, music
+from .routes import speech, voices, podcasts, transcripts, music, settings
 from .routes import realtime_speech
 from .routers import audio_tools
 from .services.realtime_process import realtime_process_manager
@@ -93,6 +93,7 @@ app.include_router(transcripts.router)
 app.include_router(podcast_router)
 app.include_router(podcasts.router)
 app.include_router(music.router)
+app.include_router(settings.router)
 app.include_router(audio_tools.router)
 
 

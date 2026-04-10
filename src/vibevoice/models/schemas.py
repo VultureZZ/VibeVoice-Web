@@ -456,6 +456,34 @@ class MusicHealthResponse(BaseModel):
     port: int = Field(..., description="ACE-Step port")
 
 
+class AceStepRuntimeSettingsUpdateRequest(BaseModel):
+    """Request model for updating global ACE-Step runtime model settings."""
+
+    acestep_config_path: str = Field(..., min_length=1, description="ACE-Step DiT model ID")
+    acestep_lm_model_path: str = Field(..., min_length=1, description="ACE-Step LM model ID")
+
+
+class AceStepRuntimeSettingsResponse(BaseModel):
+    """Response model for current ACE-Step runtime model settings."""
+
+    acestep_config_path: str = Field(..., description="ACE-Step DiT model ID")
+    acestep_lm_model_path: str = Field(..., description="ACE-Step LM model ID")
+    source: str = Field(..., description="settings_file or env_defaults")
+    restart_required: bool = Field(
+        ..., description="Whether a running ACE-Step subprocess must restart to apply changes"
+    )
+    settings_file: str = Field(..., description="Path to persisted runtime settings file")
+
+
+class AceStepModelCatalogResponse(BaseModel):
+    """Response model for supported ACE-Step model catalog."""
+
+    dit_models: List[str] = Field(default_factory=list, description="Supported ACE-Step DiT model IDs")
+    lm_models: List[str] = Field(default_factory=list, description="Supported ACE-Step LM model IDs")
+    defaults: Dict[str, str] = Field(default_factory=dict, description="Environment-backed default model IDs")
+    current: Dict[str, str] = Field(default_factory=dict, description="Currently effective runtime settings")
+
+
 class MusicPresetRequest(BaseModel):
     """Request model for saving/updating a music preset."""
 

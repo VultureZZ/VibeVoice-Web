@@ -306,6 +306,26 @@ export interface MusicHealthResponse {
   port: number;
 }
 
+export interface AceStepRuntimeSettingsRequest {
+  acestep_config_path: string;
+  acestep_lm_model_path: string;
+}
+
+export interface AceStepRuntimeSettingsResponse {
+  acestep_config_path: string;
+  acestep_lm_model_path: string;
+  source: 'settings_file' | 'env_defaults' | string;
+  restart_required: boolean;
+  settings_file: string;
+}
+
+export interface AceStepModelCatalogResponse {
+  dit_models: string[];
+  lm_models: string[];
+  defaults: Record<string, string>;
+  current: Record<string, string>;
+}
+
 export interface MusicPreset {
   id: string;
   name: string;

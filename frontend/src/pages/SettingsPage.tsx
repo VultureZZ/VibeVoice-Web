@@ -14,7 +14,7 @@ import { SUPPORTED_LANGUAGES } from '../utils/languages';
 
 export function SettingsPage() {
   const { settings, saveSettings, clearSettings } = useSettings();
-  const { healthCheck, error } = useApi();
+  const { healthCheck, error, getAceStepSettings, updateAceStepSettings, getAceStepModelCatalog } = useApi();
 
   const [apiEndpoint, setApiEndpoint] = useState(
     settings.apiEndpoint
@@ -35,6 +35,18 @@ export function SettingsPage() {
   const [ollamaModel, setOllamaModel] = useState(
     settings.ollamaModel || 'llama3.2'
   );
+  const [acestepConfigPath, setAcestepConfigPath] = useState(
+    settings.acestepConfigPath || 'acestep-v15-turbo'
+  );
+  const [acestepLmModelPath, setAcestepLmModelPath] = useState(
+    settings.acestepLmModelPath || 'acestep-5Hz-lm-0.6B'
+  );
+  const [acestepDitModelOptions, setAcestepDitModelOptions] = useState<
+    Array<{ value: string; label: string }>
+  >([{ value: 'acestep-v15-turbo', label: 'acestep-v15-turbo' }]);
+  const [acestepLmModelOptions, setAcestepLmModelOptions] = useState<
+    Array<{ value: string; label: string }>
+  >([{ value: 'acestep-5Hz-lm-0.6B', label: 'acestep-5Hz-lm-0.6B' }]);
 
   const [testStatus, setTestStatus] = useState<
     'idle' | 'testing' | 'success' | 'error'
@@ -52,7 +64,39 @@ export function SettingsPage() {
       settings.ollamaServerUrl || 'http://localhost:11434'
     );
     setOllamaModel(settings.ollamaModel || 'llama3.2');
+    setAcestepConfigPath(settings.acestepConfigPath || 'acestep-v15-turbo');
+    setAcestepLmModelPath(settings.acestepLmModelPath || 'acestep-5Hz-lm-0.6B');
   }, [settings]);
+
+  useEffect(() => {
+    const loadAceStepSettings = async () => {
+      const catalog = await getAceStepModelCatalog();
+      if (catalog) {
+        if (catalog.dit_models?.length > 0) {
+          setAcestepDitModelOptions(
+            catalog.dit_models.map((model) => ({ value: model, label: model }))
+          );
+        }
+        if (catalog.lm_models?.length > 0) {
+          setAcestepLmModelOptions(
+            catalog.lm_models.map((model) => ({ value: model, label: model }))
+          );
+        }
+      }
+
+      const currentSettings = await getAceStepSettings();
+      if (currentSettings) {
+        setAcestepConfigPath(currentSettings.acestep_config_path);
+        setAcestepLmModelPath(currentSettings.acestep_lm_model_path);
+      } else if (catalog?.current) {
+        const dit = catalog.current.acestep_config_path;
+        const lm = catalog.current.acestep_lm_model_path;
+        if (dit) setAcestepConfigPath(dit);
+        if (lm) setAcestepLmModelPath(lm);
+      }
+    };
+    loadAceStepSettings();
+  }, [getAceStepModelCatalog, getAceStepSettings]);
 
   const endpointValidation = validateApiEndpoint(apiEndpoint);
 
@@ -90,9 +134,18 @@ export function SettingsPage() {
     });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!endpointValidation.valid) {
       setSaveMessage('Please fix validation errors before saving');
+      return;
+    }
+
+    const runtimeSettings = await updateAceStepSettings({
+      acestep_config_path: acestepConfigPath,
+      acestep_lm_model_path: acestepLmModelPath,
+    });
+    if (!runtimeSettings) {
+      setSaveMessage('Failed to save ACE-Step settings');
       return;
     }
 
@@ -104,9 +157,15 @@ export function SettingsPage() {
       defaultSampleRate: parseInt(defaultSampleRate),
       ollamaServerUrl: ollamaServerUrl.trim() || undefined,
       ollamaModel: ollamaModel.trim() || undefined,
+      acestepConfigPath: acestepConfigPath.trim(),
+      acestepLmModelPath: acestepLmModelPath.trim(),
     });
 
-    setSaveMessage('Settings saved successfully!');
+    setSaveMessage(
+      runtimeSettings.restart_required
+        ? 'Settings saved. ACE-Step will restart on the next music request.'
+        : 'Settings saved successfully!'
+    );
     setTimeout(() => setSaveMessage(null), 3000);
   };
 
@@ -214,6 +273,31 @@ export function SettingsPage() {
               onChange={(e) => setOllamaModel(e.target.value)}
               placeholder="llama3.2"
             />
+          </div>
+        </div>
+
+        <div className="border-t pt-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            ACE-Step Music Configuration
+          </h2>
+
+          <div className="space-y-4">
+            <Select
+              label="ACE-Step DiT Model"
+              options={acestepDitModelOptions}
+              value={acestepConfigPath}
+              onChange={(e) => setAcestepConfigPath(e.target.value)}
+            />
+
+            <Select
+              label="ACE-Step LM Model"
+              options={acestepLmModelOptions}
+              value={acestepLmModelPath}
+              onChange={(e) => setAcestepLmModelPath(e.target.value)}
+            />
+            <p className="text-sm text-gray-600">
+              Missing models are auto-downloaded by ACE-Step on first use.
+            </p>
           </div>
         </div>
 

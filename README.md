@@ -105,7 +105,7 @@ AudioMesh/
 | **TTS (default)** | Qwen3-TTS: `Qwen/Qwen3-TTS-12Hz-1.7B-Base`, `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice`, `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign` (`QWEN_TTS_*`). |
 | **TTS (legacy)** | VibeVoice: `microsoft/VibeVoice-1.5B` (`TTS_BACKEND=vibevoice`, `MODEL_PATH`, `VIBEVOICE_REPO_DIR`). |
 | **Realtime TTS** | `microsoft/VibeVoice-Realtime-0.5B` (`REALTIME_VIBEVOICE_REPO_DIR`, `REALTIME_MODEL_ID`). |
-| **Music** | ACE-Step runtime (`ACESTEP_CONFIG_PATH=acestep-v15-turbo`, `ACESTEP_LM_MODEL_PATH=acestep-5Hz-lm-0.6B`). Optional Ollama prompt refinement (`OLLAMA_*`, default `llama3.2`). |
+| **Music** | ACE-Step runtime (`ACESTEP_CONFIG_PATH=acestep-v15-turbo`, `ACESTEP_LM_MODEL_PATH=acestep-5Hz-lm-0.6B`). Optional Ollama prompt refinement (`OLLAMA_*`, default `llama3.2`). Model defaults come from `.env`, and runtime selection can be changed in Settings. |
 | **Transcripts** | Whisper (`TRANSCRIPT_WHISPER_MODEL`, default `large-v3`) with speaker analysis tooling, plus configurable LLM analysis (`LLM_PROVIDER`, `LLM_MODEL`). |
 | **Podcast / lyrics** | Ollama for podcast script and lyric/caption assistance (`OLLAMA_BASE_URL`, `OLLAMA_MODEL`). |
 | **Voice profiles** | Ollama-assisted profile analysis and keyword enrichment (`OLLAMA_*`). |
@@ -159,6 +159,12 @@ python scripts/setup_vibevoice.py
 ```
 
 If the Music page shows `ACE-Step Not Configured`, ensure the setup script completed successfully and that `ACESTEP_REPO_DIR` points to the cloned ACE-Step folder.
+
+### ACE-Step model selection
+
+- Open **Settings -> ACE-Step Music Configuration** to choose the global DiT and LM model pair used by both Music generation and podcast production CUE music.
+- If ACE-Step is currently running, saving new model settings stops the subprocess and applies the new model selection on the next music request.
+- Missing model weights are auto-downloaded by ACE-Step on first use.
 
 ### Slow Generation
 
@@ -251,6 +257,12 @@ The frontend lives in `frontend/`. See `frontend/README.md` for setup, developme
 - `GET /api/v1/music/history` - List generation history
 - `GET /api/v1/music/history/{history_id}` - Get one history item
 - `DELETE /api/v1/music/history/{history_id}` - Delete history item
+
+### Settings
+
+- `GET /api/v1/settings/acestep` - Get current effective ACE-Step runtime model settings
+- `PUT /api/v1/settings/acestep` - Update ACE-Step runtime model settings (global backend default)
+- `GET /api/v1/settings/acestep/models` - List supported ACE-Step DiT and LM model IDs
 
 ### Audio tools
 

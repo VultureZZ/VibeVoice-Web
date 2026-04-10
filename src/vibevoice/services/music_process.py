@@ -22,6 +22,7 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from ..config import config
+from .acestep_settings import acestep_settings_service
 from ..gpu_memory import (
     cuda_device_index_from_string,
     wait_for_cuda_memory,
@@ -53,6 +54,7 @@ class MusicProcessManager:
         self._idle_timer: Optional[threading.Timer] = None
 
     def _current_cfg(self) -> MusicServerConfig:
+        runtime_settings = acestep_settings_service.get_current()
         return MusicServerConfig(
             host=config.ACESTEP_HOST,
             port=config.ACESTEP_PORT,
@@ -60,8 +62,8 @@ class MusicProcessManager:
             startup_timeout_seconds=config.ACESTEP_STARTUP_TIMEOUT_SECONDS,
             idle_shutdown_seconds=config.ACESTEP_IDLE_SHUTDOWN_SECONDS,
             server_command=config.ACESTEP_SERVER_COMMAND,
-            config_path=config.ACESTEP_CONFIG_PATH,
-            lm_model_path=config.ACESTEP_LM_MODEL_PATH,
+            config_path=runtime_settings["acestep_config_path"],
+            lm_model_path=runtime_settings["acestep_lm_model_path"],
             lm_backend=config.ACESTEP_LM_BACKEND,
             device=config.ACESTEP_DEVICE,
         )

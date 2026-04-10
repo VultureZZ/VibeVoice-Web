@@ -10,6 +10,8 @@ export interface AppSettings {
   defaultSampleRate: number;
   ollamaServerUrl?: string;
   ollamaModel?: string;
+  acestepConfigPath?: string;
+  acestepLmModelPath?: string;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -20,4 +22,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultSampleRate: 24000,
   ollamaServerUrl: 'http://localhost:11434',
   ollamaModel: 'llama3.2',
+  acestepConfigPath: 'acestep-v15-turbo',
+  acestepLmModelPath: 'acestep-5Hz-lm-0.6B',
 };

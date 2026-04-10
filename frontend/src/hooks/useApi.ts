@@ -43,6 +43,9 @@ import {
   TranscriptStatusResponse,
   TranscriptItem,
   TranscriptListResponse,
+  AceStepModelCatalogResponse,
+  AceStepRuntimeSettingsRequest,
+  AceStepRuntimeSettingsResponse,
 } from '../types/api';
 
 export function useApi() {
@@ -242,6 +245,21 @@ export function useApi() {
 
   const checkMusicHealth = useCallback(async (): Promise<MusicHealthResponse | null> => {
     return execute(() => apiClient.checkMusicHealth());
+  }, [execute]);
+
+  const getAceStepSettings = useCallback(async (): Promise<AceStepRuntimeSettingsResponse | null> => {
+    return execute(() => apiClient.getAceStepSettings());
+  }, [execute]);
+
+  const updateAceStepSettings = useCallback(
+    async (request: AceStepRuntimeSettingsRequest): Promise<AceStepRuntimeSettingsResponse | null> => {
+      return execute(() => apiClient.updateAceStepSettings(request));
+    },
+    [execute]
+  );
+
+  const getAceStepModelCatalog = useCallback(async (): Promise<AceStepModelCatalogResponse | null> => {
+    return execute(() => apiClient.getAceStepModelCatalog());
   }, [execute]);
 
   const listMusicPresets = useCallback(async (): Promise<MusicPresetListResponse | null> => {
@@ -474,6 +492,9 @@ export function useApi() {
     generateLyrics,
     downloadMusic,
     checkMusicHealth,
+    getAceStepSettings,
+    updateAceStepSettings,
+    getAceStepModelCatalog,
     listMusicPresets,
     createMusicPreset,
     updateMusicPreset,
