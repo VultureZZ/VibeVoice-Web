@@ -5,6 +5,7 @@ import json
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse, JSONResponse
@@ -28,6 +29,7 @@ from ..models.schemas import (
 )
 from ..services.voice_manager import voice_manager
 from ..services.voice_profile_from_audio import voice_profile_from_audio
+from ..services.voice_sample_cache import get_or_create_voice_sample, invalidate_voice_sample_cache
 
 router = APIRouter(prefix="/api/v1/voices", tags=["voices"])
 
@@ -882,6 +884,46 @@ async def list_voices() -> VoiceListResponse:
         ) from e
 
 
+@router.get(
+    "/{voice_id}/sample",
+    responses={
+        400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+async def get_voice_sample_audio(voice_id: str, language: Optional[str] = None):
+    """
+    Return a short cached TTS preview for this voice.
+
+    The WAV is generated once per unique transcript, language, profile style, and
+    reference material; subsequent requests serve the file from ``custom_voices/voice_samples/``.
+    """
+    try:
+        voice = voice_manager.get_voice(voice_id)
+        if not voice:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Voice '{voice_id}' not found",
+            )
+        lang = language or voice.get("language_code") or "en"
+        wav_path = get_or_create_voice_sample(voice_id, language=lang)
+        return FileResponse(
+            path=str(wav_path),
+            media_type="audio/wav",
+            filename="voice_sample.wav",
+        )
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Voice sample failed: {str(e)}",
+        ) from e
+
+
 def _media_type_for_image(path: Path) -> str:
     ext = path.suffix.lower()
     if ext in (".jpg", ".jpeg"):
@@ -1051,6 +1093,8 @@ async def delete_voice(voice_id: str) -> JSONResponse:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Voice '{voice_id}' not found",
             )
+
+        invalidate_voice_sample_cache(voice_id)
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
@@ -1365,7 +1409,7 @@ async def create_or_update_voice_profile(
         from ..services.voice_profiler import voice_profiler
         import logging
         logger = logging.getLogger(__name__)
-        
+
         try:
             if existing_profile and request.keywords:
                 # Enhance existing profile
@@ -1600,7 +1644,7 @@ async def generate_voice_profile(
     try:
         import logging
         logger = logging.getLogger(__name__)
-        
+
         # Check if voice exists
         voice_data = voice_manager.get_voice(voice_id)
         if not voice_data:

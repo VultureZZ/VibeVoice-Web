@@ -6,14 +6,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '../services/api';
 import { useSettings } from '../hooks/useSettings';
 import type { VoiceResponse } from '../types/api';
-import { VOICE_SAMPLE_TRANSCRIPT } from '../utils/voiceSample';
 
 const SAMPLE_PLAY_EVENT = 'audiomesh-voice-sample-play';
 
 interface VoiceSampleButtonProps {
   voice: VoiceResponse;
-  /** Load profile and return a style string; may fetch from API. */
-  fetchProfileInstruction?: (voiceId: string) => Promise<string | undefined>;
 }
 
 function SpeakerWaveIcon({ className }: { className?: string }) {
@@ -49,7 +46,7 @@ function SpeakerWaveIcon({ className }: { className?: string }) {
   );
 }
 
-export function VoiceSampleButton({ voice, fetchProfileInstruction }: VoiceSampleButtonProps) {
+export function VoiceSampleButton({ voice }: VoiceSampleButtonProps) {
   const { settings } = useSettings();
   const languageCode = (voice.language_code?.trim() || settings.defaultLanguage || 'en').trim();
   const [busy, setBusy] = useState(false);
@@ -99,35 +96,7 @@ export function VoiceSampleButton({ voice, fetchProfileInstruction }: VoiceSampl
 
     setBusy(true);
     try {
-      let styleInstruction: string | undefined;
-      if (fetchProfileInstruction) {
-        styleInstruction = await fetchProfileInstruction(voice.id);
-      }
-
-      const speakerInstructions = styleInstruction?.trim()
-        ? [styleInstruction.trim()]
-        : undefined;
-
-      const response = await apiClient.generateSpeech({
-        transcript: VOICE_SAMPLE_TRANSCRIPT,
-        speakers: [voice.name],
-        speaker_instructions:
-          speakerInstructions && speakerInstructions.length === 1 ? speakerInstructions : undefined,
-        settings: {
-          language: languageCode || 'en',
-          output_format: 'wav',
-          sample_rate: 24000,
-        },
-      });
-
-      if (!response.success || !response.audio_url) {
-        throw new Error(response.message || 'Could not generate sample');
-      }
-
-      const filename = response.audio_url.split('/').pop();
-      if (!filename) throw new Error('Invalid audio URL');
-
-      const blob = await apiClient.downloadAudio(filename);
+      const blob = await apiClient.getVoiceSample(voice.id, languageCode || 'en');
       const url = URL.createObjectURL(blob);
       objectUrlRef.current = url;
 

@@ -224,6 +224,17 @@ class ApiClient {
   }
 
   /**
+   * Short cached TTS preview for a voice (WAV). Server stores under custom_voices/voice_samples/.
+   */
+  async getVoiceSample(voiceId: string, language?: string): Promise<Blob> {
+    const response = await this.client.get(`/api/v1/voices/${encodeURIComponent(voiceId)}/sample`, {
+      responseType: 'blob',
+      params: language ? { language } : undefined,
+    });
+    return response.data;
+  }
+
+  /**
    * Create a voice: from audio files, from clips, or from a text description (VoiceDesign).
    */
   async createVoice(params: {

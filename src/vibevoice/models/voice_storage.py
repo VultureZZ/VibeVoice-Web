@@ -245,6 +245,12 @@ class VoiceStorage:
                 data["voices"][voice_id].pop("speaker_embedding", None)
 
         self._save(data)
+        try:
+            from ..services.voice_sample_cache import invalidate_voice_sample_cache
+
+            invalidate_voice_sample_cache(voice_id)
+        except Exception:
+            pass
         return True
 
     def update_voice_profile(self, voice_id: str, profile: Dict) -> bool:
@@ -281,6 +287,12 @@ class VoiceStorage:
                 data["profiles"][voice_id]["created_at"] = now
 
         self._save(data)
+        try:
+            from ..services.voice_sample_cache import invalidate_voice_sample_cache
+
+            invalidate_voice_sample_cache(voice_id)
+        except Exception:
+            pass
         return True
 
     def get_voice_profile(self, voice_id: str) -> Optional[Dict]:
