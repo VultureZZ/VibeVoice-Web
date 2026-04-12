@@ -33,8 +33,13 @@ export function Navigation() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex">
-            <Link to="/" className="flex items-center">
-              <span className="text-xl font-bold text-primary-600">AudioMesh</span>
+            <Link to="/" className="flex items-center shrink-0">
+              <img
+                src="/audiomesh-logo.svg"
+                alt="AudioMesh"
+                className="h-8 w-auto max-w-[10rem] sm:max-w-none"
+                decoding="async"
+              />
             </Link>
             <div className="hidden sm:ml-6 sm:flex sm:items-center sm:space-x-6">
               {navLinks.map((link) => (

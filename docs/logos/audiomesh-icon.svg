@@ -1,0 +1,212 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background gradient -->
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#07071f"/>
+      <stop offset="100%" stop-color="#160830"/>
+    </linearGradient>
+
+    <!-- Waveform bar gradient (bottom-to-top) -->
+    <linearGradient id="barGrad" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%"   stop-color="#00d4ff"/>
+      <stop offset="60%"  stop-color="#00ffa3"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+
+    <!-- Mesh line gradient (left-to-right) -->
+    <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#00d4ff" stop-opacity="0.7"/>
+      <stop offset="50%"  stop-color="#00ffa3" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.7"/>
+    </linearGradient>
+
+    <!-- Node gradient -->
+    <radialGradient id="nodeCyan" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#00d4ff"/>
+    </radialGradient>
+    <radialGradient id="nodePurple" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </radialGradient>
+    <radialGradient id="nodeTeal" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#00ffa3"/>
+    </radialGradient>
+
+    <!-- Soft glow for bars -->
+    <filter id="barGlow" x="-80%" y="-30%" width="260%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Node glow -->
+    <filter id="nodeGlow" x="-150%" y="-150%" width="400%" height="400%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Subtle ambient glow behind bars -->
+    <filter id="ambientGlow" x="-100%" y="-50%" width="300%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="20" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- ── Background ─────────────────────────────── -->
+  <rect width="512" height="512" rx="96" fill="url(#bgGrad)"/>
+
+  <!-- ── Mesh grid lines ────────────────────────── -->
+  <!--
+    7 columns: x = 64, 128, 192, 256, 320, 384, 448
+    5 rows:    y = 96, 176, 256, 336, 416
+    Spacing: 64px horizontal, 80px vertical
+  -->
+  <g stroke="url(#lineGrad)" stroke-width="1.2" fill="none" opacity="0.35">
+
+    <!-- Horizontal lines (5 rows × 6 segments) -->
+    <line x1="64"  y1="96"  x2="448" y2="96"/>
+    <line x1="64"  y1="176" x2="448" y2="176"/>
+    <line x1="64"  y1="256" x2="448" y2="256"/>
+    <line x1="64"  y1="336" x2="448" y2="336"/>
+    <line x1="64"  y1="416" x2="448" y2="416"/>
+
+    <!-- Vertical lines (7 columns × 4 segments) -->
+    <line x1="64"  y1="96" x2="64"  y2="416"/>
+    <line x1="128" y1="96" x2="128" y2="416"/>
+    <line x1="192" y1="96" x2="192" y2="416"/>
+    <line x1="256" y1="96" x2="256" y2="416"/>
+    <line x1="320" y1="96" x2="320" y2="416"/>
+    <line x1="384" y1="96" x2="384" y2="416"/>
+    <line x1="448" y1="96" x2="448" y2="416"/>
+
+    <!-- Diagonal connections (triangulation — selective for elegance) -->
+    <!-- Top-left triangle group -->
+    <line x1="64"  y1="96"  x2="128" y2="176"/>
+    <line x1="128" y1="96"  x2="192" y2="176"/>
+    <line x1="192" y1="96"  x2="256" y2="176"/>
+    <!-- Top-right triangle group -->
+    <line x1="256" y1="96"  x2="320" y2="176"/>
+    <line x1="320" y1="96"  x2="384" y2="176"/>
+    <line x1="384" y1="96"  x2="448" y2="176"/>
+    <!-- Bottom-left triangle group -->
+    <line x1="64"  y1="336" x2="128" y2="416"/>
+    <line x1="128" y1="336" x2="192" y2="416"/>
+    <line x1="192" y1="336" x2="256" y2="416"/>
+    <!-- Bottom-right triangle group -->
+    <line x1="256" y1="336" x2="320" y2="416"/>
+    <line x1="320" y1="336" x2="384" y2="416"/>
+    <line x1="384" y1="336" x2="448" y2="416"/>
+    <!-- Cross-diagonals on outer columns -->
+    <line x1="64"  y1="176" x2="128" y2="96"/>
+    <line x1="384" y1="96"  x2="448" y2="176"/>
+    <line x1="64"  y1="336" x2="128" y2="416"/>
+    <line x1="384" y1="416" x2="448" y2="336"/>
+    <!-- Mid-section diagonals -->
+    <line x1="64"  y1="176" x2="128" y2="256"/>
+    <line x1="128" y1="256" x2="64"  y2="336"/>
+    <line x1="448" y1="176" x2="384" y2="256"/>
+    <line x1="384" y1="256" x2="448" y2="336"/>
+  </g>
+
+  <!-- ── Ambient waveform glow (behind bars) ───── -->
+  <g filter="url(#ambientGlow)" opacity="0.25">
+    <rect x="56"  y="231" width="16" height="50"  rx="8" fill="#00d4ff"/>
+    <rect x="120" y="211" width="16" height="90"  rx="8" fill="#00c8f0"/>
+    <rect x="184" y="181" width="16" height="150" rx="8" fill="#00ffa3"/>
+    <rect x="248" y="156" width="16" height="200" rx="8" fill="#00ffa3"/>
+    <rect x="312" y="181" width="16" height="150" rx="8" fill="#00ffa3"/>
+    <rect x="376" y="211" width="16" height="90"  rx="8" fill="#8b84e8"/>
+    <rect x="440" y="231" width="16" height="50"  rx="8" fill="#8b5cf6"/>
+  </g>
+
+  <!-- ── Waveform bars (main focal element) ─────── -->
+  <!--
+    7 bars aligned to the 7 column centers, all vertically centered at y=256
+    Heights: 50, 90, 150, 200, 150, 90, 50
+    top = 256 - height/2
+  -->
+  <g filter="url(#barGlow)">
+    <!-- Col 0: x=64,  h=50,  top=231 -->
+    <rect x="56"  y="231" width="16" height="50"  rx="8" fill="url(#barGrad)" opacity="0.95"/>
+    <!-- Col 1: x=128, h=90,  top=211 -->
+    <rect x="120" y="211" width="16" height="90"  rx="8" fill="url(#barGrad)" opacity="0.97"/>
+    <!-- Col 2: x=192, h=150, top=181 -->
+    <rect x="184" y="181" width="16" height="150" rx="8" fill="url(#barGrad)"/>
+    <!-- Col 3: x=256, h=200, top=156 (tallest/center) -->
+    <rect x="248" y="156" width="16" height="200" rx="8" fill="url(#barGrad)"/>
+    <!-- Col 4: x=320, h=150, top=181 -->
+    <rect x="312" y="181" width="16" height="150" rx="8" fill="url(#barGrad)"/>
+    <!-- Col 5: x=384, h=90,  top=211 -->
+    <rect x="376" y="211" width="16" height="90"  rx="8" fill="url(#barGrad)" opacity="0.97"/>
+    <!-- Col 6: x=448, h=50,  top=231 -->
+    <rect x="440" y="231" width="16" height="50"  rx="8" fill="url(#barGrad)" opacity="0.95"/>
+  </g>
+
+  <!-- ── Mesh nodes at grid intersections ──────── -->
+  <!--
+    Rows: y = 96, 176, 256, 336, 416
+    Cols: x = 64, 128, 192, 256, 320, 384, 448
+    Color: cyan (left) → teal (center) → purple (right)
+  -->
+  <g filter="url(#nodeGlow)">
+
+    <!-- Row y=96 -->
+    <circle cx="64"  cy="96"  r="5.5" fill="url(#nodeCyan)"/>
+    <circle cx="128" cy="96"  r="5.5" fill="url(#nodeCyan)"/>
+    <circle cx="192" cy="96"  r="5.5" fill="url(#nodeTeal)"/>
+    <circle cx="256" cy="96"  r="6.5" fill="url(#nodeTeal)"/>
+    <circle cx="320" cy="96"  r="5.5" fill="url(#nodeTeal)"/>
+    <circle cx="384" cy="96"  r="5.5" fill="url(#nodePurple)"/>
+    <circle cx="448" cy="96"  r="5.5" fill="url(#nodePurple)"/>
+
+    <!-- Row y=176 -->
+    <circle cx="64"  cy="176" r="5.5" fill="url(#nodeCyan)"/>
+    <circle cx="128" cy="176" r="5.5" fill="url(#nodeCyan)"/>
+    <circle cx="192" cy="176" r="5.5" fill="url(#nodeTeal)"/>
+    <circle cx="256" cy="176" r="6"   fill="url(#nodeTeal)"/>
+    <circle cx="320" cy="176" r="5.5" fill="url(#nodeTeal)"/>
+    <circle cx="384" cy="176" r="5.5" fill="url(#nodePurple)"/>
+    <circle cx="448" cy="176" r="5.5" fill="url(#nodePurple)"/>
+
+    <!-- Row y=256 (center row — only outer nodes, bars occupy center) -->
+    <circle cx="64"  cy="256" r="5.5" fill="url(#nodeCyan)"/>
+    <circle cx="128" cy="256" r="5.5" fill="url(#nodeCyan)"/>
+    <circle cx="192" cy="256" r="5"   fill="url(#nodeTeal)" opacity="0.6"/>
+    <circle cx="256" cy="256" r="5"   fill="url(#nodeTeal)" opacity="0.6"/>
+    <circle cx="320" cy="256" r="5"   fill="url(#nodeTeal)" opacity="0.6"/>
+    <circle cx="384" cy="256" r="5.5" fill="url(#nodePurple)"/>
+    <circle cx="448" cy="256" r="5.5" fill="url(#nodePurple)"/>
+
+    <!-- Row y=336 -->
+    <circle cx="64"  cy="336" r="5.5" fill="url(#nodeCyan)"/>
+    <circle cx="128" cy="336" r="5.5" fill="url(#nodeCyan)"/>
+    <circle cx="192" cy="336" r="5.5" fill="url(#nodeTeal)"/>
+    <circle cx="256" cy="336" r="6"   fill="url(#nodeTeal)"/>
+    <circle cx="320" cy="336" r="5.5" fill="url(#nodeTeal)"/>
+    <circle cx="384" cy="336" r="5.5" fill="url(#nodePurple)"/>
+    <circle cx="448" cy="336" r="5.5" fill="url(#nodePurple)"/>
+
+    <!-- Row y=416 -->
+    <circle cx="64"  cy="416" r="5.5" fill="url(#nodeCyan)"/>
+    <circle cx="128" cy="416" r="5.5" fill="url(#nodeCyan)"/>
+    <circle cx="192" cy="416" r="5.5" fill="url(#nodeTeal)"/>
+    <circle cx="256" cy="416" r="6.5" fill="url(#nodeTeal)"/>
+    <circle cx="320" cy="416" r="5.5" fill="url(#nodeTeal)"/>
+    <circle cx="384" cy="416" r="5.5" fill="url(#nodePurple)"/>
+    <circle cx="448" cy="416" r="5.5" fill="url(#nodePurple)"/>
+  </g>
+
+  <!-- ── Subtle border ring ─────────────────────── -->
+  <rect width="512" height="512" rx="96" fill="none"
+        stroke="url(#lineGrad)" stroke-width="1.5" opacity="0.4"/>
+</svg>
