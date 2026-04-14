@@ -14,6 +14,7 @@ from typing import Any, Optional
 
 from ..config import config
 from ..gpu_memory import release_torch_cuda_memory
+from ..idle_memory import begin_gpu_work, end_gpu_work
 
 logger = logging.getLogger(__name__)
 
@@ -52,24 +53,28 @@ def transcribe_for_ad_scan(audio_path: str, language: Optional[str] = None) -> d
     """
     Return a Whisper-like dict: { "segments": [ {start, end, text}, ... ], "language": ... }.
     """
-    model = _get_model()
-    segments, info = model.transcribe(
-        audio_path,
-        language=language,
-        vad_filter=True,
-    )
-    out_segments: list[dict[str, Any]] = []
-    for seg in segments:
-        text = (seg.text or "").strip()
-        out_segments.append(
-            {
-                "start": float(seg.start),
-                "end": float(seg.end),
-                "text": text,
-            }
+    begin_gpu_work()
+    try:
+        model = _get_model()
+        segments, info = model.transcribe(
+            audio_path,
+            language=language,
+            vad_filter=True,
         )
-    detected = getattr(info, "language", None)
-    return {"segments": out_segments, "language": detected}
+        out_segments: list[dict[str, Any]] = []
+        for seg in segments:
+            text = (seg.text or "").strip()
+            out_segments.append(
+                {
+                    "start": float(seg.start),
+                    "end": float(seg.end),
+                    "text": text,
+                }
+            )
+        detected = getattr(info, "language", None)
+        return {"segments": out_segments, "language": detected}
+    finally:
+        end_gpu_work()
 
 
 def unload_model() -> None:

@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 from ...config import config
 from ...gpu_memory import release_torch_cuda_memory
+from ...idle_memory import begin_gpu_work, end_gpu_work
 
 logger = logging.getLogger(__name__)
 
@@ -45,18 +46,29 @@ class TranscriptTranscriber:
         return self._model
 
     async def transcribe(self, audio_path: str, language: Optional[str] = None) -> dict[str, Any]:
-        model = self._load_model()
-        logger.info("Transcribing audio with WhisperX: %s", audio_path)
-        result = await asyncio.to_thread(
-            model.transcribe,
-            audio_path,
-            language=language,
-        )
-        if "segments" not in result:
-            result["segments"] = []
-        return result
+        begin_gpu_work()
+        try:
+            model = self._load_model()
+            logger.info("Transcribing audio with WhisperX: %s", audio_path)
+            result = await asyncio.to_thread(
+                model.transcribe,
+                audio_path,
+                language=language,
+            )
+            if "segments" not in result:
+                result["segments"] = []
+            return result
+        finally:
+            end_gpu_work()
 
     async def align(self, transcript: dict[str, Any], audio_path: str) -> dict[str, Any]:
+        begin_gpu_work()
+        try:
+            return await self._align_impl(transcript, audio_path)
+        finally:
+            end_gpu_work()
+
+    async def _align_impl(self, transcript: dict[str, Any], audio_path: str) -> dict[str, Any]:
         whisperx = self._load_whisperx()
         language = transcript.get("language") or "en"
         if self._align_model is None or self._align_metadata is None:

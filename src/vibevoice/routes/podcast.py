@@ -99,6 +99,16 @@ def _get_production_task(task_id: str) -> Dict | None:
         return dict(data) if data else None
 
 
+def has_running_production_tasks() -> bool:
+    """True while an async production podcast task is queued or running."""
+    with _PRODUCTION_TASKS_LOCK:
+        for data in _PRODUCTION_TASKS.values():
+            st = (data or {}).get("status")
+            if st in ("queued", "running"):
+                return True
+    return False
+
+
 def _initial_stage_progress() -> Dict[str, str]:
     return {
         "generating_script": "pending",

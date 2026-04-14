@@ -11,6 +11,7 @@ from typing import Any
 
 from ...config import config
 from ...gpu_memory import release_torch_cuda_memory
+from ...idle_memory import begin_gpu_work, end_gpu_work
 
 logger = logging.getLogger(__name__)
 
@@ -147,42 +148,50 @@ class TranscriptDiarizer:
         return as_pyannote_annotation(raw)
 
     async def run(self, audio_path: str):
-        pipeline = self._load_pipeline()
-        logger.info(
-            "Running diarization (in-memory waveform, device=%s): %s",
-            self._device,
-            audio_path,
-        )
-        return await asyncio.to_thread(self._run_pipeline_on_file, pipeline, audio_path)
+        begin_gpu_work()
+        try:
+            pipeline = self._load_pipeline()
+            logger.info(
+                "Running diarization (in-memory waveform, device=%s): %s",
+                self._device,
+                audio_path,
+            )
+            return await asyncio.to_thread(self._run_pipeline_on_file, pipeline, audio_path)
+        finally:
+            end_gpu_work()
 
     async def assign_speakers(self, aligned_transcript: dict[str, Any], diarization: Any) -> list[dict[str, Any]]:
-        diarization = as_pyannote_annotation(diarization)
-        whisperx = self._load_whisperx()
-        enriched = await asyncio.to_thread(whisperx.assign_word_speakers, diarization, aligned_transcript)
+        begin_gpu_work()
+        try:
+            diarization = as_pyannote_annotation(diarization)
+            whisperx = self._load_whisperx()
+            enriched = await asyncio.to_thread(whisperx.assign_word_speakers, diarization, aligned_transcript)
 
-        segments_out: list[dict[str, Any]] = []
-        for segment in enriched.get("segments", []):
-            speaker_id = segment.get("speaker") or "SPEAKER_00"
-            start_ms = int(float(segment.get("start", 0.0)) * 1000)
-            end_ms = int(float(segment.get("end", 0.0)) * 1000)
-            text = (segment.get("text") or "").strip()
-            if not text:
-                continue
-            confidence = 0.0
-            words = segment.get("words") or []
-            confidences = [float(w.get("score", 0.0)) for w in words if isinstance(w, dict) and "score" in w]
-            if confidences:
-                confidence = sum(confidences) / len(confidences)
-            segments_out.append(
-                {
-                    "speaker_id": speaker_id,
-                    "start_ms": start_ms,
-                    "end_ms": end_ms,
-                    "text": text,
-                    "confidence": confidence,
-                }
-            )
-        return segments_out
+            segments_out: list[dict[str, Any]] = []
+            for segment in enriched.get("segments", []):
+                speaker_id = segment.get("speaker") or "SPEAKER_00"
+                start_ms = int(float(segment.get("start", 0.0)) * 1000)
+                end_ms = int(float(segment.get("end", 0.0)) * 1000)
+                text = (segment.get("text") or "").strip()
+                if not text:
+                    continue
+                confidence = 0.0
+                words = segment.get("words") or []
+                confidences = [float(w.get("score", 0.0)) for w in words if isinstance(w, dict) and "score" in w]
+                if confidences:
+                    confidence = sum(confidences) / len(confidences)
+                segments_out.append(
+                    {
+                        "speaker_id": speaker_id,
+                        "start_ms": start_ms,
+                        "end_ms": end_ms,
+                        "text": text,
+                        "confidence": confidence,
+                    }
+                )
+            return segments_out
+        finally:
+            end_gpu_work()
 
     def unload_pipeline(self) -> None:
         """Drop pyannote pipeline references and release GPU memory (best-effort)."""

@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 _state_lock = threading.Lock()
 _last_activity: float = time.monotonic()
 _purge_lock = threading.Lock()
+_gpu_work_depth = 0
+_gpu_work_lock = threading.Lock()
 
 
 def touch_activity() -> None:
@@ -27,6 +29,23 @@ def touch_activity() -> None:
     global _last_activity
     with _state_lock:
         _last_activity = time.monotonic()
+
+
+def begin_gpu_work() -> None:
+    """
+    Increment refcount while WhisperX, pyannote, or similar GPU work runs without TTS inflight.
+    Pairs with end_gpu_work(); also refreshes idle activity.
+    """
+    global _gpu_work_depth
+    with _gpu_work_lock:
+        _gpu_work_depth += 1
+    touch_activity()
+
+
+def end_gpu_work() -> None:
+    global _gpu_work_depth
+    with _gpu_work_lock:
+        _gpu_work_depth = max(0, _gpu_work_depth - 1)
 
 
 def _maybe_trim_heap() -> None:
@@ -57,6 +76,16 @@ def _work_in_progress() -> bool:
         return True
     if voice_generator.tts_has_inflight_generation():
         return True
+    with _gpu_work_lock:
+        if _gpu_work_depth > 0:
+            return True
+    try:
+        from .routes.podcast import has_running_production_tasks
+
+        if has_running_production_tasks():
+            return True
+    except Exception:
+        logger.debug("podcast production busy check failed", exc_info=True)
     return False
 
 
