@@ -23,6 +23,32 @@ def _resolve_model(model: Optional[str]) -> str:
     return m if m else DEFAULT_OPENAI_MODEL
 
 
+def _include_temperature_in_chat_completion(model: str) -> bool:
+    """
+    GPT-5 family reasoning models reject non-default temperature on /v1/chat/completions
+    (400 unsupported_value). Omit the parameter and use the API default.
+    """
+    m = (model or "").strip().lower()
+    if m.startswith("gpt-5"):
+        return False
+    return True
+
+
+def _openai_http_error_message(resp: httpx.Response) -> str:
+    try:
+        payload = resp.json()
+        err = payload.get("error")
+        if isinstance(err, dict):
+            msg = err.get("message") or str(payload)
+            p = err.get("param")
+            if p:
+                return f"{msg} (param: {p})"
+            return str(msg)
+        return str(payload)[:800]
+    except Exception:
+        return (resp.text or "")[:800]
+
+
 def _chat_message_content(
     api_key: str,
     model: str,
@@ -35,14 +61,25 @@ def _chat_message_content(
         "Authorization": f"Bearer {api_key}",
         "content-type": "application/json",
     }
-    body = {
+    body: Dict[str, Any] = {
         "model": model,
         "messages": [{"role": "user", "content": user_content}],
-        "temperature": temperature,
     }
+    if _include_temperature_in_chat_completion(model):
+        body["temperature"] = temperature
     with httpx.Client(timeout=timeout) as client:
         resp = client.post(OPENAI_CHAT_COMPLETIONS_URL, headers=headers, json=body)
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            detail = _openai_http_error_message(resp)
+            logger.warning(
+                "OpenAI chat/completions failed model=%s status=%s detail=%s",
+                model,
+                resp.status_code,
+                detail,
+            )
+            raise RuntimeError(
+                f"OpenAI API error ({resp.status_code}): {detail}"
+            ) from None
         data = resp.json()
     text = (
         data.get("choices", [{}])[0]
@@ -99,6 +136,8 @@ def generate_script_openai(
     )
     try:
         raw = _chat_message_content(api_key, resolved_model, prompt, temperature=0.7)
+    except RuntimeError:
+        raise
     except httpx.HTTPError as e:
         raise RuntimeError(f"OpenAI API request failed: {e}") from e
     if not raw:
@@ -131,6 +170,8 @@ def generate_script_segments_openai(
     )
     try:
         raw = _chat_message_content(api_key, resolved_model, prompt, temperature=0.2)
+    except RuntimeError:
+        raise
     except httpx.HTTPError as e:
         raise RuntimeError(f"OpenAI API request failed for segmentation: {e}") from e
     if not raw:

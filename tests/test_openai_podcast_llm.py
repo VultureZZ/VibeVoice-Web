@@ -1,9 +1,10 @@
 """Tests for OpenAI-backed podcast script / segmentation paths."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+from vibevoice.services import openai_text_client as otc
 from vibevoice.services.podcast_generator import podcast_generator
 
 
@@ -30,6 +31,58 @@ def test_generate_script_segments_openai_requires_api_key() -> None:
             genre="News",
             genre_style="News",
         )
+
+
+def test_include_temperature_false_for_gpt5_family() -> None:
+    assert otc._include_temperature_in_chat_completion("gpt-5-mini") is False
+    assert otc._include_temperature_in_chat_completion("GPT-5-nano") is False
+    assert otc._include_temperature_in_chat_completion("gpt-4o-mini") is True
+
+
+@patch("httpx.Client")
+def test_chat_message_content_omits_temperature_for_gpt5(mock_client_cls: object) -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "choices": [{"message": {"content": "Speaker 1: Hi."}}],
+    }
+    mock_client = MagicMock()
+    mock_client.post.return_value = mock_resp
+    mock_client_cls.return_value.__enter__.return_value = mock_client
+
+    out = otc._chat_message_content(
+        "sk-test",
+        "gpt-5-mini",
+        "prompt text",
+        temperature=0.7,
+    )
+    assert "Speaker 1" in out
+    call_kw = mock_client.post.call_args
+    assert call_kw is not None
+    body = call_kw.kwargs.get("json") or (call_kw[1] or {}).get("json")
+    assert body is not None
+    assert "temperature" not in body
+
+
+@patch("httpx.Client")
+def test_chat_message_content_includes_temperature_for_gpt4(mock_client_cls: object) -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "choices": [{"message": {"content": "ok"}}],
+    }
+    mock_client = MagicMock()
+    mock_client.post.return_value = mock_resp
+    mock_client_cls.return_value.__enter__.return_value = mock_client
+
+    otc._chat_message_content(
+        "sk-test",
+        "gpt-4o-mini",
+        "prompt",
+        temperature=0.7,
+    )
+    _, kwargs = mock_client.post.call_args
+    assert kwargs["json"]["temperature"] == 0.7
 
 
 @patch("vibevoice.services.openai_text_client._chat_message_content")
