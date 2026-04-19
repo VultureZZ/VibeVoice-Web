@@ -287,6 +287,7 @@ class PodcastGenerator:
         self,
         script: str,
         voices: List[str],
+        voice_direction: Optional[List[Any]] = None,
     ) -> str:
         """
         Generate audio from podcast script.
@@ -294,6 +295,7 @@ class PodcastGenerator:
         Args:
             script: Podcast script with speaker labels
             voices: List of voice names (mapped to speakers in order)
+            voice_direction: Optional per-line prosody (ProductionPlan voice_direction rows)
 
         Returns:
             Path to generated audio file
@@ -322,6 +324,7 @@ class PodcastGenerator:
         output_path = self.voice_gen.generate_speech(
             transcript=formatted_script,
             speakers=voices,
+            voice_direction=voice_direction,
         )
 
         logger.info(f"Audio generated: {output_path}")

@@ -1,0 +1,19 @@
+{
+  "checks": [
+    "loudness_lufs",
+    "true_peak_dbfs",
+    "dynamic_range_plr",
+    "voice_band_intelligibility",
+    "silence_gaps",
+    "duration_drift",
+    "clip_count"
+  ],
+  "summary_keys": [
+    "all_passed",
+    "rendered_duration_sec",
+    "integrated_lufs",
+    "true_peak_dbfs",
+    "plr_lu",
+    "target_lufs"
+  ]
+}

@@ -6,8 +6,9 @@ Uses CustomVoice model for built-in speakers and Base model for voice cloning.
 import gc
 import logging
 import threading
+from dataclasses import replace
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from ...config import config
 from .base import SpeakerRef, TTSBackend
@@ -59,6 +60,14 @@ _EMOTION_EXPANSIONS = {
     "playful": "Speak in a playful, lighthearted tone.",
     "whisper": "Speak in a soft whisper.",
     "shouting": "Speak loudly, as if shouting.",
+    # ProductionPlan voice_direction emotions
+    "neutral": "Speak in a neutral, clear broadcast tone.",
+    "somber": "Speak in a somber, subdued tone with weight.",
+    "curious": "Speak with curiosity and engaged interest.",
+    "confident": "Speak with confident, authoritative delivery.",
+    "amused": "Speak with light amusement and warmth.",
+    "tense": "Speak with quiet tension and restraint.",
+    "warm": "Speak in a warm, inviting tone.",
 }
 
 
@@ -399,6 +408,10 @@ class Qwen3Backend(TTSBackend):
         language: str,
         output_path: Path,
         progress_callback: Optional[Any] = None,
+        *,
+        breath_audio: Optional[Any] = None,
+        breath_after_segment_indices: Optional[Set[int]] = None,
+        breath_gain_db: float = -22.0,
     ) -> Path:
         """Generate speech from segments and concatenate into one WAV."""
         import numpy as np
@@ -419,6 +432,8 @@ class Qwen3Backend(TTSBackend):
 
             all_wavs: List[np.ndarray] = []
             sample_rate = 24000
+            breath_after = breath_after_segment_indices or set()
+            bcoef = float(10.0 ** (breath_gain_db / 20.0))
 
             for i, seg in enumerate(segments):
                 if seg.speaker_index >= len(speaker_refs):
@@ -426,7 +441,14 @@ class Qwen3Backend(TTSBackend):
                         f"Segment speaker_index {seg.speaker_index} out of range (have {len(speaker_refs)} speaker_refs)"
                     )
                 ref = speaker_refs[seg.speaker_index]
-                wav, sr = self._generate_segment(seg.text, ref, language)
+                seg_instruct = (getattr(seg, "instruct", None) or "").strip()
+                base = (ref.instruct or "").strip()
+                if seg_instruct:
+                    merged = f"{base} {seg_instruct}".strip() if base else seg_instruct
+                    ref_eff = replace(ref, instruct=merged)
+                else:
+                    ref_eff = ref
+                wav, sr = self._generate_segment(seg.text, ref_eff, language)
                 if progress_callback:
                     progress_callback(i + 1, total, f"Generated segment {i + 1} of {total}")
                 if wav is not None and len(wav) > 0:
@@ -435,6 +457,17 @@ class Qwen3Backend(TTSBackend):
                     elif sr != sample_rate:
                         logger.warning("Segment sample rate %s != %s; using first segment sr", sr, sample_rate)
                     all_wavs.append(wav.astype(np.float32))
+
+                if breath_audio is not None and i in breath_after and i < len(segments) - 1:
+                    ba = np.asarray(breath_audio, dtype=np.float32).reshape(-1)
+                    if len(ba) > 0:
+                        all_wavs.append(ba * bcoef)
+
+                pause_ms = int(getattr(seg, "pause_after_ms", 0) or 0)
+                if pause_ms > 0:
+                    n_pad = int(sample_rate * pause_ms / 1000.0)
+                    if n_pad > 0:
+                        all_wavs.append(np.zeros(n_pad, dtype=np.float32))
 
             if not all_wavs:
                 raise RuntimeError("No audio generated from segments")

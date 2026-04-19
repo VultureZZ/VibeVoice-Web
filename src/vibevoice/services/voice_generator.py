@@ -10,7 +10,7 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
 from ..config import config
 from .voice_manager import voice_manager
@@ -106,12 +106,18 @@ class VoiceGenerator:
         language: Optional[str] = None,
         speaker_instructions: Optional[List[str]] = None,
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
+        voice_direction: Optional[Sequence[Union[Dict[str, Any], Any]]] = None,
+        breath_audio_path: Optional[Path] = None,
     ) -> Path:
         """
         Generate speech from transcript.
 
         Uses Qwen3-TTS backend by default; set TTS_BACKEND=vibevoice for legacy subprocess.
         speaker_instructions: optional list of style/emotion instructions (one per speaker).
+
+        When ``voice_direction`` is set (list of dicts or VoiceDirectionLine-like rows aligned
+        to dialogue lines), Qwen3-TTS receives per-utterance style instructions and optional
+        ``pause_after_ms`` silences between lines (before WhisperX alignment).
         """
         logger.info("Starting speech generation process...")
         logger.info("  Transcript length: %s characters", len(transcript))
@@ -139,7 +145,63 @@ class VoiceGenerator:
             language or "en",
             speaker_instructions,
             progress_callback,
+            voice_direction=voice_direction,
+            breath_audio_path=breath_audio_path,
         )
+
+    @staticmethod
+    def build_qwen3_line_instruct(emotion: str, emphasis_words: Optional[Sequence[str]] = None) -> str:
+        """Natural-language instruct line for one utterance (merged with SpeakerRef.instruct)."""
+        from .tts.qwen3_backend import _expand_instruct
+
+        em = (emotion or "neutral").strip().lower()
+        base = _expand_instruct(em) or _expand_instruct("neutral") or "Speak clearly."
+        words = [w.strip() for w in (emphasis_words or []) if w and str(w).strip()]
+        if words:
+            stress = ", ".join(words[:12])
+            return f"{base} Emphasize these words slightly: {stress}."
+        return str(base)
+
+    def _apply_voice_direction_to_segments(
+        self,
+        segments: List[Any],
+        voice_direction: Sequence[Union[Dict[str, Any], Any]],
+    ) -> None:
+        """Mutate ``TranscriptSegment`` rows with per-line instruct and pause_after_ms."""
+
+        def _li(r: Union[Dict[str, Any], Any]) -> int:
+            if isinstance(r, dict):
+                return int(r.get("line_index", 0))
+            return int(getattr(r, "line_index", 0))
+
+        rows = sorted(voice_direction, key=_li)
+        for i, seg in enumerate(segments):
+            if i >= len(rows):
+                break
+            row = rows[i]
+            if isinstance(row, dict):
+                em = str(row.get("emotion") or "neutral")
+                emph = row.get("emphasis_words") or []
+                pause = int(row.get("pause_after_ms") or 0)
+            else:
+                em = str(getattr(row, "emotion", None) or "neutral")
+                emph = list(getattr(row, "emphasis_words", None) or [])
+                pause = int(getattr(row, "pause_after_ms", 0) or 0)
+            seg.instruct = self.build_qwen3_line_instruct(em, emph)
+            seg.pause_after_ms = max(0, pause)
+
+    def _load_breath_mono(self, path: Path, target_sr: int) -> Any:
+        import numpy as np
+        import soundfile as sf
+
+        data, sr = sf.read(str(path), always_2d=True, dtype="float32")
+        mono = data[:, 0] if data.shape[1] else data.reshape(-1)
+        if sr != target_sr and len(mono) > 0:
+            n_dst = int(round(len(mono) * target_sr / float(sr)))
+            t_src = np.linspace(0.0, 1.0, num=len(mono), endpoint=False)
+            t_dst = np.linspace(0.0, 1.0, num=n_dst, endpoint=False)
+            mono = np.interp(t_dst, t_src, mono).astype(np.float32)
+        return mono.astype(np.float32)
 
     def _generate_speech_backend(
         self,
@@ -149,11 +211,15 @@ class VoiceGenerator:
         language: str = "en",
         speaker_instructions: Optional[List[str]] = None,
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
+        voice_direction: Optional[Sequence[Union[Dict[str, Any], Any]]] = None,
+        breath_audio_path: Optional[Path] = None,
     ) -> Path:
         """Generate using TTS backend (Qwen3-TTS)."""
+        import random
+
         from .tts import parse_transcript_into_segments
         from .tts.base import SpeakerRef
-        from .tts.qwen3_backend import resolve_speaker_to_qwen3_ref
+        from .tts.qwen3_backend import Qwen3Backend, resolve_speaker_to_qwen3_ref
 
         backend = self._get_backend()
         if backend is None:
@@ -164,6 +230,9 @@ class VoiceGenerator:
         if not segments:
             raise ValueError("No segments to generate (empty or unparseable transcript)")
 
+        if voice_direction:
+            self._apply_voice_direction_to_segments(list(segments), voice_direction)
+
         speaker_refs: List[SpeakerRef] = []
         for name in speakers:
             ref = resolve_speaker_to_qwen3_ref(name, voice_manager)
@@ -173,9 +242,33 @@ class VoiceGenerator:
                 if i < len(speaker_refs) and instr and isinstance(instr, str):
                     speaker_refs[i].instruct = instr.strip()
 
-        backend.generate(
-            segments, speaker_refs, language, output_path, progress_callback
-        )
+        breath_np = None
+        breath_idx = None
+        if isinstance(backend, Qwen3Backend):
+            from app.services.voice_prosody import breath_after_indices, resolve_breath_audio_path
+
+            env_breath = getattr(config, "BREATH_SFX_PATH", None) or os.getenv("BREATH_SFX_PATH")
+            bpath = breath_audio_path or resolve_breath_audio_path(
+                Path(env_breath) if env_breath else None
+            )
+            breath_idx, _stride = breath_after_indices(len(segments), random.Random())
+            if bpath and bpath.is_file():
+                try:
+                    breath_np = self._load_breath_mono(bpath, 24000)
+                except Exception as exc:
+                    logger.warning("Could not load breath sample %s: %s", bpath, exc)
+
+            backend.generate(
+                segments,
+                speaker_refs,
+                language,
+                output_path,
+                progress_callback,
+                breath_audio=breath_np,
+                breath_after_segment_indices=breath_idx if breath_np is not None else None,
+            )
+        else:
+            backend.generate(segments, speaker_refs, language, output_path, progress_callback)
         logger.info("Speech generation completed: %s", output_path)
         return output_path
 

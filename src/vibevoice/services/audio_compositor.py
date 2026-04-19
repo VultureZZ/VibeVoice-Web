@@ -1,5 +1,8 @@
 """
 Audio composition service for production podcast output.
+
+``LegacyAudioCompositor`` retains the original pydub-based implementation for A/B comparison.
+``AudioCompositor`` routes production mixes through ``ProductionMixer`` (pedalboard + LUFS + ffmpeg).
 """
 from __future__ import annotations
 
@@ -7,7 +10,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import ffmpeg
 from pydub import AudioSegment
@@ -26,8 +29,8 @@ class CuePlacement:
     duration_ms: Optional[int] = None
 
 
-class AudioCompositor:
-    """Composes voice + music cues into a production mix."""
+class LegacyAudioCompositor:
+    """Original pydub-based compositor (cue placements + simple ducking)."""
 
     def mix_podcast(self, voice_path: str, cues: List[CuePlacement]) -> str:
         voice = AudioSegment.from_file(voice_path)
@@ -49,7 +52,7 @@ class AudioCompositor:
             .set_sample_width(voice.sample_width)
         )
         logger.info(
-            "Compositing production mix: voice_len_ms=%s, total_len_ms=%s, cues=intro:%s,outro:%s,transition:%s,bed:%s",
+            "Legacy compositing: voice_len_ms=%s, total_len_ms=%s, cues=intro:%s,outro:%s,transition:%s,bed:%s",
             voice_len,
             total_len,
             len(intro_cues),
@@ -84,10 +87,8 @@ class AudioCompositor:
         if len(bed_source) <= 0:
             return AudioSegment.silent(duration=total_len, frame_rate=44100)
 
-        # Target bed level: -6dB in gaps.
         bed = self._loop_to_length(bed_source, total_len).apply_gain(-6.0)
 
-        # Duck to -18dB under dialogue (delta -12dB from base gap level).
         for cue in dialogue_cues:
             start = max(cue.position_ms, 0)
             if cue.duration_ms is None:
@@ -138,16 +139,90 @@ class AudioCompositor:
             logger.error("ffmpeg conversion failed: %s", stderr)
             raise RuntimeError(f"Failed converting mix to mp3: {stderr}") from exc
 
-        # Guard against accidental truncated exports (e.g. only intro cue length).
         rendered = AudioSegment.from_file(str(mp3_path))
         rendered_len = len(rendered)
         if rendered_len < max(expected_min_duration_ms - 3000, 1000):
             raise RuntimeError(
                 f"Production mix appears truncated: rendered={rendered_len}ms expected>={expected_min_duration_ms}ms"
             )
-        logger.info("Exported production mix: mp3=%s, duration_ms=%s", mp3_path, rendered_len)
+        logger.info("Exported legacy production mix: mp3=%s, duration_ms=%s", mp3_path, rendered_len)
         return str(mp3_path)
 
 
-audio_compositor = AudioCompositor()
+class AudioCompositor:
+    """
+    Production mixer using ``ProductionMixer``; legacy pydub path available via
+    ``legacy`` attribute.
+    """
 
+    def __init__(self) -> None:
+        self.legacy = LegacyAudioCompositor()
+        # Imported lazily to avoid loading pedalboard when only legacy is used
+        self._mixer: Any = None
+
+    def _get_mixer(self) -> Any:
+        if self._mixer is None:
+            from app.services.production_mixer import ProductionMixer
+
+            self._mixer = ProductionMixer()
+        return self._mixer
+
+    def mix_podcast(self, voice_path: str, cues: List[CuePlacement]) -> str:
+        from app.services.production_mixer import legacy_cues_to_production_plan
+
+        voice = AudioSegment.from_file(voice_path)
+        voice_len_sec = len(voice) / 1000.0
+        plan, overrides = legacy_cues_to_production_plan(
+            voice_duration_seconds=voice_len_sec,
+            cues=cues,
+        )
+        config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
+        mp3_path = config.OUTPUT_DIR / f"{stamp}_podcast_production_mix.mp3"
+
+        class _Dummy:
+            def resolve_path(self, _aid: str) -> Path:
+                raise KeyError("use overrides")
+
+        return self._get_mixer().render(
+            plan,
+            voice_path,
+            str(mp3_path),
+            library=_Dummy(),
+            asset_path_overrides=overrides,
+        )
+
+    def mix_production_plan(
+        self,
+        voice_path: str,
+        plan: Any,
+        library: Any,
+        *,
+        id3_title: Optional[str] = None,
+        id3_genre: Optional[str] = None,
+        episode_number: Optional[int] = None,
+        word_index: Optional[List[Any]] = None,
+        timing_hints: Optional[List[Any]] = None,
+        voice_line_timing_ms: Optional[List[Any]] = None,
+        genre_template: Optional[Any] = None,
+    ) -> str:
+        config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
+        mp3_path = config.OUTPUT_DIR / f"{stamp}_production_plan_mix.mp3"
+        g = id3_genre or getattr(plan, "genre", None)
+        return self._get_mixer().render(
+            plan,
+            voice_path,
+            str(mp3_path),
+            library=library,
+            id3_title=id3_title,
+            id3_genre=str(g) if g else None,
+            episode_number=episode_number,
+            word_index=word_index,
+            timing_hints=timing_hints,
+            voice_line_timing_ms=voice_line_timing_ms,
+            genre_template=genre_template,
+        )
+
+
+audio_compositor = AudioCompositor()

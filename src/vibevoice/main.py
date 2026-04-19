@@ -4,6 +4,12 @@ FastAPI application entry point for AudioMesh API.
 import logging
 import sys
 import asyncio
+from pathlib import Path
+
+# Repo root must be importable for ``app.services`` (production director, asset library).
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,7 +19,7 @@ from .middleware.auth import APIKeyAuthMiddleware
 from .middleware.idle_activity import IdleActivityMiddleware
 from .middleware.rate_limit import RateLimitMiddleware
 from .idle_memory import idle_memory_watchdog
-from .routes import speech, voices, podcasts, transcripts, music, settings
+from .routes import speech, voices, podcasts, transcripts, music, settings, production_ui
 from .routes import realtime_speech
 from .routers import audio_tools
 from .services.realtime_process import realtime_process_manager
@@ -21,7 +27,6 @@ from .services.music_process import music_process_manager
 from .services.transcript_service import transcript_service
 
 # Import podcast router using file-based import
-from pathlib import Path
 import importlib.util
 _podcast_file = Path(__file__).parent / "routes" / "podcast.py"
 _spec = importlib.util.spec_from_file_location("vibevoice.routes.podcast", _podcast_file)
@@ -41,6 +46,7 @@ logging.basicConfig(
 logging.getLogger("vibevoice").setLevel(logging.INFO)
 logging.getLogger("uvicorn").setLevel(logging.INFO)
 logging.getLogger("uvicorn.access").setLevel(logging.INFO)
+logging.getLogger("pipeline.structured").setLevel(logging.INFO)
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +111,7 @@ app.include_router(podcasts.router)
 app.include_router(music.router)
 app.include_router(settings.router)
 app.include_router(audio_tools.router)
+app.include_router(production_ui.router)
 
 
 @app.on_event("shutdown")

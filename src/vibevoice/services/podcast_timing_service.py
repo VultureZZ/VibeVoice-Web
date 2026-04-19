@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Dict, List
+from typing import Any, Dict, List, Tuple
+
+from app.services.word_index import build_fallback_word_index, words_from_segment
 
 from ..core.transcripts.transcriber import transcript_transcriber
 
@@ -33,10 +35,15 @@ class PodcastTimingService:
             dialogue.append({"speaker": speaker, "text": text})
         return dialogue
 
-    async def build_dialogue_timing(self, script: str, voice_path: str) -> List[Dict]:
+    async def build_alignment_bundle(self, script: str, voice_path: str) -> Tuple[List[Dict], List[Dict[str, Any]]]:
+        """
+        WhisperX transcript + alignment, then per-line timing and a word-level index for triggers.
+
+        Returns (dialogue_timing, word_index).
+        """
         dialogue = self.parse_dialogue_lines(script)
         if not dialogue:
-            return []
+            return [], []
 
         try:
             transcript = await transcript_transcriber.transcribe(voice_path, language="en")
@@ -48,9 +55,9 @@ class PodcastTimingService:
                 raise RuntimeError("No aligned segments available for timing")
 
             timing: List[Dict] = []
-            pointer = 0
-            for line in dialogue:
-                seg = text_segments[min(pointer, len(text_segments) - 1)]
+            word_index: List[Dict[str, Any]] = []
+            for i, line in enumerate(dialogue):
+                seg = text_segments[min(i, len(text_segments) - 1)]
                 start = max(float(seg.get("start", 0.0)), 0.0)
                 end = max(float(seg.get("end", start + 1.0)), start + 0.1)
                 timing.append(
@@ -61,11 +68,17 @@ class PodcastTimingService:
                         "duration_ms": int((end - start) * 1000),
                     }
                 )
-                pointer += 1
-            return timing
+                word_index.extend(words_from_segment(seg, i, line["speaker"]))
+            return timing, word_index
         except Exception as exc:
             logger.warning("WhisperX timing alignment unavailable, using fallback timing: %s", exc)
-            return self._fallback_timing(dialogue)
+            fb = self._fallback_timing(dialogue)
+            wi = build_fallback_word_index(dialogue, fb)
+            return fb, wi
+
+    async def build_dialogue_timing(self, script: str, voice_path: str) -> List[Dict]:
+        timing, _word_index = await self.build_alignment_bundle(script, voice_path)
+        return timing
 
     def _fallback_timing(self, dialogue: List[Dict]) -> List[Dict]:
         current = 2.0

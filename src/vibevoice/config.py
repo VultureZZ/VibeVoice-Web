@@ -121,6 +121,37 @@ class Config:
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3.2")
 
+    # Podcast production: ProductionDirector + AssetLibrary tool loop (fallback: segment+cue pipeline)
+    USE_PRODUCTION_DIRECTOR: bool = os.getenv("USE_PRODUCTION_DIRECTOR", "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    # Pre-Whisper Director pass + per-line TTS prosody from ProductionPlan.voice_direction
+    VOICE_DIRECTION_ENABLED: bool = os.getenv("VOICE_DIRECTION_ENABLED", "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    # Mixer: gently compand per dialogue line RMS toward emotion-based targets
+    LINE_ENERGY_MATCHING: bool = os.getenv("LINE_ENERGY_MATCHING", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    # Optional explicit path to a soft breath WAV for inter-line breath inserts (else library search)
+    BREATH_SFX_PATH: Optional[str] = os.getenv("BREATH_SFX_PATH", None)
+    # Stable Audio Open (SFX) — skeleton client; set when integrated.
+    STABLE_AUDIO_OPEN_ENABLED: bool = os.getenv("STABLE_AUDIO_OPEN_ENABLED", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
     # Transcript service configuration
     HF_TOKEN: Optional[str] = os.getenv("HF_TOKEN", None)
     # Pyannote speaker-diarization pipeline: auto = CUDA if available, else CPU; or cuda:0, cpu, etc.

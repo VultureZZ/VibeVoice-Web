@@ -2,9 +2,9 @@
 Pydantic models for request/response validation.
 """
 from datetime import datetime
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class SpeechSettings(BaseModel):
@@ -282,6 +282,9 @@ class PodcastGenerateResponse(BaseModel):
     warnings: List[str] = Field(default_factory=list, description="Optional warnings (e.g., background music risk)")
 
 
+ProductionGenre = Literal["tech_talk", "news", "storytelling", "true_crime", "comedy"]
+
+
 class PodcastProductionRequest(BaseModel):
     """Request model for production-mode podcast generation with music cues."""
 
@@ -294,9 +297,16 @@ class PodcastProductionRequest(BaseModel):
     duration: Optional[str] = Field(None, description="Optional duration metadata (e.g., '10 min')")
     save_to_library: bool = Field(default=True, description="Whether to save the generated podcast to the library")
     production_mode: bool = Field(default=True, description="Whether production mode is enabled")
+    production_genre: Optional[ProductionGenre] = Field(
+        None,
+        description=(
+            "Production template id (Director, library filter, generation prompts, mastering). "
+            "Takes precedence over legacy `style` when set."
+        ),
+    )
     style: Literal["tech_talk", "casual", "news", "storytelling"] = Field(
         default="casual",
-        description="Music style profile for cue prompts",
+        description="Legacy alias: maps to a default production template when `production_genre` is omitted",
     )
     enabled_cues: List[Literal["intro", "outro", "transitions", "bed"]] = Field(
         default_factory=lambda: ["intro", "outro", "transitions"],
@@ -332,6 +342,62 @@ class PodcastProductionStatusResponse(BaseModel):
     script_segments: List[PodcastSegment] = Field(default_factory=list, description="Structured production cue segments")
     warnings: List[str] = Field(default_factory=list, description="Non-fatal warnings encountered during production")
     error: Optional[str] = Field(default=None, description="Failure reason when task fails")
+
+
+class RegenerateEventRequest(BaseModel):
+    """Re-run ACE-Step / SAO for a single TrackEvent and remix (no TTS / Director)."""
+
+    track_id: str = Field(..., description="Timeline track_id from ProductionPlan")
+    event_id: str = Field(..., description="TrackEvent.event_id to regenerate")
+
+
+class PodcastCompareRequest(BaseModel):
+    """A/B: same voice track, two production genre templates."""
+
+    script: str = Field(..., description="Podcast script with speaker labels")
+    voices: List[str] = Field(..., min_length=1, max_length=4, description="Voice names")
+    genres: List[ProductionGenre] = Field(
+        ...,
+        min_length=2,
+        max_length=2,
+        description="Exactly two production_genre template ids",
+    )
+    settings: Optional[SpeechSettings] = Field(default_factory=SpeechSettings, description="Speech generation settings")
+    ollama_url: Optional[str] = Field(None, description="Optional Ollama URL for Director")
+    ollama_model: Optional[str] = Field(None, description="Optional Ollama model")
+    genre: Optional[str] = Field(None, description="Optional metadata for segmentation")
+    duration: Optional[str] = Field(None, description="Optional duration hint for segmentation")
+    style: Literal["tech_talk", "casual", "news", "storytelling"] = Field(
+        default="casual",
+        description="Legacy style for script segmentation when genre metadata is absent",
+    )
+
+    @field_validator("genres")
+    @classmethod
+    def _two_distinct(cls, v: List[str]) -> List[str]:
+        if len(v) != 2:
+            raise ValueError("genres must have exactly two entries")
+        return v
+
+
+class PodcastCompareSubmitResponse(BaseModel):
+    compare_id: str
+    status: str
+    message: str = ""
+
+
+class PodcastCompareStatusResponse(BaseModel):
+    compare_id: str
+    status: str
+    message: str = ""
+    audio_url_a: Optional[str] = None
+    audio_url_b: Optional[str] = None
+    file_path_a: Optional[str] = None
+    file_path_b: Optional[str] = None
+    qa_a: Optional[Dict[str, Any]] = None
+    qa_b: Optional[Dict[str, Any]] = None
+    warnings: List[str] = Field(default_factory=list)
+    error: Optional[str] = None
 
 
 class PodcastItem(BaseModel):

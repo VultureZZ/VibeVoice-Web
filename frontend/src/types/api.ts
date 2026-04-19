@@ -163,8 +163,12 @@ export interface PodcastSegment {
   notes?: string | null;
 }
 
+export type ProductionGenre = 'tech_talk' | 'news' | 'storytelling' | 'true_crime' | 'comedy';
+
 export interface PodcastProductionRequest extends PodcastGenerateRequest {
   production_mode?: boolean;
+  /** When set, selects the production template (Director, library, prompts, mastering). Overrides legacy `style` mapping. */
+  production_genre?: ProductionGenre;
   style?: 'tech_talk' | 'casual' | 'news' | 'storytelling';
   enabled_cues?: ('intro' | 'outro' | 'transitions' | 'bed')[];
   ollama_url?: string;

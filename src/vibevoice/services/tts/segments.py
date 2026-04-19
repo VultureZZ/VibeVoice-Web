@@ -14,6 +14,10 @@ class TranscriptSegment:
     """Index into the speakers list (0-based)."""
     text: str
     """Plain text for this segment (no speaker label)."""
+    instruct: str = ""
+    """Qwen3-TTS style/emotion instruction for this utterance only (merged with SpeakerRef.instruct)."""
+    pause_after_ms: int = 0
+    """Silence appended after this segment in the output WAV (before WhisperX alignment)."""
 
 
 def parse_transcript_into_segments(transcript: str, num_speakers: int) -> List[TranscriptSegment]:

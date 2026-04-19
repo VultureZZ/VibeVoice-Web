@@ -25,6 +25,8 @@ pydub>=0.25.1
 # Python 3.13+ compatibility: stdlib `audioop` removed (pydub fallback)
 audioop-lts>=0.2.1; python_version >= "3.13"
 ffmpeg-python>=0.2.0
+pedalboard>=0.9
+pyloudnorm>=0.1
 # System dependency required for audio conversion/mixing:
 # - macOS: brew install ffmpeg
 # - Ubuntu/Debian: apt install ffmpeg
