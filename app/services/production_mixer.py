@@ -535,7 +535,6 @@ class ProductionMixer:
         vdir = list(getattr(plan, "voice_direction", []) or [])
         if voice_line_timing_ms and vdir:
             mono = _apply_line_energy_matching(mono, sr, vdir, voice_line_timing_ms)
-        out_mono = np.zeros(n, dtype=np.float32)
 
         from app.services.genre_templates import merge_voice_chain_params
 
@@ -544,6 +543,7 @@ class ProductionMixer:
             vc_base = merge_voice_chain_params(dict(genre_template.voice_chain_overrides))
 
         if not vdir:
+            out_mono = np.zeros(n, dtype=np.float32)
             board = _speaker_chain(1, vc_base)
             chunk = mono[np.newaxis, :]
             proc = board(chunk.astype(np.float64), float(sr))
@@ -553,6 +553,10 @@ class ProductionMixer:
             else:
                 out_mono[: pr.shape[0]] = pr
             return np.vstack([out_mono, out_mono])
+
+        # Dry TTS baseline: only aligned line ranges get per-speaker processing; everything
+        # else stays from the source buffer (Whisper timing often does not span full TTS length).
+        out_mono = mono.copy()
 
         ranges: List[Tuple[int, int, int]] = []
         if voice_line_timing_ms:
