@@ -15,6 +15,16 @@ logger = logging.getLogger(__name__)
 
 CheckResult = Dict[str, Any]
 
+_PYLOUDNORM_WARNED = False
+
+
+def _rms_power_dbfs(y: np.ndarray) -> float:
+    """Mean-square level in dBFS (10·log10 mean(x²)); not ITU LUFS."""
+    if y.size == 0:
+        return -120.0
+    ms = float(np.mean(np.asarray(y, dtype=np.float64) ** 2))
+    return float(10.0 * np.log10(ms + 1e-18))
+
 
 def _check_result(
     name: str,
@@ -59,11 +69,27 @@ def _load_audio(path: Path) -> Tuple[np.ndarray, int]:
     return np.asarray(mono, dtype=np.float32), int(sr)
 
 
-def _integrated_lufs(y: np.ndarray, sr: int) -> float:
-    import pyloudnorm as pyln
+def _integrated_lufs(y: np.ndarray, sr: int) -> tuple[float, bool]:
+    """
+    Integrated loudness (LUFS) when pyloudnorm is available.
+
+    Returns (value, used_pyloudnorm). Without pyloudnorm, returns RMS power dBFS as a
+    rough stand-in so QA can still run; install pyloudnorm for ITU-R BS.1770-4 LUFS.
+    """
+    global _PYLOUDNORM_WARNED
+    try:
+        import pyloudnorm as pyln
+    except ImportError:
+        if not _PYLOUDNORM_WARNED:
+            logger.warning(
+                "pyloudnorm not installed; loudness/PLR use RMS dBFS proxy. "
+                "For accurate LUFS, run: pip install pyloudnorm"
+            )
+            _PYLOUDNORM_WARNED = True
+        return _rms_power_dbfs(y), False
 
     if y.size == 0:
-        return -70.0
+        return -70.0, True
     x = np.asarray(y, dtype=np.float64)
     if x.ndim == 1:
         interleaved = np.column_stack([x, x])
@@ -71,10 +97,10 @@ def _integrated_lufs(y: np.ndarray, sr: int) -> float:
         interleaved = x
     meter = pyln.Meter(sr)
     try:
-        return float(meter.integrated_loudness(interleaved))
+        return float(meter.integrated_loudness(interleaved)), True
     except Exception as exc:
         logger.warning("LUFS measurement failed: %s", exc)
-        return -70.0
+        return -70.0, True
 
 
 def _sample_peak_dbfs(y: np.ndarray) -> float:
@@ -210,23 +236,34 @@ def run_mix_qa(
 
     y, sr = _load_audio(path)
     dur_sec = (float(len(y)) / float(sr)) if sr else 0.0
-    il = _integrated_lufs(y, sr)
+    il, lufs_is_itu = _integrated_lufs(y, sr)
     peak_dbfs = _sample_peak_dbfs(y)
     plr = _plr_estimate(peak_dbfs, il)
     clips = _clip_count(y)
     gap_ms = _longest_silence_gap_ms(y, sr)
     ratio_db, _ok = _band_ratio_db_dialogue(y, sr, dialogue_regions_ms)
 
-    lufs_ok = abs(il - target_lufs) <= lufs_tolerance
-    checks.append(
-        _check_result(
-            "loudness_lufs",
-            passed=lufs_ok,
-            value=round(il, 2),
-            threshold=f"{target_lufs:.1f} ± {lufs_tolerance:.1f} LUFS",
-            severity="warn" if not lufs_ok else "info",
+    if lufs_is_itu:
+        lufs_ok = abs(il - target_lufs) <= lufs_tolerance
+        checks.append(
+            _check_result(
+                "loudness_lufs",
+                passed=lufs_ok,
+                value=round(il, 2),
+                threshold=f"{target_lufs:.1f} ± {lufs_tolerance:.1f} LUFS",
+                severity="warn" if not lufs_ok else "info",
+            )
         )
-    )
+    else:
+        checks.append(
+            _check_result(
+                "loudness_lufs",
+                passed=True,
+                value=round(il, 2),
+                threshold="RMS dBFS proxy — pip install pyloudnorm for ITU LUFS vs target",
+                severity="info",
+            )
+        )
 
     tp_ok = peak_dbfs <= true_peak_max_dbfs
     checks.append(
@@ -239,16 +276,27 @@ def run_mix_qa(
         )
     )
 
-    plr_ok = plr_min <= plr <= plr_max
-    checks.append(
-        _check_result(
-            "dynamic_range_plr",
-            passed=plr_ok,
-            value=round(plr, 2),
-            threshold=f"{plr_min:.0f}–{plr_max:.0f} LU (peak vs integrated)",
-            severity="warn" if not plr_ok else "info",
+    if lufs_is_itu:
+        plr_ok = plr_min <= plr <= plr_max
+        checks.append(
+            _check_result(
+                "dynamic_range_plr",
+                passed=plr_ok,
+                value=round(plr, 2),
+                threshold=f"{plr_min:.0f}–{plr_max:.0f} LU (peak vs integrated)",
+                severity="warn" if not plr_ok else "info",
+            )
         )
-    )
+    else:
+        checks.append(
+            _check_result(
+                "dynamic_range_plr",
+                passed=True,
+                value=round(plr, 2),
+                threshold="peak−level proxy — pip install pyloudnorm for PLR (LU)",
+                severity="info",
+            )
+        )
 
     intel_ok = ratio_db >= intelligibility_min_db
     sev = "info" if intel_ok else "warn"
@@ -308,6 +356,7 @@ def run_mix_qa(
         "true_peak_dbfs": round(peak_dbfs, 2),
         "plr_lu": round(plr, 2),
         "target_lufs": target_lufs,
+        "lufs_is_itu": lufs_is_itu,
     }
     return {"checks": checks, "summary": summary}
 

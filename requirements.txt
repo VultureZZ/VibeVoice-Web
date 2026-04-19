@@ -26,6 +26,7 @@ pydub>=0.25.1
 audioop-lts>=0.2.1; python_version >= "3.13"
 ffmpeg-python>=0.2.0
 pedalboard>=0.9
+# Mix QA (LUFS / PLR); required for accurate loudness — without it, mix_qa uses RMS proxy
 pyloudnorm>=0.1
 # System dependency required for audio conversion/mixing:
 # - macOS: brew install ffmpeg
