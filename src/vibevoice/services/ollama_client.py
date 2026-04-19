@@ -1089,6 +1089,7 @@ Output the JSON array now:"""
 **VOICE PROFILE ADHERENCE**
    - Apply the **VOICE PROFILES** section above to the matching Speaker number; lines must reflect each profile (tone, cadence, structure, vocabulary, and signature phrases when natural).
    - Genre and production specifications set format; profiles set how each person talks. Do not substitute generic dialogue for a defined profile.
+   - Profiles are for **delivery and chemistry**, not for stripping names: co-hosts can still address each other and reference people in the story inside the dialogue.
 
 """
         if not voice_profiles_section.strip():
@@ -1149,8 +1150,8 @@ Use ONLY this format. No markdown, no stage directions in prose, no header label
 
 {chr(10).join(speaker_examples)}
 
-Each speaker turn must be on its own line, prefixed with exactly ``Speaker 1:``, ``Speaker 2:``, … ``Speaker {num_voices}:`` (the word Speaker, a space, the digit, then a colon).
-Do not use real names, persona names, celebrity names, voice library names, or role labels (Host/Guest/Anchor) as line prefixes — those may appear inside the spoken line when citing people or sources.
+Each speaker turn must be on its own line, prefixed with exactly ``Speaker 1:``, ``Speaker 2:``, … ``Speaker {num_voices}:`` (the word Speaker, a space, the digit, then a colon). Never use names, roles, or persona labels as the **prefix** before the colon — only ``Speaker N:``.
+Inside the spoken text after the colon, write **personable, natural dialogue**: co-hosts may address each other by first name or informal reference, react to one another ("yeah, but—", "exactly"), and cite people and organizations from the source material by name. The VOICE PROFILES describe *how* each numbered speaker sounds, not what text must appear at the start of a line.
 Blank lines between speaker turns only — no other blank lines.
 Do NOT include stage directions, scene headers, act labels, or any non-dialogue text.{script_format_cue_rule}
 
@@ -1174,6 +1175,7 @@ Do NOT include stage directions, scene headers, act labels, or any non-dialogue 
 3. SPEAKER DYNAMICS
    - No speaker should dominate more than 60% of any 2-minute segment
    - Build in natural interruptions, completions, or agreements ("Exactly." / "Right, and what's interesting is—") to signal interplay
+   - Keep the show **human and personable**: let hosts acknowledge each other, ask direct questions of one another, and use names or casual address inside lines when it fits the genre (still only ``Speaker N:`` as the line prefix).
    - Each speaker must have a consistent verbal identity maintained throughout:
      * Speaker 1 (anchor): sets context, asks the critical question, summarizes takeaways
      * Speaker 2 (analyst/co-host): adds texture, nuance, and "what this means" framing
@@ -1196,7 +1198,7 @@ Do NOT include stage directions, scene headers, act labels, or any non-dialogue 
 --- DO NOT ---
 - Do not write "(pause)" or "(beat)" — build pauses into sentence structure with em dashes and ellipses
 - Do not write sound effect instructions
-- Do not prefix lines with names or roles — only ``Speaker 1:`` through ``Speaker {num_voices}:`` (matching the VOICE PROFILES order by speaker number, not by display name)
+- Do not use anything other than ``Speaker 1:`` … ``Speaker {num_voices}:`` as the **start of a dialogue line** (before the first colon). Names and roles belong **inside** the line, not in the margin.
 {do_not_spoken_line}- Do not repeat the episode title or date mid-script
 - Do not let any story segment exceed {max_segment_words} words without a speaker exchange
 
