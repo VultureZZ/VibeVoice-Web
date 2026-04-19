@@ -11,7 +11,7 @@ import { Input } from '../components/Input';
 import { Select } from '../components/Select';
 import { Alert } from '../components/Alert';
 import { SUPPORTED_LANGUAGES } from '../utils/languages';
-import type { PrimaryLlmProvider } from '../types/settings';
+import type { AppSettings, PrimaryLlmProvider } from '../types/settings';
 import { apiClient } from '../services/api';
 
 const PRIMARY_LLM_OPTIONS: Array<{ value: PrimaryLlmProvider; label: string }> = [
@@ -191,6 +191,44 @@ export function SettingsPage() {
     return [{ value: openaiModel, label: `${openaiModel} (current)` }, ...openaiModelOptions];
   }, [openaiModelOptions, openaiModel]);
 
+  const buildAppSettingsSnapshot = useCallback((): AppSettings => {
+    return {
+      apiEndpoint: apiEndpoint.trim(),
+      apiKey: apiKey.trim() || undefined,
+      defaultLanguage,
+      defaultOutputFormat,
+      defaultSampleRate: parseInt(defaultSampleRate, 10),
+      primaryLlmProvider,
+      openaiApiKey: openaiApiKey.trim() || undefined,
+      openaiModel: openaiModel.trim() || undefined,
+      ollamaServerUrl: ollamaServerUrl.trim() || undefined,
+      ollamaModel: ollamaModel.trim() || undefined,
+      acestepConfigPath: acestepConfigPath.trim(),
+      acestepLmModelPath: acestepLmModelPath.trim(),
+    };
+  }, [
+    apiEndpoint,
+    apiKey,
+    defaultLanguage,
+    defaultOutputFormat,
+    defaultSampleRate,
+    primaryLlmProvider,
+    openaiApiKey,
+    openaiModel,
+    ollamaServerUrl,
+    ollamaModel,
+    acestepConfigPath,
+    acestepLmModelPath,
+  ]);
+
+  /** Persist current form to localStorage so other pages (e.g. Podcast) see LLM choices without clicking Save. */
+  const persistFormSettingsToStorage = useCallback(
+    (overrides: Partial<AppSettings> = {}) => {
+      saveSettings({ ...buildAppSettingsSnapshot(), ...overrides });
+    },
+    [saveSettings, buildAppSettingsSnapshot]
+  );
+
   const endpointValidation = validateApiEndpoint(apiEndpoint);
 
   const handleTestConnection = async () => {
@@ -242,20 +280,7 @@ export function SettingsPage() {
       return;
     }
 
-    saveSettings({
-      apiEndpoint: apiEndpoint.trim(),
-      apiKey: apiKey.trim() || undefined,
-      defaultLanguage,
-      defaultOutputFormat,
-      defaultSampleRate: parseInt(defaultSampleRate),
-      primaryLlmProvider,
-      openaiApiKey: openaiApiKey.trim() || undefined,
-      openaiModel: openaiModel.trim() || undefined,
-      ollamaServerUrl: ollamaServerUrl.trim() || undefined,
-      ollamaModel: ollamaModel.trim() || undefined,
-      acestepConfigPath: acestepConfigPath.trim(),
-      acestepLmModelPath: acestepLmModelPath.trim(),
-    });
+    saveSettings(buildAppSettingsSnapshot());
 
     setSaveMessage(
       runtimeSettings.restart_required
@@ -355,16 +380,19 @@ export function SettingsPage() {
           <p className="text-sm text-gray-600 mb-4">
             Choose whether podcast script generation and script segmentation use your local Ollama server
             or the OpenAI API. Production mode still uses Ollama for the Director step; keep the Ollama
-            server below configured and running when using production features.
+            server below configured and running when using production features. Provider and OpenAI model
+            are saved as soon as you change them (other fields still use Save Settings below).
           </p>
           <div className="space-y-4">
             <Select
               label="Primary provider"
               options={PRIMARY_LLM_OPTIONS}
               value={primaryLlmProvider}
-              onChange={(e) =>
-                setPrimaryLlmProvider(e.target.value as PrimaryLlmProvider)
-              }
+              onChange={(e) => {
+                const v = e.target.value as PrimaryLlmProvider;
+                setPrimaryLlmProvider(v);
+                persistFormSettingsToStorage({ primaryLlmProvider: v });
+              }}
             />
             {primaryLlmProvider === 'openai' && (
               <>
@@ -373,6 +401,7 @@ export function SettingsPage() {
                   type="password"
                   value={openaiApiKey}
                   onChange={(e) => setOpenaiApiKey(e.target.value)}
+                  onBlur={() => persistFormSettingsToStorage()}
                   placeholder="sk-..."
                 />
                 <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
@@ -381,7 +410,11 @@ export function SettingsPage() {
                       label="OpenAI model"
                       options={openaiModelSelectOptions}
                       value={openaiModel}
-                      onChange={(e) => setOpenaiModel(e.target.value)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setOpenaiModel(v);
+                        persistFormSettingsToStorage({ openaiModel: v });
+                      }}
                     />
                   </div>
                   <Button
