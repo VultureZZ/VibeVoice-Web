@@ -3,7 +3,35 @@ Parse transcript with speaker labels into segments for per-speaker TTS.
 """
 import re
 from dataclasses import dataclass
-from typing import List
+from typing import List, Tuple
+
+# Inline silence hint after a speaker line (stripped before synthesis). Example: [PAUSE_MS:220]
+INLINE_PAUSE_MS_PATTERN = re.compile(r"\s*\[PAUSE_MS:\s*(\d{1,4})\s*\]", re.IGNORECASE)
+_MAX_PAUSE_MS = 5000
+
+
+def strip_inline_pause_markers(text: str) -> Tuple[str, int]:
+    """
+    Remove ``[PAUSE_MS:N]`` tokens from spoken text and return total milliseconds (capped).
+
+    Multiple markers on one line sum; used for ``TranscriptSegment.pause_after_ms``.
+    """
+    if not text or not text.strip():
+        return text, 0
+
+    total = 0
+
+    def _accum(m: re.Match) -> str:
+        nonlocal total
+        try:
+            total += int(m.group(1))
+        except ValueError:
+            return ""
+        return " "
+
+    cleaned = INLINE_PAUSE_MS_PATTERN.sub(_accum, text)
+    cleaned = re.sub(r" +", " ", cleaned).strip()
+    return cleaned, min(_MAX_PAUSE_MS, max(0, total))
 
 
 @dataclass
@@ -28,6 +56,7 @@ def parse_transcript_into_segments(transcript: str, num_speakers: int) -> List[T
       - "Speaker 1: Hello world"
       - "Speaker 2: More text"
       - "Speaker 1: Continued"
+      - Optional inline ``[PAUSE_MS:N]`` tokens (stripped from speech; summed into ``pause_after_ms``)
 
     Speaker indices are normalized to 0-based (Speaker 1 -> 0, Speaker 2 -> 1)
     and wrapped with num_speakers so they always index into the given speakers list.
@@ -58,14 +87,21 @@ def parse_transcript_into_segments(transcript: str, num_speakers: int) -> List[T
             if pending:
                 # Attribute to speaker 0 by default (will be overridden if we had a previous segment)
                 prev_speaker = segments[-1].speaker_index if segments else 0
-                segments.append(TranscriptSegment(speaker_index=prev_speaker, text=pending))
+                t2, p2 = strip_inline_pause_markers(pending)
+                if t2:
+                    segments.append(
+                        TranscriptSegment(speaker_index=prev_speaker, text=t2, pause_after_ms=p2)
+                    )
 
         speaker_num = int(match.group(1))
         # 1-based to 0-based, then wrap
         speaker_index = (speaker_num - 1) % num_speakers
-        text = match.group(2).strip()
+        raw_text = match.group(2).strip()
+        text, pause_ms = strip_inline_pause_markers(raw_text)
         if text:
-            segments.append(TranscriptSegment(speaker_index=speaker_index, text=text))
+            segments.append(
+                TranscriptSegment(speaker_index=speaker_index, text=text, pause_after_ms=pause_ms)
+            )
 
         last_end = match.end()
 
@@ -74,10 +110,16 @@ def parse_transcript_into_segments(transcript: str, num_speakers: int) -> List[T
         pending = transcript[last_end:].strip()
         if pending:
             prev_speaker = segments[-1].speaker_index if segments else 0
-            segments.append(TranscriptSegment(speaker_index=prev_speaker, text=pending))
+            t2, p2 = strip_inline_pause_markers(pending)
+            if t2:
+                segments.append(
+                    TranscriptSegment(speaker_index=prev_speaker, text=t2, pause_after_ms=p2)
+                )
 
     # If no speaker labels were found, treat whole transcript as one segment (speaker 0)
     if not segments and transcript.strip():
-        segments.append(TranscriptSegment(speaker_index=0, text=transcript.strip()))
+        t0, p0 = strip_inline_pause_markers(transcript.strip())
+        if t0:
+            segments.append(TranscriptSegment(speaker_index=0, text=t0, pause_after_ms=p0))
 
     return segments

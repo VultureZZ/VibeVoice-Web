@@ -1137,6 +1137,12 @@ async def generate_podcast_audio(
         script_segments = await asyncio.to_thread(
             podcast_generator.generate_script_segments,
             script_norm,
+            request.ollama_url,
+            request.ollama_model,
+            llm_provider=request.llm_provider,
+            openai_api_key=request.openai_api_key,
+            openai_model=request.openai_model,
+            num_voices=len(request.voices),
             genre=request.genre,
             genre_style=request.genre,
             duration=request.duration,

@@ -128,6 +128,11 @@ export interface PodcastGenerateRequest {
   genre?: string;
   duration?: string;
   save_to_library?: boolean;
+  llm_provider?: LlmProvider;
+  openai_api_key?: string;
+  openai_model?: string;
+  ollama_url?: string;
+  ollama_model?: string;
 }
 
 export interface PodcastGenerateResponse {
@@ -176,11 +181,6 @@ export interface PodcastProductionRequest extends PodcastGenerateRequest {
   production_genre?: ProductionGenre;
   style?: 'tech_talk' | 'casual' | 'news' | 'storytelling';
   enabled_cues?: ('intro' | 'outro' | 'transitions' | 'bed')[];
-  llm_provider?: LlmProvider;
-  openai_api_key?: string;
-  openai_model?: string;
-  ollama_url?: string;
-  ollama_model?: string;
 }
 
 export interface PodcastProductionSubmitResponse {

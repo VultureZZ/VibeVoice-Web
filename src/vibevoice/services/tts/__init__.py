@@ -5,9 +5,8 @@ Provides a unified interface for text-to-speech generation across
 Qwen3-TTS, and optionally XTTS and Bark.
 """
 from .base import SpeakerRef, TTSBackend
-from .segments import TranscriptSegment
 from .qwen3_backend import Qwen3Backend
-from .segments import parse_transcript_into_segments
+from .segments import TranscriptSegment, parse_transcript_into_segments, strip_inline_pause_markers
 
 __all__ = [
     "SpeakerRef",
@@ -15,4 +14,5 @@ __all__ = [
     "TTSBackend",
     "Qwen3Backend",
     "parse_transcript_into_segments",
+    "strip_inline_pause_markers",
 ]

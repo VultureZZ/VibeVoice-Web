@@ -279,6 +279,14 @@ class PodcastGenerateRequest(BaseModel):
     genre: Optional[str] = Field(None, description="Optional genre metadata")
     duration: Optional[str] = Field(None, description="Optional duration metadata (e.g., '10 min')")
     save_to_library: bool = Field(default=True, description="Whether to save the generated podcast to the library")
+    llm_provider: Literal["ollama", "openai"] = Field(
+        default="ollama",
+        description="LLM for script segmentation metadata returned with the response",
+    )
+    openai_api_key: Optional[str] = Field(None, description="OpenAI API key when llm_provider is openai")
+    openai_model: Optional[str] = Field(None, description="OpenAI model id when llm_provider is openai")
+    ollama_url: Optional[str] = Field(None, description="Optional custom Ollama server URL")
+    ollama_model: Optional[str] = Field(None, description="Optional custom Ollama model name")
 
 
 class PodcastGenerateResponse(BaseModel):

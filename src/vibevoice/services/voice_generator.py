@@ -196,7 +196,9 @@ class VoiceGenerator:
                 emph = list(getattr(row, "emphasis_words", None) or [])
                 pause = int(getattr(row, "pause_after_ms", 0) or 0)
             seg.instruct = self.build_qwen3_line_instruct(em, emph)
-            seg.pause_after_ms = max(0, pause)
+            # Preserve inline [PAUSE_MS:N] from transcript parsing when voice_direction also sets pauses
+            existing_pause = int(getattr(seg, "pause_after_ms", 0) or 0)
+            seg.pause_after_ms = max(existing_pause, max(0, pause))
 
     def _load_breath_mono(self, path: Path, target_sr: int) -> Any:
         import numpy as np

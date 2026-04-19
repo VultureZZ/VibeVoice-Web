@@ -27,7 +27,7 @@ Full pipeline with script segmentation, multi-voice TTS, WhisperX timing alignme
 1. If a URL is provided, `ArticleScraper` fetches and extracts plain text from the article.
 2. Voice profiles are loaded from storage for each named voice. These profiles contain style/tone information built when the voice was created.
 3. `OllamaClient.generate_script()` sends the article text plus voice profiles to a local Ollama LLM (default `llama3.2`). The prompt targets a specific word count derived from the requested duration or `approximate_duration_minutes` field.
-4. The LLM returns a dialogue script in `Speaker N: text` format, with 1-4 speakers.
+4. The LLM returns a dialogue script in `Speaker N: text` format, with 1-4 speakers. Cleaned output may include inline `[PAUSE_MS:N]` tokens at the end of lines (not spoken); they become silent gaps between turns in the WAV. Post-processing also appends a default `[PAUSE_MS:220]` at each speaker handoff when the model omitted one.
 5. When `include_production_cues=true`, the script may also contain `[CUE: ...]` markers; these are stripped before TTS and used only for segmentation.
 
 **Script segmentation** also runs at this stage (or as its own sub-step in production mode). `OllamaClient.generate_script_segments()` asks the LLM to return a structured JSON list of segments, each with a `segment_type`, timing hints, energy level, and notes. Segment types are:
@@ -51,9 +51,10 @@ If Ollama JSON segmentation fails, a deterministic fallback (`_fallback_segments
 **What happens:**
 
 1. All `[CUE: ...]` markers are stripped from the script (`strip_production_cue_markers`).
-2. `PodcastGenerator._format_script_for_voices()` normalises `Speaker N:` labels and assigns any unlabelled lines to Speaker 1.
-3. `VoiceGenerator.generate_speech()` synthesises the full multi-speaker dialogue as a single concatenated WAV. Each `Speaker N` label maps to the corresponding voice in the request's `voices` list (index 0 = Speaker 1, etc.).
-4. The output WAV is written to `outputs/`.
+2. `[PAUSE_MS:N]` markers are removed from the spoken text during transcript parsing; their values are applied as `pause_after_ms` silence between concatenated segments.
+3. `PodcastGenerator._format_script_for_voices()` normalises `Speaker N:` labels and assigns any unlabelled lines to Speaker 1.
+4. `VoiceGenerator.generate_speech()` synthesises the full multi-speaker dialogue as a single concatenated WAV. Each `Speaker N` label maps to the corresponding voice in the request's `voices` list (index 0 = Speaker 1, etc.).
+5. The output WAV is written to `outputs/`.
 
 **TTS backends:**
 

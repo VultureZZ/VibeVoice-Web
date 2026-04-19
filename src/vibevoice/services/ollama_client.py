@@ -66,18 +66,83 @@ def _sanitize_profile_for_prompt(profile: Dict) -> Dict:
 _CUE_MARKER_BRACKET = re.compile(r"^\s*\[CUE:", re.IGNORECASE)
 _INLINE_PRODUCTION_CUE = re.compile(r"\s*\[CUE:\s*[^\]]+\]\s*", re.IGNORECASE)
 _SPEAKER_LINE_CANONICAL = re.compile(r"^\s*Speaker\s*(\d+)\s*:\s*", re.IGNORECASE)
+# Inline TTS pause tokens (not spoken); must survive _remove_placeholder_brackets
+_PAUSE_MS_INNER = re.compile(r"^\s*PAUSE_MS\s*:\s*(\d{1,4})\s*$", re.IGNORECASE)
 
 
 def _remove_placeholder_brackets(script: str) -> str:
-    """Strip bracketed placeholders (e.g. stage directions) but keep [CUE: ...] production tokens."""
+    """Strip bracketed placeholders (e.g. stage directions) but keep [CUE: ...] and [PAUSE_MS: ...] tokens."""
 
     def repl(m: re.Match) -> str:
         inner = m.group(1)
         if inner.strip().upper().startswith("CUE:"):
             return m.group(0)
+        if _PAUSE_MS_INNER.match(inner):
+            return m.group(0)
         return ""
 
     return re.sub(r"\s*\[([^\]]+)\]", repl, script)
+
+
+def _inject_speaker_handoff_pauses(
+    script: str,
+    *,
+    include_production_cues: bool = False,
+    default_handoff_ms: int = 220,
+) -> str:
+    """
+    Append ``[PAUSE_MS:N]`` at the end of speaker lines when the next speaker line is a different speaker.
+
+    Skips lines that already contain a pause marker. Used for LLM-generated scripts so TTS inserts
+    silence between turns (see ``strip_inline_pause_markers`` in ``tts/segments.py``).
+    """
+    from .tts.segments import INLINE_PAUSE_MS_PATTERN
+
+    raw_lines = [ln.rstrip() for ln in script.split("\n")]
+    entries: List[Tuple[str, Any]] = []
+    for line in raw_lines:
+        s = line.strip()
+        if not s:
+            continue
+        sp_m = re.match(r"^(Speaker\s+(\d+)\s*:\s*)(.*)$", s, re.IGNORECASE)
+        if sp_m:
+            entries.append(
+                (
+                    "spk",
+                    int(sp_m.group(2)),
+                    sp_m.group(1),
+                    sp_m.group(3).strip(),
+                )
+            )
+        elif include_production_cues and _CUE_MARKER_BRACKET.match(s):
+            entries.append(("cue", s))
+        else:
+            entries.append(("other", s))
+
+    for i, e in enumerate(entries):
+        if e[0] != "spk":
+            continue
+        _, sn, prefix, body = e
+        next_sn: Optional[int] = None
+        for j in range(i + 1, len(entries)):
+            if entries[j][0] == "spk":
+                next_sn = entries[j][1]
+                break
+        if next_sn is None or next_sn == sn:
+            continue
+        if INLINE_PAUSE_MS_PATTERN.search(body):
+            continue
+        body = f"{body} [PAUSE_MS:{default_handoff_ms}]"
+        entries[i] = ("spk", sn, prefix, body)
+
+    out: List[str] = []
+    for e in entries:
+        if e[0] == "spk":
+            _, _sn, prefix, body = e
+            out.append(f"{prefix}{body}".strip())
+        else:
+            out.append(e[1])
+    return "\n".join(out)
 
 
 def normalize_podcast_speaker_labels(
@@ -1153,6 +1218,7 @@ Use ONLY this format. No markdown, no stage directions in prose, no header label
 Each speaker turn must be on its own line, prefixed with exactly ``Speaker 1:``, ``Speaker 2:``, … ``Speaker {num_voices}:`` (the word Speaker, a space, the digit, then a colon). Never use names, roles, or persona labels as the **prefix** before the colon — only ``Speaker N:``.
 Inside the spoken text after the colon, write **personable, natural dialogue**: co-hosts may address each other by first name or informal reference, react to one another ("yeah, but—", "exactly"), and cite people and organizations from the source material by name. The VOICE PROFILES describe *how* each numbered speaker sounds, not what text must appear at the start of a line.
 Blank lines between speaker turns only — no other blank lines.
+When the next line is a different speaker, end the current line with an inline pause token after the spoken words: ``[PAUSE_MS:220]`` (use roughly 160–400; higher after a direct question or sharp topic change). These tokens are stripped before text-to-speech and become silence between turns — they must never be read as dialogue. If you omit them, the system may insert a default pause at each speaker handoff.
 Do NOT include stage directions, scene headers, act labels, or any non-dialogue text.{script_format_cue_rule}
 
 --- AUDIO WRITING RULES ---
@@ -1196,7 +1262,7 @@ Do NOT include stage directions, scene headers, act labels, or any non-dialogue 
    - CLOSE (final {close_word_count} words): Thematic recap — 2-3 sentences max per key story. End on a forward-looking note. No "thanks for listening" filler.
 {music_cue_section}{voice_adherence_block}
 --- DO NOT ---
-- Do not write "(pause)" or "(beat)" — build pauses into sentence structure with em dashes and ellipses
+- Do not write "(pause)" or "(beat)" in prose. For silence between speaker turns use ``[PAUSE_MS:N]`` tokens as described above; inside a single speaker line you may still use em dashes and ellipses for rhythm
 - Do not write sound effect instructions
 - Do not use anything other than ``Speaker 1:`` … ``Speaker {num_voices}:`` as the **start of a dialogue line** (before the first colon). Names and roles belong **inside** the line, not in the margin.
 {do_not_spoken_line}- Do not repeat the episode title or date mid-script
@@ -1276,6 +1342,11 @@ Generate the complete podcast script now:"""
         cleaned_script = re.sub(r' ,', ',', cleaned_script)
         cleaned_script = re.sub(r' \?', '?', cleaned_script)
         cleaned_script = re.sub(r' !', '!', cleaned_script)
+
+        cleaned_script = _inject_speaker_handoff_pauses(
+            cleaned_script,
+            include_production_cues=include_production_cues,
+        )
 
         return cleaned_script
 
